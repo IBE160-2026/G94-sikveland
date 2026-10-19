@@ -7,3 +7,11 @@ Repoet inneholder gruppens applikasjon og dokumentasjon av utvikling, testing og
 ## Medlemmer
 
 - Wannapa Sikveland
+
+## Dokumentasjon
+
+Planleggingsdokumenter ligger i [`docs/planning/`](docs/planning/):
+
+- [Product brief](docs/planning/product-brief.md)
+- [Tilbakemelding på product brief](docs/planning/tilbakemelding-product-brief.md)
+- [Implementeringsplan](docs/planning/implementation-plan.md)
