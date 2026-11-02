@@ -9,7 +9,7 @@ updated: 2026-11-02
 
 ## 0. Document Purpose
 
-This PRD is for the IBE160 project group, the examiner, and the downstream UX, architecture and story work. It builds on `docs/planning/product-brief.md` and keeps the FR/NFR IDs from `docs/planning/epics-and-stories.md` so stories still trace. Terms in §3 Glossary are used exactly. Inferred points are tagged `[ASSUMPTION]` and listed in §10. Technical detail lives in `addendum.md`.
+This PRD is for the IBE160 project group, the examiner, and the downstream UX, architecture and story work. It builds on `docs/planning/product-brief.md` and keeps the FR/NFR IDs from the earlier epics draft; the stories now live in `docs/planning/epics.md`. Terms in §3 Glossary are used exactly. Inferred points are tagged `[ASSUMPTION]` and listed in §10. Technical detail lives in `addendum.md`.
 
 ## 1. Vision
 
@@ -88,7 +88,7 @@ Applicants get answers without waiting and can prepare their application themsel
 
 ## 4. Features
 
-*FR IDs FR1–FR11 are kept from `epics-and-stories.md` so stories still trace; new FRs continue from FR12, and NFR8 is new. FR3, FR5, FR6 and FR9 have changed meaning since the stories were written (embassy-decides answer, feedback on done signal, saved ticks, deletion of personal information); those stories must be updated.*
+*FR IDs FR1–FR11 are kept from the earlier epics draft; new FRs continue from FR12, and NFR8 is new. FR3, FR5, FR6 and FR9 changed meaning from that draft (embassy-decides answer, feedback on done signal, saved ticks, deletion of personal information). The current stories are in `docs/planning/epics.md`.*
 
 ### 4.1 Ask in Thai, get answers with sources
 
@@ -185,7 +185,7 @@ The app can run in demo mode without an API key.
 
 ## 5. Cross-Cutting NFRs
 
-*IDs NFR1–NFR7 are kept from `epics-and-stories.md`.*
+*IDs NFR1–NFR7 are kept from the earlier epics draft.*
 
 - **NFR1 — Mobile first.** The chat page works well on a phone, including in Facebook's in-app browser, with large touch targets and simple language. Realizes UJ-1.
 - **NFR2 — Easy to run.** The app can be run locally by following the README, with your own API key or in demo mode.
