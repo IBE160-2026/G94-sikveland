@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # No API key is passed: tests use fakes and never call the Claude API.
+      - name: Run tests
+        run: uv run pytest

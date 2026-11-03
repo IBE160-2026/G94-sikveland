@@ -59,3 +59,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# App data (SQLite feedback file); keep the folder
+data/*
+!data/.gitkeep
