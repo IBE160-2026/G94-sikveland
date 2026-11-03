@@ -9,3 +9,7 @@
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — Full structure and language review of the PRD (bmad-review structure, prose) was skipped
 - [ ] 2026-11-02 [architecture](998-2026-11-02-22-53-29-architecture.md) — Test on a real phone that streaming works in Facebook's in-app browser (Deferred in the architecture spine) (now an AC in Story 1.6)
 - [ ] 2026-11-02 [architecture](998-2026-11-02-22-53-29-architecture.md) — implementation-plan.md is out of date compared with the PRD, architecture and epics.md (Haiku for classifying, demo answers in content/, checklist in the MVP, new epic order); update it or mark it as replaced
+- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Check that the first GitHub Actions CI run passes
+- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 2.3: resolve DATABASE_PATH against the project root (deferred-work.md)
+- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md)
+- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md
