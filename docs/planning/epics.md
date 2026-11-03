@@ -57,14 +57,14 @@ From the architecture spine (AD numbers in brackets):
 - Classifier: separate structured-output call (no forced tool use), closed categories `general`, `individual_assessment`, `out_of_scope`, `reach_person`, `done`; sees the question plus the last 2 exchanges (AD-5).
 - Fixed texts: `content/texts.yaml`, a closed key list with `th` and `en`, category → key mapping, `{ADVISER_CONTACT}` filled at load; `GET /api/texts` returns `{demo_mode, texts, example_questions}`; no hard-coded Thai in the page (AD-6).
 - Answer call: system prompt → all KB documents sorted by id with Citations and a cache breakpoint → history → question; text held back until the first citation; zero citations → `reply-no-answer`; a started reply is never replaced (AD-7).
-- Stream contract: `POST /api/chat` returns JSON Lines; events `meta` → `text`* → `sources` (with `checklist` flag) → `done`, or `error`; read with `fetch` + `getReader()` + streaming `TextDecoder`; only `app/web` builds events (AD-8).
+- Stream contract: `POST /api/chat` returns JSON Lines; events `meta` → `text`* → `sources` (with `checklist` flag and `checklist_purposes`) → `done`, or `error`; read with `fetch` + `getReader()` + streaming `TextDecoder`; only `app/web` builds events (AD-8).
 - Knowledge base: `knowledge-base/sources.yaml` (id, title, url, publisher, retrieved, file) + Markdown snapshots; `scripts/ingest.py` offline; the adviser reviews diffs; the app never fetches at runtime; every shown link is a source (AD-9).
 - Feedback: SQLite table `feedback(conversation_id, answer, created_at)` written only by `POST /api/feedback`; flow ownership and `conversation_id` lifecycle as in AD-10; SM-1 counts the first answer per conversation.
-- Checklists: `content/checklists.yaml`, item ids stable, sources resolved to `{title, url}` by `GET /api/checklists/{purpose}`; ticks in `localStorage` under `checklist:{purpose}`; a permanent checklist button plus an "open checklist" button when the `sources` event has `checklist: true` (AD-11).
+- Checklists: `content/checklists.yaml`, item ids stable, sources resolved to `{title, url}` by `GET /api/checklists/{purpose}`; ticks in `localStorage` under `checklist:{purpose}`; a permanent checklist button plus an "open checklist" button when the `sources` event has `checklist: true`, opening the purpose in `checklist_purposes` directly when there is one (AD-11).
 - Prompts in `prompts/` with a `version:` line; logs and eval reports record prompt versions (AD-12).
 - Tests: pytest with a scripted fake in `tests/fakes/`; `scripts/run_eval.py` runs `eval/testset.yaml` through the full pipeline and writes `eval/reports/` (AD-13).
-- Demo mode: `content/demo-answers.yaml` keyed by example-question id, NFC + trim matching, `done_phrases`, non-match → `reply-demo-only`; startup fails if an example question lacks a demo answer (AD-15).
-- Conventions: endpoints `POST /api/chat`, `POST /api/translate` (`{text}` → `{translation}`, stored `en` first), `POST /api/feedback`, `GET /api/checklists/{purpose}`, `GET /api/texts`; kebab-case ids; ISO 8601 dates; error envelope `{"error": {"code", "message"}}`; startup checks on content keys, source ids and demo answers; one JSON log line per request without question or answer text; config from `.env` via `app/config.py`, with `.env.example`; `.env` and `data/` git-ignored.
+- Demo mode: `content/demo-answers.yaml` keyed by example-question id, NFC + trim matching, `done_phrases`, non-match → `reply-demo-only`; in demo mode, startup fails if an example question lacks a demo answer (AD-15).
+- Conventions: endpoints `POST /api/chat`, `POST /api/translate` (`{text}` → `{translation}`, stored `en` first), `POST /api/feedback`, `GET /api/checklists/{purpose}`, `GET /api/texts`; kebab-case ids; ISO 8601 dates; error envelope `{"error": {"code", "message"}}`; startup checks on content keys and source ids, plus demo answers in demo mode; one JSON log line per request without question or answer text; config from `.env` via `app/config.py`, with `.env.example`, including per-model prices (`PRICE_ANSWER_*`, `PRICE_SMALL_*` for input, output, cache read and cache write); `.env` and `data/` git-ignored.
 
 ### UX Design Requirements
 
@@ -131,8 +131,8 @@ So that every later story starts from the same structure and is checked on every
 
 **Given** the settings module `app/config.py`
 **When** the app starts
-**Then** every setting is read from `.env` (`ANTHROPIC_API_KEY`, `MODEL_ANSWER`, `MODEL_SMALL`, `EFFORT_ANSWER`, `EFFORT_SMALL`, `MOCK_LLM`, `ADVISER_CONTACT`, `DATABASE_PATH`)
-**And** `.env.example` lists all of them with safe example values
+**Then** every setting is read from `.env` (`ANTHROPIC_API_KEY`, `MODEL_ANSWER`, `MODEL_SMALL`, `EFFORT_ANSWER`, `EFFORT_SMALL`, `MOCK_LLM`, `ADVISER_CONTACT`, `DATABASE_PATH`, and the `PRICE_ANSWER_*` and `PRICE_SMALL_*` settings for input, output, cache-read and cache-write tokens)
+**And** `.env.example` lists all of them with safe example values, and prices taken from Anthropic's pricing page
 **And** `.env` and `data/` are git-ignored.
 
 **Given** a push to GitHub
@@ -254,7 +254,7 @@ So that I can see what to do and check where the information comes from.
 **When** the server handles it
 **Then** the pipeline runs the filter before anything is sent to the LLM (AD-1)
 **And** the classify step is not part of this story: every question is treated as `general`
-**And** the response is JSON Lines with the events `meta` (`category`, `personal_info_removed`, `clean_question`), `text` (`delta`), `sources` (`[{id, title, url}]`, `checklist: false`) and `done`, in that order (AD-8)
+**And** the response is JSON Lines with the events `meta` (`category`, `personal_info_removed`, `clean_question`), `text` (`delta`), `sources` (`[{id, title, url}]`, `checklist: false`, `checklist_purposes: []`) and `done`, in that order (AD-8)
 **And** the answer is in Thai, also when the question has typos or mixes Thai and English (FR1).
 
 **Given** the LLM returns chunks with citations
@@ -274,6 +274,10 @@ So that I can see what to do and check where the information comes from.
 **When** events arrive
 **Then** it reads them with `fetch` + `getReader()` and a streaming `TextDecoder`, appends `text` deltas as they come, and shows the source links under the answer when `sources` arrives
 **And** a "typing" indicator shows until the first `text` event.
+
+**Given** a real Android or iPhone phone
+**When** the chat page is opened from a link in Facebook's in-app browser
+**Then** the answer streams bit by bit as in a normal browser, and the result is noted in the pull request (NFR1, spine Deferred).
 
 **Given** the tests
 **When** they run with the scripted fake
@@ -323,9 +327,9 @@ So that I can report the running cost and keep it under control.
 **Then** one JSON line is written with timestamp, category, prompt versions, model, input, output (including thinking), cache-read and cache-write tokens, and cost in USD (NFR6, AD-12)
 **And** the line contains no question text, answer text or personal information (NFR5).
 
-**Given** the price per model is set in configuration
+**Given** the `PRICE_ANSWER_*` and `PRICE_SMALL_*` settings from Story 1.1
 **When** cost is calculated
-**Then** cache reads and cache writes are priced separately from normal input tokens.
+**Then** each call is priced with the settings for its model, and cache reads and cache writes are priced separately from normal input tokens.
 
 **Given** several requests using the same knowledge base
 **When** I look at the log
@@ -525,16 +529,16 @@ So that I can go straight from the answer to ticking off what I have.
 
 **Given** an answer whose cited sources include a source linked to at least one checklist item
 **When** the `sources` event is sent
-**Then** it has `checklist: true`; otherwise `checklist: false` (AD-8, AD-11).
+**Then** it has `checklist: true` and `checklist_purposes` lists every visit purpose whose checklist has an item linked to a cited source; otherwise `checklist: false` and `checklist_purposes: []` (AD-8, AD-11).
 
 **Given** a `sources` event with `checklist: true`
 **When** the page shows the answer
 **Then** an "Open checklist" button appears under it.
 
 **Given** the applicant taps "Open checklist"
-**When** the cited sources belong to the checklist of only one visit purpose
+**When** `checklist_purposes` has one purpose
 **Then** that checklist opens directly
-**And** if they belong to more than one, the visit-purpose choice from Story 3.2 opens first.
+**And** if it has more than one, the visit-purpose choice from Story 3.2 opens first.
 
 **Given** the scripted fake
 **When** the tests run
