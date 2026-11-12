@@ -251,6 +251,8 @@ The app can run in demo mode without an API key.
 - Knowledge base of 10–20 official sources, updated by script (FR11).
 - Demo mode without an API key (FR10).
 
+**Deadline and team:** the IBE160 delivery is due 2026-11-15, and the group is one person.
+
 **Priority order** (when time runs short, cut from the bottom of this list first):
 1. **Core:** FR1, FR2, FR3, FR4, FR9, FR10, FR12 — Thai answers with sources, the steps in order, "the embassy decides", no-answer, the privacy filter, and demo mode so the examiner can run the app.
 2. **Next:** FR6, FR5, FR13, FR14 — checklist, feedback question, reach a person, out of scope.
@@ -265,9 +267,8 @@ The app can run in demo mode without an API key.
 
 ## 9. Open Questions
 
-1. Project deadline and group size for IBE160 — decides how far down the §8.1 priority order the MVP gets.
-2. Response-time limit for NFR1 and a cost target for NFR6.
-3. How to check that the checklist actually replaces the adviser's document check — possible extra success metric.
+1. Response-time limit for NFR1 and a cost target for NFR6.
+2. How to check that the checklist actually replaces the adviser's document check — possible extra success metric.
 
 ## 10. Assumptions Index
 
