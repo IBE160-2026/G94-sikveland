@@ -13,3 +13,4 @@
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 2.3: resolve DATABASE_PATH against the project root (deferred-work.md)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md
+- [ ] 2026-11-12 [story-1-2-chat-page](995-2026-11-12-22-58-24-story-1-2-chat-page.md) — Story 1.6: browser-level test for the chat page JavaScript (render, tap-to-fill, retry, streaming) (deferred-work.md)
