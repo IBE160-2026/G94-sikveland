@@ -20,26 +20,26 @@ This document provides the complete epic and story breakdown for Norway Visa Gui
 - FR1: The applicant can ask a question in Thai and gets an answer in Thai, also when the question has typos or mixes Thai and English; the chat page opens in Thai; the applicant can ask follow-up questions and the chatbot uses earlier questions in the same conversation.
 - FR2: Every answer is based only on the knowledge base and links to the sources it uses; answers based on the knowledge base show at least one source link (fixed replies need none); the answer contains no facts that are not in its sources.
 - FR3: When the applicant asks an individual-assessment question, the chatbot answers that the embassy makes the decision and no one else can answer it; it never estimates the applicant's chances.
-- FR4: When the knowledge base does not contain the answer, the chatbot says so and gives the adviser contact; it does not make up an answer.
+- FR4: When the knowledge base does not contain the answer (an in-scope question no source answers, so the answer would cite no source), the chatbot says so and gives the adviser contact, with no claims about requirements, fees or deadlines; it does not make up an answer; the test set has at least four such questions, all of which must get the no-answer message.
 - FR5: When the applicant gives a done signal, the chatbot asks the feedback question; "Yes" ends the conversation; "No" leads to "What would you still like to know?" and the question is asked again at the next done signal; only the Yes/No answer, its time and an anonymous conversation ID are stored.
 - FR6: The applicant can select a visit purpose (tourism, visiting family, visiting friends), get its fixed checklist, and tick off documents; ticks are kept on the same phone and browser with no account, are not stored on the server, and survive checklist updates for unchanged items; each item links to its source; the family-visit checklist includes the sponsorship form and invitation letter, says the sponsor fills them in, and links to where the sponsor finds them.
-- FR7: The applicant can show an English translation of an answer.
-- FR8: The chat page shows example questions the applicant can tap to ask them.
-- FR9: The chat page asks applicants not to share personal information and states that questions are sent to an AI service; personal information (passport, ID and phone number) in a question is deleted before it is sent to the AI service and never stored; the chatbot warns the applicant, still answers the rest of the question, and reminds them not to send personal information.
+- FR7: Any reply can be shown in English, mainly for the course examiner, who does not read Thai: every reply has a button that shows the translation under it, the Thai reply is unchanged, and the source links stay visible.
+- FR8: The chat page shows 3–5 example questions; tapping one sends it as the question, without typing.
+- FR9: The chat page asks applicants not to share personal information and states that questions are sent to an AI service; personal information (passport number, 13-digit Thai ID number with or without dashes or spaces, phone number in Thai format 08x-xxx-xxxx or +66, or Norwegian format) in a question is deleted before it is sent to the AI service and never stored, while amounts such as "90 euro" and dates are kept; the chatbot warns the applicant, still answers the rest of the question, and reminds them not to send personal information; names and addresses are not detected automatically, and the privacy notice says so.
 - FR10: The app can run in demo mode without an API key: it answers the example questions with stored Thai answers and sources, gives a Thai message for other questions, and shows a visible "Demo mode" label.
 - FR11: The knowledge base holds 10–20 official sources (UDI, VFS Global, the Royal Norwegian Embassy in Bangkok, the EU Schengen pages), each with URL, publisher and retrieval date; a script updates it; the adviser reviews changes before they are used; every answer can be traced to a source version; it covers application steps, checklists, the sponsorship form and invitation letter, relationship proof and the visa fee.
 - FR12: When the applicant asks how to start, the chatbot gives the application steps in order (documents → register at UDI → pay the visa fee → book an appointment at VFS) and names and links the website for each step.
-- FR13: When the applicant asks to talk to a person or asks for help with the whole process, the chatbot gives the adviser contact.
+- FR13: When the applicant asks to talk to a person or asks for help with the whole process, the chatbot gives the adviser contact; the test set has at least three different phrasings, all of which must get the adviser contact.
 - FR14: When the applicant asks an out-of-scope question, the chatbot answers that it only covers short-stay tourist and visitor visas to Norway and gives the adviser contact.
 
 ### NonFunctional Requirements
 
-- NFR1: The chat page works well on a phone, including in Facebook's in-app browser, with large touch targets and simple language.
+- NFR1: The chat page works well on a phone, including in Facebook's in-app browser, with large touch targets and simple language: it works from 360 px width with no horizontal scrolling down to 320 px, touch targets are at least 44×44 px, and it is checked on a real phone in Facebook's in-app browser.
 - NFR2: The app can be run locally by following the README, with your own API key or in demo mode.
 - NFR3: Automated tests never call the real API and run in GitHub Actions.
-- NFR4: On the test set of 20–30 Thai questions with expected answers and sources (covering application steps, checklists, sponsor forms, relationship proof, visa fee, individual-assessment, out-of-scope and personal-information questions): at least 90% of general questions correct with correct source, as judged by the adviser; 100% of individual-assessment questions get the embassy-decides answer; answers in Thai also for typos and mixed Thai/English. The test set runs against the real model after every prompt or source change, separately from NFR3, and results are recorded.
+- NFR4: On the test set of 20–30 Thai questions with expected answers and sources (covering application steps, checklists, sponsor forms, relationship proof, visa fee, individual-assessment, out-of-scope and personal-information questions): at least 90% of general questions correct with correct source, as judged by the adviser; 100% of individual-assessment questions get the embassy-decides answer; 100% of questions the sources do not cover (at least four) get the no-answer message with no invented facts; 100% of requests for a person (at least three phrasings) get the adviser contact; answers in Thai also for typos and mixed Thai/English. The test set runs against the real model after every prompt or source change, separately from NFR3, and results are recorded.
 - NFR5: Conversation text is not stored and personal information is deleted; only the feedback Yes/No, its time and an anonymous conversation ID are stored on the server; checklist ticks stay on the phone; no secrets or real applicant enquiries are stored in the repository.
-- NFR6: The cost per question is measured and reported.
+- NFR6: The cost per question is measured and reported in the README; a cost target is still open (PRD §9).
 - NFR7: Prompts are stored as versioned files in the repository.
 - NFR8: All fixed Thai texts (example questions, checklists, embassy-decides, out-of-scope and no-answer messages, privacy notice, demo answers) are reviewed by the adviser before release.
 
@@ -110,6 +110,16 @@ The examiner can run the app without an API key, see the demo-mode label, try th
 ### Epic 5: Measured quality: test set and evaluation
 The adviser and the examiner can see that the chatbot meets its targets: the test set runs against the real models through the full pipeline and produces a report (SM-2), and a statistics script reports the share of "Yes" answers (SM-1).
 **FRs covered:** none directly; covers NFR4, SM-1 and SM-2
+
+## Build Order
+
+Epic and story numbers stay as they are, but stories are built in the PRD §8.1 priority order (updated 2026-11-12 after the examiner's feedback), so the core works end to end before anything else:
+
+1. **Core:** Stories 1.1–1.8 (1.1 and 1.2 are done), then 2.1 (FR3, "the embassy decides"), 4.2 (FR10, demo mode) and 4.3 (README), so the examiner can run the app early.
+2. **Next:** 3.1–3.3 (FR6, checklist), 2.3 (FR5, feedback question), 2.2 (FR13 and FR14), then 5.1–5.2 (test set and evaluation, SM-2).
+3. **If time allows:** 4.1 (FR7, English translation), 5.3 (feedback statistics) and the ingest script in Story 1.3. If time is short, Story 1.3 can be built with hand-made snapshots and the script added at the end.
+
+Story 4.2 depends on 1.6 and on the categories from 2.1; its `done_phrases` part works fully once 2.3 is built.
 
 ## Epic 1: Applicants get answers in Thai from official sources
 
@@ -199,7 +209,7 @@ So that my personal information never reaches the AI service or any log.
 
 **Acceptance Criteria:**
 
-**Given** a text containing a Thai ID number, a passport number or a phone number (Thai or Norwegian format)
+**Given** a text containing a 13-digit Thai ID number (with or without dashes or spaces), a passport number, or a phone number in Thai format (08x-xxx-xxxx, also with +66) or Norwegian format
 **When** the filter in `app/pipeline/` runs on it
 **Then** each match is removed and replaced with a neutral marker
 **And** the filter reports that something was removed (FR9, AD-4).
@@ -212,6 +222,11 @@ So that my personal information never reaches the AI service or any log.
 **When** its tests run
 **Then** there are pytest cases for each pattern and for common false positives
 **And** the filter is pure logic with no FastAPI or SDK imports.
+
+**Given** the privacy notice in `content/texts.yaml`
+**When** this story is done
+**Then** it also says that names and addresses are not removed automatically and asks the applicant not to write them (FR9)
+**And** the adviser has reviewed the changed Thai text (NFR8).
 
 ### Story 1.5: Claude connection with a test version
 
@@ -274,6 +289,10 @@ So that I can see what to do and check where the information comes from.
 **When** events arrive
 **Then** it reads them with `fetch` + `getReader()` and a streaming `TextDecoder`, appends `text` deltas as they come, and shows the source links under the answer when `sources` arrives
 **And** a "typing" indicator shows until the first `text` event.
+
+**Given** the example questions on the page from Story 1.2
+**When** the applicant taps one
+**Then** it is sent as the question right away, without typing, and answered like a typed question (FR8).
 
 **Given** a real Android or iPhone phone
 **When** the chat page is opened from a link in Facebook's in-app browser
@@ -571,7 +590,7 @@ So that I can follow what the chatbot tells applicants.
 
 **Given** a translation is returned
 **When** the page shows it
-**Then** the English text appears under the Thai reply, and the Thai reply is unchanged
+**Then** the English text appears under the Thai reply, and the Thai reply and its source links are unchanged
 **And** a failed translation shows the fixed `error` text.
 
 **Given** the scripted fake
@@ -659,7 +678,10 @@ So that the chatbot's quality can be measured the same way every time.
 **Given** the test set as a whole
 **When** I check its coverage
 **Then** it includes questions on the application steps, checklists, the sponsorship form and invitation letter, relationship proof and the visa fee
-**And** it includes individual-assessment questions, out-of-scope questions, requests for a person, questions containing personal information, questions with typos and questions mixing Thai and English
+**And** it includes individual-assessment questions, out-of-scope questions, questions with typos and questions mixing Thai and English
+**And** it includes at least four in-scope questions that no source answers, expected to get the no-answer message (FR4)
+**And** it includes at least three different requests for a person or for help with the whole process (FR13)
+**And** it includes questions containing personal information, with at least one Thai ID number, one passport number and one phone number (FR9)
 **And** some questions are follow-ups that come with a short history.
 
 **Given** the expected facts and categories
@@ -692,7 +714,7 @@ So that I can see whether the chatbot meets the quality targets after each chang
 **Given** the run has finished
 **When** the report is written to `eval/reports/<date>-<prompt versions>.md`
 **Then** it shows, per question, the automatic checks and the adviser column
-**And** it shows the totals against the targets: at least 90% of general questions correct with the correct source, and 100% of individual-assessment questions answered with "the embassy decides" (NFR4)
+**And** it shows the totals against the targets: at least 90% of general questions correct with the correct source, 100% of individual-assessment questions answered with "the embassy decides", 100% of questions the sources do not cover answered with the no-answer message, and 100% of requests for a person answered with the adviser contact (NFR4)
 **And** it records the models, prompt versions, total tokens and total cost (AD-12, NFR6).
 
 **Given** the adviser has filled in the judgement column
