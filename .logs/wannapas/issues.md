@@ -1,7 +1,7 @@
 # Åpne punkter
 
 - [x] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — Update epics-and-stories.md and implementation-plan.md to match the PRD (FR3/5/6/9 changed, FR12–14 and NFR8 new, ~12 stories) (resolved 2026-11-02: replaced by new epics.md; implementation-plan moved to a separate item)
-- [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: IBE160 deadline and group size (the priority order itself was set 2026-11-12; the deadline decides how far down it the MVP gets)
+- [x] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: IBE160 deadline and group size (the priority order itself was set 2026-11-12; the deadline decides how far down it the MVP gets) (resolved 2026-11-12: deadline 2026-11-15, one person; in PRD §8.1)
 - [x] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: response-time limit and measurable mobile limits for NFR1 (resolved 2026-11-12: mobile limits are now in NFR1; the response-time limit moved to a new item)
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: metric showing that the checklist replaces the adviser's document check
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §10: confirm the persona assumptions (Fah first-time applicant, Michael reads Thai)
