@@ -5,7 +5,7 @@
 - [x] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: response-time limit and measurable mobile limits for NFR1 (resolved 2026-11-12: mobile limits are now in NFR1; the response-time limit moved to a new item)
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §9: metric showing that the checklist replaces the adviser's document check
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — PRD §10: confirm the persona assumptions (Fah first-time applicant, Michael reads Thai)
-- [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — Add the grading guide PDF (Sensorveiledning IBE160 Del 1) to the repo and check the PRD against it
+- [x] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — Add the grading guide PDF (Sensorveiledning IBE160 Del 1) to the repo and check the PRD against it (resolved 2026-11-12: added as docs/planning/sensorveiledning-ibe160-del-1.pdf and checked against the repo; see grading-guide log)
 - [ ] 2026-11-02 [prd-norway-visa-guide](999-2026-11-02-22-16-46-prd-norway-visa-guide.md) — Full structure and language review of the PRD (bmad-review structure, prose) was skipped
 - [ ] 2026-11-02 [architecture](998-2026-11-02-22-53-29-architecture.md) — Test on a real phone that streaming works in Facebook's in-app browser (Deferred in the architecture spine) (now an AC in Story 1.6)
 - [ ] 2026-11-02 [architecture](998-2026-11-02-22-53-29-architecture.md) — implementation-plan.md is out of date compared with the PRD, architecture and epics.md (Haiku for classifying, demo answers in content/, checklist in the MVP, new epic order); update it or mark it as replaced
@@ -19,3 +19,8 @@
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Answer Bård's two reflection questions in tilbakemelding-prd.md §7
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Ask Bård whether technology.md (Pytagoras Forlag's website) belongs in this repository
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: deadline for the finished app (only part 1, 2026-11-15, is known)
+- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Working core flow by 2026-11-15 (part 1 = the app, 70 %): knowledge base, Claude connection, streamed answer with sources, privacy filter, demo mode
+- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Rewrite README for the examiner before 2026-11-15 (what it is, install, run, .env, demo mode, tests, folders, links to process docs)
+- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Add a linter/formatter (e.g. ruff) to the project and CI
+- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Write a short manual test plan (real phone, Facebook's in-app browser)
+- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Decide what to do with technology.md, which describes another app (grading-guide warning sign)
