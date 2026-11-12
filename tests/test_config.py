@@ -90,3 +90,17 @@ def test_env_example_values_are_valid() -> None:
 
     assert settings.anthropic_api_key is None
     assert settings == Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("value", ["  ", "\t"])
+def test_blank_adviser_contact_fails(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("ADVISER_CONTACT", value)
+
+    with pytest.raises(ValidationError, match="adviser_contact"):
+        Settings(_env_file=None)
+
+
+def test_adviser_contact_is_stripped(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADVISER_CONTACT", "  adviser@example.com ")
+
+    assert Settings(_env_file=None).adviser_contact == "adviser@example.com"

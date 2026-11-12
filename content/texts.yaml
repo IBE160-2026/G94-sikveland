@@ -1,0 +1,68 @@
+# Fixed user-facing texts (AD-6). Every Thai text here is reviewed by the adviser
+# before release (NFR8). Each entry needs a non-empty `th` and `en`.
+# `{ADVISER_CONTACT}` is replaced with ADVISER_CONTACT from the settings at startup.
+# The key list is closed: adding or removing a key also means changing
+# REQUIRED_TEXT_KEYS in app/ports/content.py.
+
+texts:
+  privacy-notice:
+    th: >-
+      โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน หรือเบอร์โทรศัพท์ในคำถาม
+      คำถามของคุณจะถูกส่งไปยังบริการ AI เพื่อสร้างคำตอบ
+    en: >-
+      Please do not include your passport number, ID card number or phone number
+      in your question. Your question is sent to an AI service to create the answer.
+
+  personal-info-reminder:
+    th: >-
+      เราได้ลบข้อมูลส่วนตัว (เช่น เลขหนังสือเดินทาง เลขบัตรประชาชน หรือเบอร์โทรศัพท์)
+      ออกจากคำถามของคุณก่อนส่ง โปรดอย่าใส่ข้อมูลเหล่านี้ในคำถาม
+    en: >-
+      We removed personal information (such as passport, ID card or phone numbers)
+      from your question before sending it. Please do not include this information
+      in your questions.
+
+  reply-no-answer:
+    th: >-
+      ขออภัย ไม่พบคำตอบสำหรับคำถามนี้ในแหล่งข้อมูลทางการที่เรามี
+      กรุณาติดต่อที่ปรึกษาที่ {ADVISER_CONTACT}
+    en: >-
+      Sorry, we could not find an answer to this question in our official sources.
+      Please contact the adviser at {ADVISER_CONTACT}.
+
+  error:
+    th: >-
+      ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งภายหลัง
+      หากยังมีปัญหา กรุณาติดต่อ {ADVISER_CONTACT}
+    en: >-
+      Sorry, something went wrong. Please try again later.
+      If the problem continues, please contact {ADVISER_CONTACT}.
+
+  demo-label:
+    th: โหมดสาธิต
+    en: Demo mode
+
+  send-button:
+    th: ส่ง
+    en: Send
+
+  question-placeholder:
+    th: พิมพ์คำถามเกี่ยวกับวีซ่านอร์เวย์ที่นี่
+    en: Type your question about the Norway visa here
+
+example-questions:
+  - id: tourist-visa-documents
+    th: ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง
+    en: What documents do I need for a Norway tourist visa?
+
+  - id: how-to-start
+    th: ถ้าจะขอวีซ่าไปนอร์เวย์ ต้องเริ่มต้นอย่างไร
+    en: How do I start applying for a Norway visa?
+
+  - id: visa-fee
+    th: ค่าธรรมเนียมวีซ่านอร์เวย์ราคาเท่าไร
+    en: How much is the Norway visa fee?
+
+  - id: processing-time
+    th: การพิจารณาวีซ่าใช้เวลานานเท่าไร
+    en: How long does the visa processing take?

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- All visible Thai text comes from /api/texts (AD-6); this file holds none. -->
+  <title>Norway Visa Guide</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <section id="load-failed" class="load-failed" hidden>
+      <button type="button" id="retry" class="retry">&#x21BB;</button>
+    </section>
+
+    <div id="chat" class="chat" hidden>
+      <p id="privacy-notice" class="privacy-notice" role="note"></p>
+      <div id="example-questions" class="example-questions"></div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <form id="question-form" class="question-form" hidden>
+    <textarea id="question" name="question" rows="2" maxlength="1000"></textarea>
+    <button type="submit" id="send" class="send"></button>
+  </form>
+</body>
+</html>

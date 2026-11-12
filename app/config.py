@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
 # USD per million tokens.
 Price = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+# Shown to applicants in fixed texts, so it can never be blank.
+Contact = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Settings(BaseSettings):
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
     effort_answer: Effort = "medium"
     effort_small: Effort = "low"
     mock_llm: bool = False
-    adviser_contact: str = "ngan.visaa@gmail.com"
+    adviser_contact: Contact = "ngan.visaa@gmail.com"
     database_path: str = "data/feedback.sqlite3"
 
     price_answer_input: Price = 4.00
