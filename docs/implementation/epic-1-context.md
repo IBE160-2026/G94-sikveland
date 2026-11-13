@@ -4,12 +4,12 @@
 
 ## Goal
 
-An applicant opens a mobile chat page, taps an example question or types their own, and gets a Thai answer streamed bit by bit, grounded only in official sources and linking to them, including the application steps in order. Follow-up questions work, personal information is removed before anything reaches the AI service, and when the knowledge base has no answer the applicant gets the adviser contact. The epic also lays the foundation every later epic builds on: project skeleton, CI, the LLM port with fake and real adapters, the knowledge base and ingest script, fixed texts and cost logging.
+A Thai applicant opens the mobile chat page, taps an example question or types their own, and gets a Thai answer streamed bit by bit with links to the official sources it is based on, including the application steps in order when they ask how to start. Follow-up questions work, personal information is removed before anything reaches the AI service, and when the knowledge base has no answer the applicant gets the adviser contact instead of a guess. The epic also lays the foundation every later epic builds on: project skeleton, CI, the LLM port with a scripted test fake and a real Anthropic adapter, the knowledge base, fixed texts and cost logging. It is the top of the build priority: the core must work end to end before checklist, feedback or translation work starts.
 
 ## Stories
 
-- Story 1.1: Project skeleton with CI
-- Story 1.2: Chat page with Thai texts, privacy notice and example questions
+- Story 1.1: Project skeleton with CI (done)
+- Story 1.2: Chat page with Thai texts, privacy notice and example questions (done)
 - Story 1.3: Knowledge base of official sources
 - Story 1.4: Personal information filter
 - Story 1.5: Claude connection with a test version
@@ -19,41 +19,46 @@ An applicant opens a mobile chat page, taps an example question or types their o
 
 ## Requirements & Constraints
 
-- Answers in Thai, also for typos and mixed Thai/English; the page opens in Thai; follow-ups use earlier questions in the same conversation.
-- Every model answer is based only on the knowledge base and shows at least one source link; no facts outside its sources. Zero citations means the fixed no-answer text with the adviser contact.
-- When asked how to start, the steps come in order: documents → register at UDI → pay the visa fee → book at VFS, each with its website.
-- Privacy: the page warns against sharing passport, ID or phone numbers and says questions go to an AI service. Those numbers are removed before any AI call and never stored; the rest of the question is still answered, with a reminder.
-- Knowledge base: 10–20 official sources (UDI, VFS Global, Royal Norwegian Embassy in Bangkok, EU Schengen pages), each with URL, publisher and retrieval date; updated by a script; the adviser reviews diffs before commit.
-- Mobile first, including Facebook's in-app browser; large touch targets, simple language.
-- Runnable locally from the README with an own API key; demo mode (no key) arrives in Epic 4.
-- Automated tests never call the real API and run in GitHub Actions.
-- No conversation text stored anywhere on the server (disk, database, logs); no secrets or real enquiries in the repo.
-- Cost per question is measured and reported; prompts are versioned files.
-- All fixed Thai texts are reviewed by the adviser before release; note it in the pull request.
+- **Thai in, Thai out.** The page opens in Thai; answers are in Thai also for questions with typos or mixed Thai/English. Follow-ups use earlier exchanges from the same conversation.
+- **Grounded answers only.** Every model answer is based only on the knowledge base and shows at least one source link; it contains no facts not in its sources. Fixed replies need no source link.
+- **No-answer handling.** An in-scope question that no source answers (the answer would cite nothing) gets the fixed no-answer message with the adviser contact and no claims about requirements, fees or deadlines. This must hold for 100% of such questions in the test set (at least four).
+- **Application steps.** "How do I start?" gets the steps in this order, each naming and linking its website: prepare documents (embassy checklist) → register at UDI → pay the visa fee → book an appointment at VFS.
+- **Example questions.** 3–5 example questions shown as large buttons; tapping one sends it immediately without typing.
+- **Privacy.** The page states, in Thai, not to share personal information, that questions go to an AI service, and that names and addresses are not removed automatically. Removed before any AI call and never stored: 13-digit Thai ID (with or without dashes/spaces), passport numbers, Thai phone numbers (08x-xxx-xxxx, +66) and Norwegian phone numbers. Amounts ("90 euro") and dates must survive. When something is removed, the applicant sees a reminder and the rest of the question is still answered.
+- **Knowledge base.** 10–20 official sources only (UDI, VFS Global, Royal Norwegian Embassy in Bangkok, EU Schengen pages), each with URL, publisher and retrieval date; covers application steps, document requirements per visit purpose, sponsorship form and invitation letter, relationship proof and the visa fee. The adviser reviews changes before use; every answer is traceable to a source version (its retrieval date).
+- **Mobile first.** Works from 360 px width with no horizontal scroll down to 320 px; touch targets at least 44×44 px; simple language. Streaming must be verified on a real phone in Facebook's in-app browser and noted in the PR.
+- **Safe tests.** pytest runs in GitHub Actions and never calls the real API.
+- **Nothing stored.** No conversation text on disk, in a database or in logs; no secrets or real applicant enquiries in the repo.
+- **Cost.** Cost per question is measured and logged; cache use must be visible.
+- **Adviser review.** Every fixed Thai text (example questions, privacy notice, no-answer, reminder, error) is reviewed by the adviser before release and noted in the PR.
 
 ## Technical Decisions
 
-- **Stack:** Python 3.12, uv (`pyproject.toml` + `uv.lock`), FastAPI 0.162, uvicorn 0.54, anthropic 2.4.0, pydantic-settings 2.16, PyYAML 6.0, httpx 0.28, markdownify 1.2, pypdf 6.21, pytest 9.2, SQLite from the standard library. Plain HTML/CSS/JS page, no framework. Start with `uv run uvicorn app.main:app`.
-- **Layout:** `app/{web,pipeline,ports,adapters,static}`, `app/main.py` (wiring + startup checks), `app/config.py`; plus `content/`, `prompts/`, `knowledge-base/`, `scripts/`, `eval/`, `tests/` (with `tests/fakes/`), `data/`.
-- **Dependency direction:** page → `app/web` over HTTP only; web → pipeline and config; pipeline → ports only (pure logic, no FastAPI or SDK imports); adapters → ports and config; `main.py` wires adapters.
-- **SDK isolation:** only `app/adapters/anthropic_llm.py` imports `anthropic`; no SDK types leave it. `MOCK_LLM=true` wires the demo adapter. pytest always uses the scripted fake in `tests/fakes/`.
-- **Pipeline order:** filter personal info → classify → route → answer or fixed reply. Nothing reaches the LLM before the filter. In this epic, classify is not yet built: every question is `general`.
-- **LLM port:** `answer(question, history)` streams `{text, source_ids}` chunks then `Usage` (input, output incl. thinking, cache-read, cache-write). `classify` and `translate` are declared for later epics. Answers use `MODEL_ANSWER` (Claude Opus 5.5) with adaptive thinking and `EFFORT_ANSWER`, no sampling parameters; `stop_reason: "refusal"` is an error.
-- **Answer request shape:** system prompt → every KB document sorted by source id, Citations on, cache breakpoint after the last document → history as plain text → question. Text is held back until the first citation; a started reply is never replaced.
-- **Stream contract:** `POST /api/chat` returns JSON Lines; events `meta` (`category`, `personal_info_removed`, `clean_question`) → `text` (`delta`)* → `sources` (`[{id, title, url}]`, `checklist`, `checklist_purposes`) → `done`, or `error` ending the stream. Only `app/web` builds events. The page reads with `fetch` + `getReader()` + streaming `TextDecoder` and only appends text.
-- **Stateless server:** history lives in the page's `sessionStorage`, sent as `{question, history: [{question, answer}]}`, max 10 exchanges, stored only after `done` using `clean_question`. The filter also runs on every history turn.
-- **Fixed texts:** `content/texts.yaml`, closed key list with `th` and `en`; `{ADVISER_CONTACT}` filled at load; `GET /api/texts` returns `{demo_mode, texts, example_questions}`; no hard-coded Thai in the page.
-- **Knowledge base:** `knowledge-base/sources.yaml` (`id`, `title`, `url`, `publisher`, `retrieved`, `file`) + Markdown snapshots from `scripts/ingest.py`; the app never fetches at runtime; startup fails if a snapshot is missing.
-- **Config:** everything from `.env` via `app/config.py` (pydantic-settings): `ANTHROPIC_API_KEY`, `MODEL_ANSWER`, `MODEL_SMALL`, `EFFORT_ANSWER`, `EFFORT_SMALL`, `MOCK_LLM`, `ADVISER_CONTACT`, `DATABASE_PATH`, and `PRICE_ANSWER_*` / `PRICE_SMALL_*` (input, output, cache read, cache write; USD per million tokens). `.env.example` lists all; `.env` and `data/` are git-ignored.
-- **Conventions:** kebab-case ids for sources, content keys and example questions; ISO 8601 dates, UTC timestamps; non-streaming errors use `{"error": {"code", "message"}}`; one JSON log line per request (category, prompt versions, usage, cost) with no question or answer text; prompts in `prompts/` start with a `version:` line. Code, identifiers, logs and docs in English; user-facing text in Thai with stored English.
+- **Stack:** Python 3.12 with uv, FastAPI, uvicorn, anthropic SDK, pydantic-settings, PyYAML, pytest, plain HTML/CSS/JS page (no framework). Ingest uses httpx, markdownify and pypdf. Models: `MODEL_ANSWER` = Claude Opus 5.5 for answers; `MODEL_SMALL` = Claude Haiku 5.5 for classify/translate (later epics).
+- **Layers:** `app/web` (routes, stream events, logging), `app/pipeline` (pure logic, no FastAPI/SDK imports), `app/ports` (`LLMClient`, `KnowledgeBase`, `ContentStore`, `FeedbackStore`), `app/adapters`, `app/static`. `app/main.py` wires adapters and runs startup checks.
+- **Fixed pipeline order:** filter personal info → classify → route → answer or fixed reply. Nothing reaches the LLM before the filter. In this epic there is no classifier yet: every question is treated as `general`.
+- **LLM port:** `answer(question, history)` yields `{text, source_ids}` chunks then `Usage` (input, output incl. thinking, cache-read, cache-write). `classify` and `translate` are declared but implemented in later epics. Adapters return no SDK types; only `app/adapters/anthropic_llm.py` imports `anthropic`. A refusal stop reason is raised as an error. Adaptive thinking with effort from config; no sampling parameters.
+- **Answer request shape (fixed, for caching):** system prompt → all KB documents sorted by source `id`, Citations on, cache breakpoint after the last document → history as plain-text alternating user/assistant turns → question. Citations become source IDs.
+- **Grounding rule in the pipeline:** hold back answer text until the first cited chunk arrives, then stream held text and the rest. Zero citations at the end → discard held text and send `reply-no-answer`. A reply that has started streaming is never replaced. Shown sources are exactly the cited ones.
+- **Stream contract:** `POST /api/chat` with `{question, history: [{question, answer}]}` returns JSON Lines. Events: one `meta` (`category`, `personal_info_removed`, `clean_question`) → zero or more `text` (`delta`) → one `sources` (`[{id, title, url}]`, `checklist`, `checklist_purposes`; in this epic always `false` / `[]`) → `done`. `error` can replace any later event and ends the stream. A fixed reply is one `text` event. Only `app/web` builds events. The page reads with `fetch` + `getReader()` + streaming `TextDecoder`, only appends text, and shows a typing indicator until the first `text`.
+- **Stateless server:** the conversation lives in the page's `sessionStorage`; at most the last 10 exchanges are sent. The page stores an exchange only after `done` (never after `error`), using `clean_question` and the exact shown text, fixed replies included. Reload in the same tab keeps it; closing the tab drops it.
+- **Personal-info filter:** pattern-based, pure logic, runs on the new question and every history turn (and later translate input). `personal_info_removed` describes the new question only. Matches are replaced with a neutral marker. Exact patterns are an implementation detail but must pass the tests and test set.
+- **Fixed texts:** `content/texts.yaml`, closed key list, each with `th` and `en`; `{ADVISER_CONTACT}` filled at load. Keys used here: `privacy-notice`, `personal-info-reminder`, `reply-no-answer`, `error`, `demo-label`. `GET /api/texts` returns `{demo_mode, texts, example_questions: [{id, text}]}`. No hard-coded Thai in the page.
+- **Knowledge base:** `knowledge-base/sources.yaml` (kebab-case `id`, `title`, `url`, `publisher`, `retrieved`, `file`) plus committed Markdown snapshots. `scripts/ingest.py` runs offline, writes snapshots, updates `retrieved`, reports changed and failed sources (keeping old snapshots). The app never fetches at runtime and refuses to start if a source lacks a snapshot. Every link shown must be a source in this file.
+- **Prompts:** `prompts/answer-system.md` starts with a `version:` line; it instructs Thai answers, documents only, and the ordered application steps with websites.
+- **Logging and cost:** `app/web` writes one JSON line per request: timestamp, category, prompt versions, model, input/output/cache-read/cache-write tokens, cost in USD. Never question or answer text. Each call is priced with its model's `PRICE_ANSWER_*` / `PRICE_SMALL_*` settings (USD per million tokens), with cache reads and writes priced separately.
+- **Conventions:** config only via `app/config.py` from `.env` (`.env.example` lists all settings); `.env` and `data/` git-ignored; kebab-case IDs; ISO 8601 dates, UTC timestamps; non-streaming errors use `{"error": {"code", "message"}}`; the applicant always sees the fixed `error` text. Code, identifiers, logs and docs in English; user-facing text in Thai with stored English.
+- **Tests:** a scripted fake `LLMClient` in `tests/fakes/` can return chunks with or without source IDs, errors or refusals; tests cover the cited, zero-citation and error paths, filter patterns and false positives.
 
 ## UX & Interaction Patterns
 
-- No UX document; layout is decided in the chat-page stories, bound by mobile-first and the stream contract.
-- The page shows the privacy notice, example questions as large tappable buttons, a text field and send button, a typing indicator until the first text, and source links under each answer.
-- A real-phone check that streaming works in Facebook's in-app browser belongs to the streamed-answer story.
+- No UX design document; layout is decided in the stories, bound by the mobile-first constraints and the stream contract.
+- Page shows: privacy notice, example-question buttons, text field and send button, streamed answer with source links underneath, typing indicator until text arrives.
+- When personal info was removed, the fixed reminder appears above the reply.
+- On error, the fixed `error` text is shown and the exchange is not kept in history.
 
 ## Cross-Story Dependencies
 
-- 1.1 is the base for everything (layout, config, CI). 1.2 and 1.3 provide `ContentStore` and `KnowledgeBase`; 1.4 the filter; 1.5 the LLM port, fake and real adapter; 1.6 combines them into `/api/chat` and the page; 1.7 adds history; 1.8 adds the request log on top of `Usage` from 1.5.
-- Epic 2 adds `classify` and more fixed-text keys; Epic 3 the checklist flag in `sources`; Epic 4 `translate` and the demo adapter.
+- Build order: 1.3–1.8 finish the core, then 2.1 ("the embassy decides"), 4.2 (demo mode) and 4.3 (README) so the examiner can run the app early. If time is short, Story 1.3 can start with hand-made snapshots and add the ingest script last.
+- 1.5 needs the knowledge base (1.3) for the answer request; 1.6 needs the filter (1.4), the LLM port and fake (1.5) and texts from 1.2; 1.7 builds on 1.6's stream and `meta.clean_question`; 1.8 needs `Usage` from 1.5 and price settings from 1.1.
+- Later epics extend this epic's pieces: Epic 2 adds the classifier and new fixed-reply categories into the same pipeline and logs its usage; Epic 3 fills `checklist`/`checklist_purposes` in the `sources` event; Epic 4 adds `translate`, the `mock_llm` demo adapter and README; Epic 5 runs the test set through the same pipeline entry point. Keep the port, stream contract and pipeline entry stable for them.
