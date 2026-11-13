@@ -29,3 +29,5 @@
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Add a VFS Global source so the "book at VFS" step can link to VFS (FR12; deferred-work.md)
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Story 1.5: answer prompt must handle sources that disagree
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Delete docs/VFS data/ (untracked; printed PDF has the user's full name in its metadata)
+- [ ] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter removes any bare 8-digit number starting with 4 or 9 (e.g. 90000000) as a Norwegian mobile; check against the evaluation test set
+- [ ] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Manual check: longer privacy notice at 360 px without horizontal scroll
