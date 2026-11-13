@@ -24,3 +24,8 @@
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Add a linter/formatter (e.g. ruff) to the project and CI
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Write a short manual test plan (real phone, Facebook's in-app browser)
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Decide what to do with technology.md, which describes another app (grading-guide warning sign)
+- [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Adviser: settle photo age (embassy FAQ says both 3 and 6 months, checklist says 6); both are in the knowledge base
+- [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Adviser: confirm the embassy checklist .docx (path contains xx-old-unused) is current
+- [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Add a VFS Global source so the "book at VFS" step can link to VFS (FR12; deferred-work.md)
+- [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Story 1.5: answer prompt must handle sources that disagree
+- [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Delete docs/VFS data/ (untracked; printed PDF has the user's full name in its metadata)
