@@ -11,7 +11,7 @@
 - [ ] 2026-11-02 [architecture](998-2026-11-02-22-53-29-architecture.md) — implementation-plan.md is out of date compared with the PRD, architecture and epics.md (Haiku for classifying, demo answers in content/, checklist in the MVP, new epic order); update it or mark it as replaced
 - [x] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Check that the first GitHub Actions CI run passes (resolved 2026-11-03: passes after pinning setup-uv@v10.3.3)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 2.3: resolve DATABASE_PATH against the project root (deferred-work.md)
-- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md)
+- [x] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md) (resolved 2026-11-14: tests/test_layering.py and conftest.py in Story 1.5)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md
 - [ ] 2026-11-12 [story-1-2-chat-page](995-2026-11-12-22-58-24-story-1-2-chat-page.md) — Story 1.6: browser-level test for the chat page JavaScript (render, tap-to-fill, retry, streaming) (deferred-work.md)
 - [x] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Story 1.4: adviser reviews the changed Thai privacy notice (names and addresses are not removed) (resolved 2026-11-14: adviser approved the new notice and reminder; committed in 4da7990)
@@ -33,3 +33,4 @@
 - [ ] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Manual check: longer privacy notice at 360 px without horizontal scroll
 - [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter: known ID leaks and false positives in deferred-work.md (2 entries); check against the evaluation test set
 - [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Update the PRD (FR9) and epics: phone numbers are not removed
+- [ ] 2026-11-14 [story-1-5-claude-connection](990-2026-11-14-22-14-32-story-1-5-claude-connection.md) — Manual check of the Anthropic adapter with a real API key (Thai answer, source id, cache write then cache read)
