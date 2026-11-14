@@ -9,6 +9,9 @@ from app.config import Settings, get_settings
 Settings.model_config["env_file"] = None
 for _name in Settings.model_fields:
     os.environ.pop(_name.upper(), None)
+# Credentials and endpoint the Anthropic SDK reads on its own, besides ANTHROPIC_API_KEY.
+for _name in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_PROFILE"):
+    os.environ.pop(_name, None)
 get_settings.cache_clear()
 
 
