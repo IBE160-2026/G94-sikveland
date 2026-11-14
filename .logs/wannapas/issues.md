@@ -35,3 +35,4 @@
 - [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Update the PRD (FR9) and epics: phone numbers are not removed
 - [ ] 2026-11-14 [story-1-5-claude-connection](990-2026-11-14-22-14-32-story-1-5-claude-connection.md) — Manual check of the Anthropic adapter with a real API key (Thai answer, source id, cache write then cache read)
 - [ ] 2026-11-14 [story-1-5-claude-connection](990-2026-11-14-22-14-32-story-1-5-claude-connection.md) — Story 1.6: explicit timeout and retries on the Anthropic client (deferred-work.md)
+- [ ] 2026-11-14 [story-1-6-streamed-answer-with-sources](989-2026-11-14-22-27-43-story-1-6-streamed-answer-with-sources.md) — Manual browser check of the chat page at 360/320 px with a real key (typing dots, streamed Thai, source links, no horizontal scroll) and without a key (fixed error text)
