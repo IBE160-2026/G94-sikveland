@@ -34,3 +34,4 @@
 - [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter: known ID leaks and false positives in deferred-work.md (2 entries); check against the evaluation test set
 - [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Update the PRD (FR9) and epics: phone numbers are not removed
 - [ ] 2026-11-14 [story-1-5-claude-connection](990-2026-11-14-22-14-32-story-1-5-claude-connection.md) — Manual check of the Anthropic adapter with a real API key (Thai answer, source id, cache write then cache read)
+- [ ] 2026-11-14 [story-1-5-claude-connection](990-2026-11-14-22-14-32-story-1-5-claude-connection.md) — Story 1.6: explicit timeout and retries on the Anthropic client (deferred-work.md)
