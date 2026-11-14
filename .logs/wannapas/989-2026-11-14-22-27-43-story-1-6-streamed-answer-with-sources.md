@@ -15,8 +15,11 @@ Implement Story 1.6 from its spec (dispatched implementation step): `POST /api/c
 - Beyond the spec: `Failed` carries a `reason` (exception class name or `unknown source id`) so `app/web` can log failures without text.
 - `uv run pytest`: 436 passed, no network, no key. Live check with uvicorn and a slow fake model: `meta` arrives at once, each `text` line arrives as the model yields it, Thai sent as UTF-8. `node --check` on `app.js` passes.
 - Review fixes: 422 no longer echoes extra-key names (`unknown field: ...`); history turns are stripped and limited (question 1-1000, answer 1-10000 characters); the page keeps a typed draft on example taps, puts the question back after any failure, cancels the reader when reading stops early, and sets `aria-busy` on `#messages` while answering. `tests/test_chat_api.py` + `tests/test_static.py`: 71 passed.
-- Not committed (left for the caller/review step).
+- Review (3 reviewers, 15 findings, triage in the spec): 5 patched (above), 4 deferred (timeouts for a stalled answer incl. page `AbortController` and possible heartbeat, client-disconnect check, browser-level JS tests; 2 new entries in deferred-work.md), 6 rejected.
+- `uv run pytest`: 446 passed. Committed to main as `0b1dd5f` (Story 1.6). Spec `done`, sprint status `review`. Not pushed.
 
 ### Open items
+- Timeouts for a stalled answer (SDK timeout/retries, page deadline, maybe heartbeat) and the client-disconnect check: deferred-work.md, after the real-phone test.
+- Browser-level tests for the page JavaScript: deferred-work.md, after part 1.
 - Manual check in a browser at 360/320 px (typing dots, Thai text in parts, source links, no horizontal scroll; without key the fixed error text) and with a real API key: not run here.
 - Manual check on a real phone in Facebook's in-app browser (AC, to be noted in the PR) — already tracked from the architecture log.
