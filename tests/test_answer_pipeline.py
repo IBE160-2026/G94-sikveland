@@ -12,13 +12,14 @@ from app.pipeline.answer import (
     Meta,
     SourceRef,
     Sources,
+    Spent,
     TextDelta,
     answer_question,
 )
 from app.pipeline.filter import REMOVED_MARKER
 from app.ports.knowledge_base import Source
 from app.ports.llm import AnswerChunk, Exchange, LLMError, Usage
-from tests.fakes.fake_llm import ScriptedLLM
+from tests.fakes.fake_llm import DEFAULT_USAGE, ScriptedLLM
 
 NO_ANSWER = "no answer, contact the adviser"
 META = Meta(category="general", personal_info_removed=False, clean_question="How much is the fee?")
@@ -69,6 +70,7 @@ def test_cited_answer_holds_text_until_the_first_citation() -> None:
         TextDelta("A"),
         TextDelta("B"),
         TextDelta("C"),
+        Spent(DEFAULT_USAGE),
         Sources((_ref("s1"),)),
         Done(),
     ]
@@ -98,10 +100,10 @@ def test_sources_are_the_cited_ones_in_first_cited_order_each_once() -> None:
         ]
     )
 
-    events = _run(llm)
+    sources = next(e for e in _run(llm) if isinstance(e, Sources))
 
-    assert events[-2] == Sources((_ref("s2"), _ref("s1")))
-    assert _ref("s3") not in events[-2].items
+    assert sources == Sources((_ref("s2"), _ref("s1")))
+    assert _ref("s3") not in sources.items
 
 
 def test_empty_text_deltas_are_never_sent() -> None:
@@ -115,11 +117,11 @@ def test_empty_text_deltas_are_never_sent() -> None:
 def test_zero_citations_sends_only_the_no_answer_text() -> None:
     llm = ScriptedLLM([AnswerChunk("uncited guess"), AnswerChunk(" about fees")])
 
-    assert _run(llm) == [META, TextDelta(NO_ANSWER), Sources(()), Done()]
+    assert _run(llm) == [META, TextDelta(NO_ANSWER), Spent(DEFAULT_USAGE), Sources(()), Done()]
 
 
 def test_empty_answer_gets_the_no_answer_text() -> None:
-    assert _run(ScriptedLLM([])) == [META, TextDelta(NO_ANSWER), Sources(()), Done()]
+    assert _run(ScriptedLLM([])) == [META, TextDelta(NO_ANSWER), Spent(DEFAULT_USAGE), Sources(()), Done()]
 
 
 def test_personal_info_is_removed_before_the_model_sees_the_question() -> None:
@@ -191,7 +193,29 @@ def test_usage_ends_the_answer() -> None:
             yield usage
             yield AnswerChunk("ignored", ("s2",))
 
-    assert _run(AfterUsage()) == [META, TextDelta("A"), Sources((_ref("s1"),)), Done()]
+    assert _run(AfterUsage()) == [META, TextDelta("A"), Spent(usage), Sources((_ref("s1"),)), Done()]
+
+
+def test_spent_carries_the_usage_the_model_reported() -> None:
+    usage = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
+
+    events = _run(ScriptedLLM([AnswerChunk("A", ("s1",))], usage=usage))
+
+    assert events[-3:] == [Spent(usage), Sources((_ref("s1"),)), Done()]
+
+
+def test_no_spent_without_usage() -> None:
+    class NoUsage(ScriptedLLM):
+        def _stream(self):  # type: ignore[override]
+            yield AnswerChunk("A", ("s1",))
+
+    assert _run(NoUsage()) == [META, TextDelta("A"), Sources((_ref("s1"),)), Done()]
+
+
+def test_no_spent_on_error() -> None:
+    events = _run(ScriptedLLM([AnswerChunk("A", ("s1",))], error=LLMError("cut")))
+
+    assert not any(isinstance(e, Spent) for e in events)
 
 
 def test_failed_is_always_last() -> None:

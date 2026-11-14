@@ -3,8 +3,9 @@
 Pure logic: the events here are domain values. `app/web` turns them into stream
 events (AD-8); nothing here knows about HTTP, JSON or an SDK.
 
-Order of events: one `Meta`, zero or more `TextDelta`, one `Sources`, then `Done`.
-`Failed` can come instead of any event after `Meta` and is always the last one.
+Order of events: one `Meta`, zero or more `TextDelta`, one `Spent` when the model
+reported its token use, one `Sources`, then `Done`. `Failed` can come instead of
+any event after `Meta` and is always the last one.
 """
 
 from collections.abc import Iterator, Sequence
@@ -48,6 +49,13 @@ class Sources:
 
 
 @dataclass(frozen=True)
+class Spent:
+    """The tokens the answer call used, for the request log. Never shown to the applicant."""
+
+    usage: Usage
+
+
+@dataclass(frozen=True)
 class Done:
     """The answer is complete."""
 
@@ -59,7 +67,7 @@ class Failed:
     reason: str
 
 
-AnswerEvent = Meta | TextDelta | Sources | Done | Failed
+AnswerEvent = Meta | TextDelta | Sources | Spent | Done | Failed
 
 
 def answer_question(
@@ -89,11 +97,13 @@ def answer_question(
     yield Meta(category="general", personal_info_removed=clean.removed, clean_question=clean.text)
 
     held: list[str] = []
+    usage: Usage | None = None
     cited: dict[str, SourceRef] = {}  # insertion order = order of first citation
     try:
         for item in llm.answer(clean.text, clean_history):
             if isinstance(item, Usage):
-                break  # the last item of an answer; cost logging comes in Story 1.8
+                usage = item
+                break  # the last item of an answer
             for source_id in item.source_ids:
                 if source_id not in cited:
                     try:
@@ -115,6 +125,9 @@ def answer_question(
 
     if not cited:
         yield TextDelta(no_answer_text)
+    # Before `Sources`: a client that leaves at that event still gets its cost logged.
+    if usage is not None:
+        yield Spent(usage)
     yield Sources(tuple(cited.values()))
     yield Done()
 

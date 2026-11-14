@@ -16,6 +16,7 @@ def test_defaults_without_env_file(settings: Settings) -> None:
     assert settings.effort_small == "low"
     assert settings.mock_llm is False
     assert settings.database_path == "data/feedback.sqlite3"
+    assert Settings(_env_file=None).request_log_path == "data/requests.jsonl"
 
 
 def test_env_var_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:

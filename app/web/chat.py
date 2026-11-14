@@ -1,30 +1,35 @@
 """`POST /api/chat`: one question in, a JSON Lines stream of events out (AD-8).
 
 The only place the stream events are built. Question and answer text never go
-to the log; a failure is logged by class name or a short label only.
+to the log; a failure is logged by class name or a short label only. When the
+stream ends (done, error or the client going away), one line goes to the request
+log (`app/web/request_log.py`).
 """
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.config import Settings
 from app.pipeline.answer import (
     AnswerEvent,
     Done,
     Failed,
     Meta,
     Sources,
+    Spent,
     TextDelta,
     answer_question,
 )
 from app.ports.content import ContentStore
 from app.ports.knowledge_base import KnowledgeBase
-from app.ports.llm import Exchange, LLMClient
+from app.ports.llm import Category, Exchange, LLMClient, Usage
+from app.web.request_log import Outcome, RequestLog, answer_prices, request_line
 
 MAX_QUESTION_CHARS = 1000
 MAX_ANSWER_CHARS = 10000
@@ -78,25 +83,76 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
         knowledge_base,
         no_answer_text=content.texts()["reply-no-answer"].th,
     )
+    settings: Settings = state.settings
+    request_log: RequestLog = state.request_log
+    answer_prompt_version: str = state.answer_prompt.version
+
+    def log_request(outcome: Outcome, category: Category | None, usage: Usage | None) -> None:
+        request_log.write(
+            request_line(
+                outcome=outcome,
+                category=category,
+                answer_prompt_version=answer_prompt_version,
+                model=settings.model_answer,
+                usage=usage,
+                prices=answer_prices(settings),
+            )
+        )
+
     return StreamingResponse(
-        _lines(events),
+        _lines(events, log_request),
         media_type=MEDIA_TYPE,
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )
 
 
-def _lines(events: Iterator[AnswerEvent]) -> Iterator[str]:
-    """One JSON object per line; any failure becomes an `error` event that ends the stream."""
+LogRequest = Callable[[Outcome, Category | None, Usage | None], None]
+
+
+def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[str]:
+    """One JSON object per line; any failure becomes an `error` event that ends the stream.
+
+    `log_request` is called once when the stream ends, also when the server closes
+    it because the client went away (outcome `incomplete`). `Spent` is never sent.
+    """
+    outcome: Outcome = "incomplete"
+    category: Category | None = None
+    usage: Usage | None = None
+    answered: Outcome = "no_answer"
     try:
         for event in events:
-            if isinstance(event, Failed):
-                logger.warning("chat answer failed: %s", event.reason)
-                yield _line(ERROR_EVENT)
-                return
+            match event:
+                case Failed():
+                    outcome = "error"
+                    logger.warning("chat answer failed: %s", event.reason)
+                    yield _line(ERROR_EVENT)
+                    return
+                case Spent():
+                    usage = event.usage
+                    continue
+                case Meta():
+                    category = event.category
+                case Sources():
+                    answered = "answered" if event.items else "no_answer"
+                case Done():
+                    outcome = answered
             yield _line(_event(event))
     except Exception as exc:  # noqa: BLE001 - the stream must end with an event, not a cut
+        outcome = "error"
         logger.error("chat stream failed: %s", type(exc).__name__)
         yield _line(ERROR_EVENT)
+    finally:
+        try:
+            # Ends the model stream now rather than at garbage collection.
+            close = getattr(events, "close", None)
+            if close is not None:
+                close()
+        except Exception as exc:  # noqa: BLE001 - logging below must still run
+            logger.error("closing the answer stream failed: %s", type(exc).__name__)
+        try:
+            log_request(outcome, category, usage)
+        except Exception as exc:  # noqa: BLE001 - the log must never break an answer
+            logger.error("request log failed: %s", type(exc).__name__)
 
 
 def _event(event: AnswerEvent) -> dict[str, Any]:

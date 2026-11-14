@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from fastapi.testclient import TestClient
 import app.main
 from app.adapters.anthropic_llm import AnthropicLLM
 from app.adapters.file_prompts import PromptError
-from app.config import Settings
+from app.config import ROOT, Settings
 from app.main import create_app
 from app.pipeline.filter import REMOVED_MARKER
 from app.ports.llm import AnswerChunk, Exchange, LLMError, Usage
@@ -365,3 +366,181 @@ def test_follow_up_sends_the_history_to_the_model_in_order(settings: Settings) -
     # Only the new question sets the flag; it had no personal information.
     assert events[0]["personal_info_removed"] is False
     assert events[-1] == {"type": "done"}
+
+
+# --- Request log (Story 1.8) ---------------------------------------------------------
+
+LOG_FIELDS = {
+    "timestamp",
+    "outcome",
+    "category",
+    "prompt_versions",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "cost_usd",
+}
+SPEC_USAGE = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
+
+
+def _log(settings: Settings) -> list[dict[str, Any]]:
+    path = Path(settings.request_log_path)
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_cited_answer_logs_one_line_with_tokens_and_cost(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,))], usage=SPEC_USAGE)
+    client = _client(settings, llm)
+
+    _events(client, {"question": QUESTION, "history": []})
+
+    [line] = _log(settings)
+    assert set(line) == LOG_FIELDS
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", line["timestamp"])
+    assert {k: v for k, v in line.items() if k != "timestamp"} == {
+        "outcome": "answered",
+        "category": "general",
+        "prompt_versions": {"answer": client.app.state.answer_prompt.version},
+        "model": settings.model_answer,
+        "input_tokens": 1000,
+        "output_tokens": 200,
+        "cache_read_tokens": 50000,
+        "cache_write_tokens": 0,
+        # (1000x4 + 200x20 + 50000x0.2 + 0x5) / 1e6 with the default prices
+        "cost_usd": 0.018,
+    }
+
+
+def test_no_answer_logs_no_answer_with_tokens_and_cost(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("uncited")], usage=SPEC_USAGE)
+
+    _events(_client(settings, llm), {"question": QUESTION, "history": []})
+
+    [line] = _log(settings)
+    assert line["outcome"] == "no_answer"
+    assert (line["input_tokens"], line["cost_usd"]) == (1000, 0.018)
+
+
+@pytest.mark.parametrize(
+    "llm",
+    [
+        ScriptedLLM([], error=LLMError("boom")),
+        ScriptedLLM([AnswerChunk("A", (S1,))], error=LLMError("cut")),
+        ScriptedLLM([], refusal=True),
+        ScriptedLLM([AnswerChunk("A", ("no-such-source",))]),
+        _Exploding(),
+    ],
+    ids=["error-before-text", "error-after-text", "refusal", "unknown-source", "unexpected"],
+)
+def test_error_logs_error_with_null_tokens_and_cost(settings: Settings, llm: ScriptedLLM) -> None:
+    events = _events(_client(settings, llm), {"question": QUESTION, "history": []})
+
+    assert events[-1] == ERROR
+    [line] = _log(settings)
+    assert set(line) == LOG_FIELDS
+    assert line["outcome"] == "error"
+    assert line["category"] == "general"
+    for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd"):
+        assert line[field] is None, field
+
+
+def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
+    from app.pipeline.answer import answer_question
+    from app.web.chat import _lines
+
+    logged: list[tuple[Any, ...]] = []
+    llm = ScriptedLLM([AnswerChunk("A", (S1,)), AnswerChunk("B"), AnswerChunk("C")], usage=SPEC_USAGE)
+    kb = create_app(settings, llm=llm).state.knowledge_base
+    events = answer_question(QUESTION, (), llm, kb, "no answer")
+    lines = _lines(events, lambda *args: logged.append(args))
+
+    assert json.loads(next(lines))["type"] == "meta"
+    assert json.loads(next(lines)) == {"type": "text", "delta": "A"}
+    assert logged == []
+    # Simulates the close that garbage collection performs on the abandoned stream
+    # when the client goes away (Starlette does not close it itself).
+    lines.close()
+
+    assert logged == [("incomplete", "general", None)]
+    assert events.gi_frame is None  # the pipeline (and the model stream) is closed too
+
+
+def test_privacy_no_question_answer_or_personal_info_in_the_log(settings: Settings) -> None:
+    answer = "the answer text about the fee"
+    client = _client(settings, ScriptedLLM([AnswerChunk(answer, (S1,))], usage=SPEC_USAGE))
+    question = "passport AA1234567 how much is the fee?"
+
+    history = [{"question": "earlier q", "answer": "earlier a"}]
+
+    events = _events(client, {"question": question, "history": history})
+
+    assert events[0]["personal_info_removed"] is True
+    raw = Path(settings.request_log_path).read_text(encoding="utf-8")
+    assert len(raw.splitlines()) == 1
+    for secret in (
+        question,
+        "AA1234567",
+        REMOVED_MARKER,
+        "how much is the fee",
+        answer,
+        "earlier q",
+        "earlier a",
+        _source(client, S1)["title"],
+        S1,
+        "personal_info_removed",
+    ):
+        assert secret not in raw
+
+
+def test_unwritable_log_does_not_break_the_answer(
+    settings: Settings, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    blocker = tmp_path / "a-file"
+    blocker.write_text("x", encoding="utf-8")
+    broken = settings.model_copy(update={"request_log_path": str(blocker / "logs" / "requests.jsonl")})
+    client = _client(broken, ScriptedLLM([AnswerChunk("A", (S1,))]))
+
+    with caplog.at_level(logging.WARNING):
+        first = _events(client, {"question": QUESTION, "history": []})
+        second = _events(client, {"question": QUESTION, "history": []})
+
+    assert first == second == [_meta(), {"type": "text", "delta": "A"}, _sources(_source(client, S1)), DONE]
+    warnings = [r.getMessage() for r in caplog.records if "request log" in r.getMessage()]
+    assert len(warnings) == 1
+    assert re.fullmatch(r"request log not written: \w+Error", warnings[0])
+
+
+def test_bad_request_writes_no_line(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,))])
+
+    response = _client(settings, llm).post("/api/chat", json={"question": ""})
+
+    assert response.status_code == 422
+    assert not Path(settings.request_log_path).exists()
+
+
+def test_one_line_per_request(settings: Settings) -> None:
+    client = _client(settings, ScriptedLLM([AnswerChunk("A", (S1,))]))
+
+    for _ in range(3):
+        _events(client, {"question": QUESTION, "history": []})
+
+    assert [line["outcome"] for line in _log(settings)] == ["answered"] * 3
+
+
+def test_relative_log_path_is_resolved_against_the_project_root(settings: Settings) -> None:
+    relative = settings.model_copy(update={"request_log_path": "data/requests.jsonl"})
+
+    created = create_app(relative, llm=ScriptedLLM())
+
+    assert created.state.request_log.path == ROOT / "data" / "requests.jsonl"
+
+
+def test_absolute_log_path_is_kept(settings: Settings) -> None:
+    created = create_app(settings, llm=ScriptedLLM())
+
+    assert created.state.request_log.path == Path(settings.request_log_path)

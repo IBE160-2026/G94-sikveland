@@ -1,5 +1,7 @@
 """App wiring and startup. Start with `uv run uvicorn app.main:app`."""
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -12,6 +14,7 @@ from app.adapters.file_prompts import load_prompt
 from app.config import ROOT, Settings, get_settings
 from app.ports.llm import LLMClient
 from app.web import chat, health, texts
+from app.web.request_log import RequestLog
 
 CONTENT_FILE = ROOT / "content" / "texts.yaml"
 KNOWLEDGE_BASE_DIR = ROOT / "knowledge-base"
@@ -44,6 +47,8 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         if llm is not None
         else AnthropicLLM(settings, app.state.knowledge_base, app.state.answer_prompt)
     )
+    # Nothing is written until the first chat request ends.
+    app.state.request_log = RequestLog(_from_root(settings.request_log_path))
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.include_router(health.router)
     app.include_router(texts.router)
@@ -51,6 +56,11 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     # Mounted last so every /api/* route is matched before the static files.
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
+
+
+def _from_root(path: str) -> Path:
+    """`path` as given if absolute, else relative to the project root (not the working folder)."""
+    return ROOT / Path(path)
 
 
 async def _invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:

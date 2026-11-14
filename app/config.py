@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     mock_llm: bool = False
     adviser_contact: Contact = "ngan.visaa@gmail.com"
     database_path: str = "data/feedback.sqlite3"
+    # One JSON line per chat request; a relative path is resolved against the project root.
+    request_log_path: str = "data/requests.jsonl"
 
     price_answer_input: Price = 4.00
     price_answer_output: Price = 20.00
