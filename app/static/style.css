@@ -110,6 +110,127 @@ button {
   border-radius: 0.75rem;
 }
 
+.send:disabled,
+.example-question:disabled,
+.question-form textarea:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Conversation: question bubbles on the right, replies on the left. */
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message {
+  max-width: 100%;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+}
+
+.question-bubble {
+  align-self: flex-end;
+  max-width: 85%;
+  color: #fff;
+  background: #0b3d91;
+  white-space: pre-wrap;
+}
+
+.reply {
+  align-self: stretch;
+  background: #fff;
+  border: 1px solid #dde1e8;
+}
+
+.reply-text {
+  margin: 0;
+  /* Keeps the line breaks and numbered lists of the answer. */
+  white-space: pre-wrap;
+}
+
+.reply-text:empty {
+  display: none;
+}
+
+.reminder {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #c47f00;
+  border-radius: 0.5rem;
+  background: #fff6e0;
+}
+
+.error-text {
+  margin: 0;
+  color: #8a1c1c;
+}
+
+.reply-text:not(:empty) + .error-text {
+  margin-top: 0.75rem;
+}
+
+/* Typing indicator: three dots, no text. */
+.typing {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.5rem 0;
+}
+
+.typing span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #8a94a6;
+  animation: typing 1.2s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-0.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.sources {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid #dde1e8;
+}
+
+.sources a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0.25rem 0;
+  color: #0b3d91;
+  text-decoration: underline;
+}
+
 .load-failed {
   display: flex;
   justify-content: center;

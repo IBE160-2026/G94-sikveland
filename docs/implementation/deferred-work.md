@@ -18,3 +18,9 @@
 - source_spec: `docs/implementation/spec-1-5-claude-connection-with-a-test-version.md`
   summary: Set an explicit timeout and `max_retries` on the Anthropic client, and let Story 1.6 tell overload (429/529) from configuration errors (400/401) without user text.
   evidence: The adapter uses the SDK defaults (10-minute timeout, 2 silent retries) and `LLMError` keeps only the exception class name. The right values depend on the stream UX in Story 1.6 (adaptive thinking can pause before the first text).
+- source_spec: `docs/implementation/spec-1-6-streamed-answer-with-sources.md`
+  summary: Timeouts for a stalled answer: explicit timeout and `max_retries` on the Anthropic client, a page-side `AbortController` deadline that shows the fixed error text, and, if the real-phone test shows idle cuts, a heartbeat line while text is held back. Also check that a client disconnect closes the model stream.
+  evidence: Review pass 1 of Story 1.6 (#3, #4, #5, #11). Today a stalled call keeps the typing dots and a locked form until the SDK default (10 minutes, 2 retries). The values need the real-phone test in Facebook's in-app browser; replaces the Story 1.5 entry's target.
+- source_spec: `docs/implementation/spec-1-6-streamed-answer-with-sources.md`
+  summary: Browser-level tests for the chat page's JavaScript (stream parsing across chunks, append-only text, reminder, sources, error text, form re-enabled), after part 1.
+  evidence: Review pass 1 of Story 1.6 (#12): `tests/test_static.py` only matches strings in `app.js`; breaking line buffering or `setAnswering(false)` passes CI. Replaces the Story 1.2 entry's Story 1.6 target.

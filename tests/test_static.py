@@ -100,3 +100,55 @@ def test_external_resource_pattern_catches(snippet: str) -> None:
 )
 def test_external_resource_pattern_allows_local(snippet: str) -> None:
     assert not EXTERNAL.search(snippet)
+
+
+def test_page_reads_the_chat_stream_in_parts() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    assert 'fetch("/api/chat"' in script
+    assert 'method: "POST"' in script
+    assert "getReader()" in script
+    assert "new TextDecoder()" in script
+    assert "stream: true" in script
+    assert r'split("\n")' in script
+
+
+def test_page_only_appends_answer_text() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    assert "appendData(" in script
+    # Fixed texts are looked up by key, never written into the script.
+    for key in ("personal-info-reminder", "error"):
+        assert f'texts["{key}"]' in script
+
+
+def test_page_cancels_the_stream_when_reading_stops_early() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    assert "} finally {" in script
+    assert "reader.cancel().catch(" in script
+
+
+def test_messages_are_busy_while_answering() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    assert 'messages.setAttribute("aria-busy", value ? "true" : "false")' in script
+
+
+def test_page_keeps_the_question_when_it_is_not_answered() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    # Only a typed question clears the field; an example tap keeps the draft.
+    assert "if (fromField) {" in script
+    assert "ask(example.text, false)" in script
+    assert "ask(question.value, true)" in script
+    # Any failure puts the question back into an empty field.
+    assert "if (!answered && !question.value) {" in script
+    assert "question.value = text;" in script
+
+
+def test_source_links_open_in_a_new_tab_safely() -> None:
+    script = (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+    assert 'target = "_blank"' in script
+    assert 'rel = "noopener"' in script
