@@ -16,6 +16,72 @@
   let texts = {};
   let answering = false;
 
+  // The conversation lives in this tab only (AD-3): reload keeps it, closing the tab drops it.
+  // Each entry: {question, answer, sources, reminder}; only {question, answer} is sent.
+  const STORAGE_KEY = "conversation";
+  // Must match the server's request limits (app/web/chat.py); a test checks this.
+  const MAX_HISTORY = 10;
+  const MAX_QUESTION_CHARS = 1000;
+  const MAX_ANSWER_CHARS = 10000;
+  // Shown again after a reload; older exchanges are dropped to keep storage small.
+  const MAX_STORED = 50;
+
+  function loadConversation() {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "[]");
+      if (!Array.isArray(stored)) {
+        return [];
+      }
+      return stored.filter(function (entry) {
+        return (
+          entry &&
+          typeof entry.question === "string" &&
+          entry.question.trim() &&
+          typeof entry.answer === "string" &&
+          entry.answer.trim()
+        );
+      });
+    } catch (error) {
+      return []; // storage blocked or unreadable: start a new conversation
+    }
+  }
+
+  function saveConversation(conversation) {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
+    } catch (error) {
+      console.error(error); // storage blocked or full: the answer is still shown
+    }
+  }
+
+  function historyToSend() {
+    return loadConversation()
+      .filter(function (entry) {
+        return (
+          entry.question.trim().length <= MAX_QUESTION_CHARS &&
+          entry.answer.trim().length <= MAX_ANSWER_CHARS
+        );
+      })
+      .slice(-MAX_HISTORY)
+      .map(function (entry) {
+        return { question: entry.question, answer: entry.answer };
+      });
+  }
+
+  // One check for live and replayed source links.
+  function safeSources(items) {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    return items
+      .filter(function (item) {
+        return item && typeof item.title === "string" && /^https:\/\//.test(item.url);
+      })
+      .map(function (item) {
+        return { title: item.title, url: item.url };
+      });
+  }
+
   function render(data) {
     texts = data.texts;
     privacyNotice.textContent = data.texts["privacy-notice"];
@@ -36,9 +102,32 @@
       exampleQuestions.appendChild(button);
     }
 
+    showConversation();
+
     loadFailed.hidden = true;
     chat.hidden = false;
     form.hidden = false;
+  }
+
+  function addQuestionBubble(text) {
+    const bubble = document.createElement("p");
+    bubble.className = "message question-bubble";
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+  }
+
+  function showConversation() {
+    messages.replaceChildren();
+    for (const entry of loadConversation()) {
+      addQuestionBubble(entry.question);
+      const reply = createReply();
+      if (entry.reminder) {
+        reply.reminder();
+      }
+      reply.append(entry.answer);
+      reply.sources(safeSources(entry.sources));
+    }
+    keepInView(true);
   }
 
   async function load() {
@@ -149,18 +238,24 @@
   }
 
   // Applies one stream event. Returns true once the stream is finished.
-  function handle(event, reply) {
+  // `record` collects the exchange as shown, to store it after `done`.
+  function handle(event, reply, record) {
     switch (event.type) {
       case "meta":
+        // Only the cleaned question is ever stored (AD-3, AD-4).
+        record.question = typeof event.clean_question === "string" ? event.clean_question : "";
+        record.reminder = Boolean(event.personal_info_removed);
         if (event.personal_info_removed) {
           reply.reminder();
         }
         return false;
       case "text":
+        record.answer += event.delta;
         reply.append(event.delta);
         return false;
       case "sources":
-        reply.sources(event.sources);
+        record.sources = safeSources(event.sources);
+        reply.sources(record.sources);
         return false;
       case "done":
         return true;
@@ -172,13 +267,12 @@
     }
   }
 
-  async function stream(text, reply) {
+  async function stream(text, reply, record) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
-      // Follow-up questions come in Story 1.7: no history is kept yet.
-      body: JSON.stringify({ question: text, history: [] }),
+      body: JSON.stringify({ question: text, history: historyToSend() }),
     });
     if (!response.ok || !response.body) {
       throw new Error("POST /api/chat failed: " + response.status);
@@ -201,7 +295,7 @@
           }
           const event = JSON.parse(line);
           const follow = nearBottom();
-          const finished = handle(event, reply);
+          const finished = handle(event, reply, record);
           keepInView(follow);
           if (finished) {
             return event.type === "done";
@@ -230,16 +324,20 @@
       question.value = "";
     }
 
-    const bubble = document.createElement("p");
-    bubble.className = "message question-bubble";
-    bubble.textContent = text;
-    messages.appendChild(bubble);
+    addQuestionBubble(text);
     const reply = createReply();
     keepInView(true);
 
+    const record = { question: "", answer: "", sources: [], reminder: false };
     let answered = false;
     try {
-      answered = await stream(text, reply);
+      answered = await stream(text, reply, record);
+      // Stored only after `done`, never after `error` (AD-3).
+      if (answered && record.question.trim() && record.answer.trim()) {
+        const conversation = loadConversation();
+        conversation.push(record);
+        saveConversation(conversation.slice(-MAX_STORED));
+      }
     } catch (error) {
       console.error(error);
       reply.error();

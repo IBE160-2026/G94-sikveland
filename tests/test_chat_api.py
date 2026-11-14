@@ -345,3 +345,23 @@ def test_limits_are_inclusive(settings: Settings) -> None:
 
     assert events[-1] == DONE
     assert len(llm.calls[0].history) == 10
+
+
+def test_follow_up_sends_the_history_to_the_model_in_order(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,))])
+    client = _client(settings, llm)
+    history = [
+        {"question": "first question", "answer": "first answer"},
+        {"question": "passport AA1234567, second question", "answer": "ID 1234567890123 noted"},
+    ]
+
+    events = _events(client, {"question": "and the fee?", "history": history})
+
+    assert llm.calls[0].question == "and the fee?"
+    assert llm.calls[0].history == (
+        Exchange("first question", "first answer"),
+        Exchange(f"passport {REMOVED_MARKER}, second question", f"ID {REMOVED_MARKER} noted"),
+    )
+    # Only the new question sets the flag; it had no personal information.
+    assert events[0]["personal_info_removed"] is False
+    assert events[-1] == {"type": "done"}

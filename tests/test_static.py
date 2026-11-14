@@ -152,3 +152,58 @@ def test_source_links_open_in_a_new_tab_safely() -> None:
 
     assert 'target = "_blank"' in script
     assert 'rel = "noopener"' in script
+
+
+def _app_js() -> str:
+    return (Path(STATIC_DIR) / "app.js").read_text(encoding="utf-8")
+
+
+def test_page_keeps_the_conversation_in_session_storage() -> None:
+    js = _app_js()
+
+    assert "sessionStorage.getItem(STORAGE_KEY)" in js
+    assert "sessionStorage.setItem(STORAGE_KEY" in js
+    # Never localStorage: closing the tab must drop the conversation (AD-3).
+    assert "localStorage" not in js
+
+
+def test_page_stores_the_clean_question_and_shown_text_only_after_done() -> None:
+    js = _app_js()
+
+    assert "record.answer += event.delta;" in js
+    assert "if (answered && record.question.trim() && record.answer.trim())" in js
+    assert 'return event.type === "done";' in js
+
+
+def test_page_sends_at_most_ten_exchanges_as_question_and_answer() -> None:
+    js = _app_js()
+
+    assert ".slice(-MAX_HISTORY)" in js
+    assert "return { question: entry.question, answer: entry.answer };" in js
+    assert "history: historyToSend()" in js
+
+
+def test_page_shows_the_stored_conversation_after_a_reload() -> None:
+    js = _app_js()
+
+    assert "showConversation();" in js
+    assert "for (const entry of loadConversation())" in js
+
+
+def test_page_history_limits_match_the_server() -> None:
+    from app.web import chat
+
+    js = _app_js()
+
+    assert f"const MAX_HISTORY = {chat.MAX_HISTORY_ITEMS};" in js
+    assert f"const MAX_QUESTION_CHARS = {chat.MAX_QUESTION_CHARS};" in js
+    assert f"const MAX_ANSWER_CHARS = {chat.MAX_ANSWER_CHARS};" in js
+    # Turns over the limits are left out, so one long turn cannot block later questions.
+    assert "entry.answer.trim().length <= MAX_ANSWER_CHARS" in js
+
+
+def test_page_stores_only_the_clean_question() -> None:
+    js = _app_js()
+
+    assert 'const record = { question: "", answer: "", sources: [], reminder: false };' in js
+    assert 'typeof event.clean_question === "string" ? event.clean_question : ""' in js

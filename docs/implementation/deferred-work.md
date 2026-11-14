@@ -24,3 +24,6 @@
 - source_spec: `docs/implementation/spec-1-6-streamed-answer-with-sources.md`
   summary: Browser-level tests for the chat page's JavaScript (stream parsing across chunks, append-only text, reminder, sources, error text, form re-enabled), after part 1.
   evidence: Review pass 1 of Story 1.6 (#12): `tests/test_static.py` only matches strings in `app.js`; breaking line buffering or `setAnswering(false)` passes CI. Replaces the Story 1.2 entry's Story 1.6 target.
+- source_spec: `docs/implementation/spec-1-7-follow-up-questions.md`
+  summary: Extend the deferred browser-level page tests to Story 1.7: exchange stored in sessionStorage only after `done`, follow-up sends the last 10, reload replays the conversation with reminder and sources, closing the tab drops it, malformed stored entries ignored.
+  evidence: Review of Story 1.7 (#7, #8): `tests/test_static.py` only matches strings in `app.js`; e.g. `slice(MAX_HISTORY)` instead of `slice(-MAX_HISTORY)` would pass CI.
