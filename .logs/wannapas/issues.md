@@ -14,7 +14,7 @@
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md
 - [ ] 2026-11-12 [story-1-2-chat-page](995-2026-11-12-22-58-24-story-1-2-chat-page.md) — Story 1.6: browser-level test for the chat page JavaScript (render, tap-to-fill, retry, streaming) (deferred-work.md)
-- [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Story 1.4: adviser reviews the changed Thai privacy notice (names and addresses are not removed)
+- [x] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Story 1.4: adviser reviews the changed Thai privacy notice (names and addresses are not removed) (resolved 2026-11-14: adviser approved the new notice and reminder; committed in 4da7990)
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: response-time limit for NFR1 and a cost target for NFR6
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Answer Bård's two reflection questions in tilbakemelding-prd.md §7
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Ask Bård whether technology.md (Pytagoras Forlag's website) belongs in this repository
@@ -29,5 +29,7 @@
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Add a VFS Global source so the "book at VFS" step can link to VFS (FR12; deferred-work.md)
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Story 1.5: answer prompt must handle sources that disagree
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Delete docs/VFS data/ (untracked; printed PDF has the user's full name in its metadata)
-- [ ] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter removes any bare 8-digit number starting with 4 or 9 (e.g. 90000000) as a Norwegian mobile; check against the evaluation test set
+- [x] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter removes any bare 8-digit number starting with 4 or 9 (e.g. 90000000) as a Norwegian mobile; check against the evaluation test set (resolved 2026-11-14: obsolete, the phone rules were reverted in review loop 2; phone numbers are not removed)
 - [ ] 2026-11-13 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Manual check: longer privacy notice at 360 px without horizontal scroll
+- [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Filter: known ID leaks and false positives in deferred-work.md (2 entries); check against the evaluation test set
+- [ ] 2026-11-14 [story-1-4-personal-information-filter](991-2026-11-13-22-15-35-story-1-4-personal-information-filter.md) — Update the PRD (FR9) and epics: phone numbers are not removed
