@@ -7,20 +7,22 @@
 texts:
   privacy-notice:
     th: >-
-      โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน หรือเบอร์โทรศัพท์ในคำถาม
-      คำถามของคุณจะถูกส่งไปยังบริการ AI เพื่อสร้างคำตอบ
+      โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน เบอร์โทรศัพท์ ชื่อ ที่อยู่ หรืออีเมลในคำถาม
+      ระบบจะลบเลขหนังสือเดินทางและเลขบัตรประชาชนให้อัตโนมัติ
+      แต่จะไม่ลบเบอร์โทรศัพท์ ชื่อ ที่อยู่ และอีเมล คำถามของคุณจะถูกส่งไปยังบริการ AI เพื่อสร้างคำตอบ
     en: >-
-      Please do not include your passport number, ID card number or phone number
-      in your question. Your question is sent to an AI service to create the answer.
+      Please do not include your passport number, ID card number, phone number,
+      name, address or email in your question. Passport and ID card numbers are
+      removed automatically, but phone numbers, names, addresses and emails are not.
+      Your question is sent to an AI service to create the answer.
 
   personal-info-reminder:
     th: >-
-      เราได้ลบข้อมูลส่วนตัว (เช่น เลขหนังสือเดินทาง เลขบัตรประชาชน หรือเบอร์โทรศัพท์)
-      ออกจากคำถามของคุณก่อนส่ง โปรดอย่าใส่ข้อมูลเหล่านี้ในคำถาม
+      เราได้ลบเลขหนังสือเดินทางหรือเลขบัตรประชาชนออกจากคำถามของคุณก่อนส่ง
+      โปรดอย่าใส่ข้อมูลส่วนตัวในคำถาม
     en: >-
-      We removed personal information (such as passport, ID card or phone numbers)
-      from your question before sending it. Please do not include this information
-      in your questions.
+      We removed passport or ID card numbers from your question before sending it.
+      Please do not include personal information in your questions.
 
   reply-no-answer:
     th: >-
