@@ -27,3 +27,6 @@
 - source_spec: `docs/implementation/spec-1-7-follow-up-questions.md`
   summary: Extend the deferred browser-level page tests to Story 1.7: exchange stored in sessionStorage only after `done`, follow-up sends the last 10, reload replays the conversation with reminder and sources, closing the tab drops it, malformed stored entries ignored.
   evidence: Review of Story 1.7 (#7, #8): `tests/test_static.py` only matches strings in `app.js`; e.g. `slice(MAX_HISTORY)` instead of `slice(-MAX_HISTORY)` would pass CI.
+- source_spec: `docs/implementation/spec-4-2-demo-mode-without-an-api-key.md`
+  summary: In Story 2.3, make done-phrase matching ignore surrounding punctuation and emoji (`Thanks!`, `ok.`, `ขอบคุณค่ะ 🙏`), in the mock and in the real classifier's tests, and test a stored demo category other than `general`.
+  evidence: Review of Story 4.2 (#17, #22): the mock matches done phrases exactly after trimming and casefolding; nothing consumes `classify` yet.
