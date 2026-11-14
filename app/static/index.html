@@ -9,6 +9,9 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
+  <!-- Demo mode only (MOCK_LLM=true): stays at the top while the page scrolls. -->
+  <p id="demo-label" class="demo-label" role="note" hidden></p>
+
   <main class="page">
     <section id="load-failed" class="load-failed" hidden>
       <button type="button" id="retry" class="retry">&#x21BB;</button>

@@ -15,7 +15,6 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from app.config import Settings
 from app.pipeline.answer import (
     AnswerEvent,
     Done,
@@ -26,10 +25,11 @@ from app.pipeline.answer import (
     TextDelta,
     answer_question,
 )
+from app.pipeline.cost import Prices
 from app.ports.content import ContentStore
 from app.ports.knowledge_base import KnowledgeBase
 from app.ports.llm import Category, Exchange, LLMClient, Usage
-from app.web.request_log import Outcome, RequestLog, answer_prices, request_line
+from app.web.request_log import Outcome, RequestLog, request_line
 
 MAX_QUESTION_CHARS = 1000
 MAX_ANSWER_CHARS = 10000
@@ -81,11 +81,16 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
         history,
         llm,
         knowledge_base,
-        no_answer_text=content.texts()["reply-no-answer"].th,
+        # `reply-demo-only` in demo mode, `reply-no-answer` otherwise (set in `app/main.py`).
+        no_answer_text=content.texts()[state.no_answer_key].th,
     )
-    settings: Settings = state.settings
     request_log: RequestLog = state.request_log
     answer_prompt_version: str = state.answer_prompt.version
+    # `mock_llm` at no cost in demo mode, the answer model and its prices otherwise.
+    model: str = state.answer_model
+    prices: Prices = state.answer_prices
+    # Zero usage in demo mode, so every demo line records cost 0.0; `None` otherwise.
+    fallback_usage: Usage | None = state.fallback_usage
 
     def log_request(outcome: Outcome, category: Category | None, usage: Usage | None) -> None:
         request_log.write(
@@ -93,9 +98,9 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
                 outcome=outcome,
                 category=category,
                 answer_prompt_version=answer_prompt_version,
-                model=settings.model_answer,
-                usage=usage,
-                prices=answer_prices(settings),
+                model=model,
+                usage=usage if usage is not None else fallback_usage,
+                prices=prices,
             )
         )
 

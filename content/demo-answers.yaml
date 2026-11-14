@@ -1,0 +1,157 @@
+# Stored answers for demo mode (MOCK_LLM=true, AD-15). Read only by the mock_llm
+# adapter (app/adapters/mock_llm.py); never in real mode.
+#
+# `answers`: one entry per example question id in content/texts.yaml, each with
+#   category  one of the classifier categories (app/ports/llm.py)
+#   th        the Thai answer shown to the applicant
+#   en        the stored English translation ("Show English", Story 4.1)
+#   sources   ids from knowledge-base/sources.yaml the answer is drawn from
+# Every statement must be found in the cited snapshots. The Thai is reviewed by
+# the adviser before release (NFR8).
+#
+# `done_phrases`: Thai and English thank-you/OK replies the mock classifies as
+# `done` (feedback question, Story 2.3). Matched after trimming, collapsing
+# whitespace and ignoring case.
+
+answers:
+  tourist-visa-documents:
+    category: general
+    sources:
+      - embassy-visitor-visa-checklist
+      - embassy-hand-in-documents
+    th: |-
+      เอกสารหลักสำหรับวีซ่าท่องเที่ยว ตามรายการเอกสารของสถานทูตนอร์เวย์ในกรุงเทพฯ มีดังนี้
+
+      เอกสารทั่วไป
+      1. หนังสือเดินทางฉบับจริง ที่มีอายุเหลืออย่างน้อย 3 เดือนหลังวันที่คุณจะออกจากเขตเชงเก้น และมีหน้าว่างอย่างน้อย 2 หน้า พร้อมสำเนาหน้าข้อมูลส่วนตัว
+      2. รูปถ่าย 1 รูป ถ่ายมาไม่เกิน 6 เดือน และไม่ผ่านการตกแต่ง
+      3. แบบฟอร์มคำร้องที่พิมพ์จากระบบออนไลน์ของ UDI และลงชื่อแล้ว
+      4. ประกันสุขภาพการเดินทาง ที่คุ้มครองตลอดการเดินทางและทุกประเทศในเขตเชงเก้น วงเงินคุ้มครองอย่างน้อย 30,000 ยูโร
+      5. หลักฐานแสดงตัวตน
+      6. หลักฐานการทำงาน ถ้าเป็นลูกจ้าง ใช้หนังสือจดทะเบียนบริษัทและหนังสือรับรองการทำงานที่ระบุตำแหน่ง เงินเดือน และจำนวนวันลาที่ได้รับ ถ้าเป็นเจ้าของกิจการ ใช้หลักฐานการเป็นเจ้าของกิจการ (หนังสือจดทะเบียนบริษัท)
+
+      เอกสารเพิ่มเติมสำหรับการท่องเที่ยว
+      7. หลักฐานการจองโรงแรมหรือที่พักตลอดการเดินทาง
+      8. หลักฐานการจองตั๋วเครื่องบินไป-กลับ
+      9. แผนการเดินทาง ถ้าจะไปหลายประเทศ
+      10. รายการเดินบัญชีธนาคารย้อนหลัง 3 เดือน ของคุณหรือของผู้ที่ออกค่าใช้จ่ายการเดินทาง หรือหลักฐานอื่นที่แสดงว่ามีเงินเพียงพอตลอดการเดินทาง
+
+      บางกรณีต้องใช้เอกสารเพิ่ม เช่น ใบเปลี่ยนชื่อ หรือเอกสารสำหรับเด็กอายุต่ำกว่า 18 ปีที่เดินทางโดยไม่มีผู้ปกครองตามกฎหมาย ดูรายการเอกสารฉบับเต็มได้ในเว็บไซต์ของสถานทูต
+
+      ต้องยื่นเอกสารทั้งหมดเมื่อไปที่ VFS มิฉะนั้นคำร้องอาจถูกปฏิเสธ
+    en: |-
+      The main documents for a tourist visa, from the document checklist of the Royal Norwegian Embassy in Bangkok, are:
+
+      General documents
+      1. Your original passport, valid for at least 3 months after you plan to leave the Schengen area, with at least 2 blank pages, and a copy of the bio data page
+      2. One photo, not older than 6 months and not edited
+      3. The application form printed from UDI's online application portal, signed
+      4. Travel medical insurance that covers the whole trip and the whole Schengen area, with coverage of at least 30,000 euro
+      5. Proof of identity
+      6. Proof of occupation: if employed, a company registration and a statement of employment showing your position, salary and the vacation days granted; if self-employed, evidence of business ownership (company registration)
+
+      Extra documents for tourism
+      7. A hotel reservation or other proof of accommodation for the whole stay
+      8. Proof of a round-trip flight reservation
+      9. An itinerary, if you visit several countries
+      10. Bank statements for the last 3 months, yours or those of the person paying for the trip, or other proof that you have enough money for the whole trip
+
+      Some cases need more documents, for example a name change certificate, or documents for children under 18 travelling without their legal guardian. The full checklist is on the embassy's website.
+
+      Submit all documents when you go to VFS, otherwise the application may be rejected.
+
+  how-to-start:
+    category: general
+    sources:
+      - embassy-necessary-documents
+      - udi-how-to-apply-visitor-visa
+      - embassy-online-registration
+    th: |-
+      การขอวีซ่าเยี่ยมเยียนนอร์เวย์ มี 4 ขั้นตอนตามลำดับดังนี้
+
+      1. เตรียมเอกสาร ตามรายการเอกสาร (checklist) ของสถานทูตนอร์เวย์ในกรุงเทพฯ ที่เว็บไซต์ norway.no
+      2. ลงทะเบียนคำร้องออนไลน์ที่เว็บไซต์ของ UDI (udi.no) ถ้าใช้ระบบครั้งแรก ต้องสร้างบัญชีผู้ใช้ก่อน
+      3. ชำระค่าธรรมเนียมวีซ่าออนไลน์ที่ udi.no หลังกรอกแบบฟอร์มคำร้องเสร็จ หลังจากนั้นคุณจะได้รับอีเมลยืนยันพร้อมไฟล์ schengen.pdf ให้พิมพ์ออกมาและให้ผู้ขอวีซ่าลงชื่อด้วยตัวเอง
+      4. จองคิวที่ VFS Global (vfsglobal.com) ซึ่งต้องสร้างชื่อผู้ใช้และรหัสผ่านแยกต่างหาก แล้วผู้ขอวีซ่าไปยื่นคำร้องและเอกสารทั้งหมดด้วยตัวเองที่ศูนย์รับคำร้องขอวีซ่า VFS
+    en: |-
+      Applying for a Norway visitor visa has 4 steps, in this order:
+
+      1. Prepare the documents, using the document checklist of the Royal Norwegian Embassy in Bangkok on norway.no
+      2. Register the application online on UDI's website (udi.no). If you use the portal for the first time, create a user account first.
+      3. Pay the visa fee online on udi.no once the application form is completed. You then get a confirmation email with the file schengen.pdf; print it and have the applicant sign it in person.
+      4. Book an appointment at VFS Global (vfsglobal.com), which needs its own username and password, then the applicant hands in the application and all documents in person at the VFS visa application centre.
+
+  visa-fee:
+    category: general
+    sources:
+      - embassy-online-registration
+      - udi-fees
+    th: |-
+      ค่าธรรมเนียมวีซ่าเยี่ยมเยียนนอร์เวย์ มีดังนี้
+
+      - ผู้ใหญ่และเด็กอายุ 12 ปีขึ้นไป: 90 ยูโร
+      - เด็กอายุ 6 ปีขึ้นไปแต่ไม่ถึง 12 ปี: 45 ยูโร
+      - เด็กอายุต่ำกว่า 6 ปี: ไม่ต้องเสียค่าธรรมเนียม
+
+      คุณชำระค่าธรรมเนียมนี้ออนไลน์ตอนลงทะเบียนคำร้องในระบบของ UDI ผ่าน Visa, Mastercard, Apple Pay หรือ Google Pay
+
+      นอกจากนี้ ศูนย์รับคำร้องขอวีซ่า VFS Global เก็บค่าบริการแยกต่างหาก โดยชำระให้ VFS Global โดยตรงตอนยื่นคำร้อง
+
+      ผู้ที่เดินทางไปกับหรือไปเยี่ยมสมาชิกครอบครัวใกล้ชิดที่เป็นพลเมือง EU/EEA ไม่ต้องเสียค่าธรรมเนียม และอาจมีกลุ่มอื่นที่ได้รับยกเว้นค่าธรรมเนียมด้วย ดูได้ที่หน้าค่าธรรมเนียมของ UDI
+    en: |-
+      The fee for a Norway visitor visa is:
+
+      - Adults and children aged 12 and over: 90 euro
+      - Children aged 6 to under 12: 45 euro
+      - Children under 6: no fee
+
+      You pay this fee online when you register the application in UDI's portal, with Visa, Mastercard, Apple Pay or Google Pay.
+
+      In addition, the VFS Global visa application centre charges its own service fee, paid directly to VFS Global when you hand in the application.
+
+      People who travel with or visit a close family member who is an EU/EEA citizen do not pay the fee, and some other groups may also be exempt (see UDI's fee page).
+
+  processing-time:
+    category: general
+    sources:
+      - embassy-processing-time
+      - udi-waiting-time-visitor-visa
+    th: |-
+      โดยปกติสถานทูตใช้เวลาพิจารณาไม่เกิน 15 วันตามปฏิทิน นับจากวันที่สถานทูตได้รับคำร้อง ในประเทศไทย ส่วนใหญ่จะได้รับผลภายใน 15 วันหรือเร็วกว่านั้น หลังจากสถานทูตได้รับคำร้องและเอกสารทั้งหมดผ่าน VFS
+
+      ถ้าคำร้องถูกส่งต่อไปยัง UDI อาจใช้เวลาถึง 45 วันตามปฏิทิน
+
+      ระยะเวลานี้นับจนถึงวันที่ VFS มารับหนังสือเดินทางคืนจากสถานทูต จึงควรเผื่อเวลาขนส่งเอกสารระหว่าง VFS กรุงเทพฯ กับสถานทูตด้วย
+
+      สถานทูตแนะนำให้ยื่นคำร้องอย่างน้อย 4 สัปดาห์ก่อนเดินทาง และยื่นได้เร็วสุด 6 เดือนก่อนวันเดินทาง
+    en: |-
+      The embassy normally takes up to 15 calendar days, counted from the day the embassy receives the application. In Thailand, most applicants get the result within 15 days or sooner after the embassy has received the application and all documents through VFS.
+
+      If the application is sent on to UDI, it can take up to 45 calendar days.
+
+      This time runs until the VFS courier picks up the passport from the embassy, so also allow for the courier time between VFS Bangkok and the embassy.
+
+      The embassy recommends applying at least 4 weeks before departure; you can apply at the earliest 6 months before your trip.
+
+done_phrases:
+  - ขอบคุณ
+  - ขอบคุณค่ะ
+  - ขอบคุณครับ
+  - ขอบคุณคะ
+  - ขอบคุณมาก
+  - ขอบคุณมากค่ะ
+  - ขอบคุณมากครับ
+  - ขอบใจ
+  - โอเค
+  - โอเคค่ะ
+  - โอเคครับ
+  - ได้ค่ะ
+  - ได้ครับ
+  - เข้าใจแล้ว
+  - เข้าใจแล้วค่ะ
+  - เข้าใจแล้วครับ
+  - thank you
+  - thanks
+  - thx
+  - ok
+  - okay

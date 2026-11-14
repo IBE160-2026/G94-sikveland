@@ -10,6 +10,8 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         "privacy-notice",
         "personal-info-reminder",
         "reply-no-answer",
+        # Demo mode (MOCK_LLM=true): the reply to anything but an example question.
+        "reply-demo-only",
         "error",
         "demo-label",
         # UI labels, so the page holds no Thai of its own.

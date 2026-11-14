@@ -12,6 +12,7 @@
   const privacyNotice = document.getElementById("privacy-notice");
   const exampleQuestions = document.getElementById("example-questions");
   const messages = document.getElementById("messages");
+  const demoLabel = document.getElementById("demo-label");
 
   let texts = {};
   let answering = false;
@@ -84,6 +85,9 @@
 
   function render(data) {
     texts = data.texts;
+    // In demo mode (MOCK_LLM=true) the "demo-label" text stays visible at the top.
+    demoLabel.textContent = data.texts["demo-label"];
+    demoLabel.hidden = data.demo_mode !== true;
     privacyNotice.textContent = data.texts["privacy-notice"];
     question.placeholder = data.texts["question-placeholder"];
     question.setAttribute("aria-label", data.texts["question-placeholder"]);

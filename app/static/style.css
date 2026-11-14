@@ -29,6 +29,19 @@ body {
   display: none !important;
 }
 
+/* Demo mode label: always visible at the top, also while scrolling. */
+.demo-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  text-align: center;
+  font-weight: 700;
+  color: #fff;
+  background: #6b2fa0;
+}
+
 .page {
   flex: 1;
   width: 100%;

@@ -32,6 +32,14 @@ texts:
       Sorry, we could not find an answer to this question in our official sources.
       Please contact the adviser at {ADVISER_CONTACT}.
 
+  reply-demo-only:
+    th: >-
+      โหมดสาธิตตอบได้เฉพาะคำถามตัวอย่างเท่านั้น กรุณาแตะคำถามตัวอย่างด้านบน
+      หากมีคำถามอื่น กรุณาติดต่อที่ปรึกษาที่ {ADVISER_CONTACT}
+    en: >-
+      Demo mode only answers the example questions. Please tap one of the example
+      questions above. For other questions, please contact the adviser at {ADVISER_CONTACT}.
+
   error:
     th: >-
       ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งภายหลัง
