@@ -17,7 +17,7 @@ They do not cover:
 
 | Mode | How to start | Used for |
 |---|---|---|
-| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02 |
+| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
 | Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09 |
 | Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10 |
@@ -95,7 +95,7 @@ Mode: real key for steps 1–4, no key for step 5.
 4. Close the tab, open a new tab and open the page again.
 5. Restart without a key, ask a question (you get the error text), then reload.
 
-Expected: (2) the follow-up is answered in the context of the first answer; (3) after the reload the whole conversation is back, with its source links, scrolled to the newest exchange; (4) a new tab starts empty; (5) after the reload the failed turn is not in the conversation.
+Expected: (2) the follow-up is answered in the context of the first answer; (3) after the reload the whole conversation is back, with its source links, scrolled to the newest exchange; (4) a new tab starts with an empty new chat, and the conversation is in the saved chats; (5) after the reload the failed turn is not in the conversation.
 
 ### MT-08 Request log and prompt cache (Story 1.8)
 
@@ -128,6 +128,20 @@ Mode: Ollama, 360 px. No key and no cost.
 
 Expected: (1) each answer is in Thai, arrives in parts after the typing dots, and has at least one source link; no `[[...]]` marker is ever visible, not even for a moment; the text has no Chinese characters (a native Thai reader judges the language, NFR8); (2) the fixed "we have no answer" text, no links; (3) the follow-up is answered in context and still has source links; (4) `model` is `OLLAMA_MODEL`, `prompt_versions` has `answer` and `citing`, `cost_usd` and both cache fields are 0, `unknown_source_ids` is a number; (5) the fixed error text. Answers take from a few seconds to over a minute (the model thinks first), and the first answer after starting Ollama also reads the whole knowledge base.
 
+### MT-11 Saved chats and new chat
+
+Mode: demo, 360 px and 320 px.
+
+1. Tap an example question, then tap the new-chat button and tap another example question.
+2. Close the tab, open a new tab and open the page again.
+3. Open the saved chats and tap the first chat; ask a follow-up (type any question).
+4. Reload the page.
+5. Open the saved chats; delete one chat (first cancel, then confirm), then delete all.
+6. Ask a question, then open the page in a second tab and open that chat there. In the first tab, delete the chat. In the second tab, ask a follow-up.
+7. Open the page in a private (incognito) window and tap an example question. Then open the saved chats, and check the browser's storage (F12, Application, Local storage).
+
+Expected: (1) the new chat starts empty with the example questions; (2) the page opens an empty new chat, and the saved chats list both, newest first, with the first question and the date; (3) the chat is shown with its source links, the follow-up is added to it and it moves to the top of the list; (4) the same chat is shown; (5) cancel changes nothing, confirm removes it (deleting the open chat leaves an empty new chat), delete all empties the list. The new-chat and saved-chats buttons cannot be tapped while an answer is arriving; nothing scrolls sideways at 320 px with the list open; the privacy notice says chats are saved on this device; (6) the follow-up is answered, and the deleted chat does not come back: the list shows a new chat with only the follow-up; (7) the answer is shown; note what is saved (the chat while the window is open, nothing after it is closed, or nothing at all if storage is blocked) and that the page does not break.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -144,3 +158,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-08 | | | Not run | Needs a real key |
 | | MT-09 | | | Not run | Needs a real key and a phone |
 | | MT-10 | | | Not run | Needs Ollama; branch `ollama` |
+| | MT-11 | | | Not run | |

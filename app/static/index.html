@@ -6,11 +6,20 @@
   <!-- All visible Thai text comes from /api/texts (AD-6); this file holds none. -->
   <title>Norway Visa Guide</title>
   <link rel="stylesheet" href="/style.css">
+  <!-- history.js (saved chats on this device) must run before app.js. -->
+  <script src="/history.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <!-- Demo mode only (MOCK_LLM=true): stays at the top while the page scrolls. -->
-  <p id="demo-label" class="demo-label" role="note" hidden></p>
+  <!-- Stays at the top while the page scrolls. -->
+  <header class="top">
+    <!-- Demo mode only (MOCK_LLM=true). -->
+    <p id="demo-label" class="demo-label" role="note" hidden></p>
+    <nav id="top-bar" class="top-bar" hidden>
+      <button type="button" id="history-button" class="top-button" aria-controls="history-panel"></button>
+      <button type="button" id="new-chat-button" class="top-button"></button>
+    </nav>
+  </header>
 
   <main class="page">
     <section id="load-failed" class="load-failed" hidden>
@@ -28,5 +37,17 @@
     <textarea id="question" name="question" rows="2" maxlength="1000"></textarea>
     <button type="submit" id="send" class="send"></button>
   </form>
+
+  <!-- Saved chats, newest first; full screen over the chat. -->
+  <section id="history-panel" class="history-panel" role="dialog" aria-modal="true"
+           aria-labelledby="history-title" hidden>
+    <div class="history-header">
+      <h2 id="history-title" class="history-title"></h2>
+      <button type="button" id="history-close" class="top-button"></button>
+    </div>
+    <p id="history-empty" class="history-empty"></p>
+    <ul id="history-list" class="history-list"></ul>
+    <button type="button" id="delete-all-chats" class="delete-all"></button>
+  </section>
 </body>
 </html>

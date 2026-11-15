@@ -17,6 +17,16 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         # UI labels, so the page holds no Thai of its own.
         "send-button",
         "question-placeholder",
+        # Saved chats on this device (AD-3): top bar, history panel, delete confirmations.
+        "history-button",
+        "new-chat-button",
+        "history-title",
+        "history-close",
+        "history-empty",
+        "delete-chat",
+        "delete-all-chats",
+        "confirm-delete-chat",
+        "confirm-delete-all-chats",
     }
 )
 

@@ -13,60 +13,45 @@
   const exampleQuestions = document.getElementById("example-questions");
   const messages = document.getElementById("messages");
   const demoLabel = document.getElementById("demo-label");
+  const topBar = document.getElementById("top-bar");
+
+  const historyButton = document.getElementById("history-button");
+  const newChatButton = document.getElementById("new-chat-button");
+  const historyPanel = document.getElementById("history-panel");
+  const historyTitle = document.getElementById("history-title");
+  const historyClose = document.getElementById("history-close");
+  const historyList = document.getElementById("history-list");
+  const historyEmpty = document.getElementById("history-empty");
+  const deleteAllButton = document.getElementById("delete-all-chats");
+  // Behind the full-screen panel: made inert while it is open, so focus cannot reach them.
+  const behindPanel = [document.querySelector("header.top"), document.querySelector("main"), form];
+
+  // Storage logic lives in history.js (loaded first): saved chats in localStorage on
+  // this device, the open chat's id in this tab's sessionStorage (AD-3).
+  const Chats = window.ChatHistory;
+  const local = storage("localStorage");
+  const session = storage("sessionStorage");
+  // Length of a saved chat's first question in the list.
+  const TITLE_CHARS = 80;
 
   let texts = {};
   let answering = false;
+  // The chat on screen. `id` is null until its first exchange is stored, so an empty
+  // new chat never becomes a list item. Each exchange: {question, answer, sources, reminder};
+  // only {question, answer} of the last 10 is sent.
+  let current = emptyChat();
 
-  // The conversation lives in this tab only (AD-3): reload keeps it, closing the tab drops it.
-  // Each entry: {question, answer, sources, reminder}; only {question, answer} is sent.
-  const STORAGE_KEY = "conversation";
-  // Must match the server's request limits (app/web/chat.py); a test checks this.
-  const MAX_HISTORY = 10;
-  const MAX_QUESTION_CHARS = 1000;
-  const MAX_ANSWER_CHARS = 10000;
-  // Shown again after a reload; older exchanges are dropped to keep storage small.
-  const MAX_STORED = 50;
-
-  function loadConversation() {
+  // Some browsers throw on merely reading `window.localStorage` when storage is blocked.
+  function storage(name) {
     try {
-      const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "[]");
-      if (!Array.isArray(stored)) {
-        return [];
-      }
-      return stored.filter(function (entry) {
-        return (
-          entry &&
-          typeof entry.question === "string" &&
-          entry.question.trim() &&
-          typeof entry.answer === "string" &&
-          entry.answer.trim()
-        );
-      });
+      return window[name];
     } catch (error) {
-      return []; // storage blocked or unreadable: start a new conversation
+      return null;
     }
   }
 
-  function saveConversation(conversation) {
-    try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
-    } catch (error) {
-      console.error(error); // storage blocked or full: the answer is still shown
-    }
-  }
-
-  function historyToSend() {
-    return loadConversation()
-      .filter(function (entry) {
-        return (
-          entry.question.trim().length <= MAX_QUESTION_CHARS &&
-          entry.answer.trim().length <= MAX_ANSWER_CHARS
-        );
-      })
-      .slice(-MAX_HISTORY)
-      .map(function (entry) {
-        return { question: entry.question, answer: entry.answer };
-      });
+  function emptyChat() {
+    return { id: null, exchanges: [] };
   }
 
   // One check for live and replayed source links.
@@ -92,6 +77,12 @@
     question.placeholder = data.texts["question-placeholder"];
     question.setAttribute("aria-label", data.texts["question-placeholder"]);
     send.textContent = data.texts["send-button"];
+    historyButton.textContent = data.texts["history-button"];
+    newChatButton.textContent = data.texts["new-chat-button"];
+    historyTitle.textContent = data.texts["history-title"];
+    historyClose.textContent = data.texts["history-close"];
+    historyEmpty.textContent = data.texts["history-empty"];
+    deleteAllButton.textContent = data.texts["delete-all-chats"];
 
     exampleQuestions.replaceChildren();
     for (const example of data.example_questions) {
@@ -109,6 +100,7 @@
     showConversation();
 
     loadFailed.hidden = true;
+    topBar.hidden = false;
     chat.hidden = false;
     form.hidden = false;
   }
@@ -122,7 +114,7 @@
 
   function showConversation() {
     messages.replaceChildren();
-    for (const entry of loadConversation()) {
+    for (const entry of current.exchanges) {
       addQuestionBubble(entry.question);
       const reply = createReply();
       if (entry.reminder) {
@@ -144,6 +136,7 @@
       render(await response.json());
     } catch (error) {
       console.error(error);
+      topBar.hidden = true;
       chat.hidden = true;
       form.hidden = true;
       loadFailed.hidden = false;
@@ -156,7 +149,12 @@
     answering = value;
     question.disabled = value;
     send.disabled = value;
+    newChatButton.disabled = value;
+    historyButton.disabled = value;
     for (const button of exampleQuestions.querySelectorAll("button")) {
+      button.disabled = value;
+    }
+    for (const button of historyPanel.querySelectorAll("button")) {
       button.disabled = value;
     }
     form.setAttribute("aria-busy", value ? "true" : "false");
@@ -276,7 +274,7 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ question: text, history: historyToSend() }),
+      body: JSON.stringify({ question: text, history: Chats.historyToSend(current.exchanges) }),
     });
     if (!response.ok || !response.body) {
       throw new Error("POST /api/chat failed: " + response.status);
@@ -338,9 +336,7 @@
       answered = await stream(text, reply, record);
       // Stored only after `done`, never after `error` (AD-3).
       if (answered && record.question.trim() && record.answer.trim()) {
-        const conversation = loadConversation();
-        conversation.push(record);
-        saveConversation(conversation.slice(-MAX_STORED));
+        storeExchange(record);
       }
     } catch (error) {
       console.error(error);
@@ -354,11 +350,153 @@
     }
   }
 
+  // The open chat keeps its exchanges in memory too, so follow-ups work even when
+  // storage is blocked or full; then the answer is shown but not saved.
+  function storeExchange(record) {
+    current = Chats.appendExchange(local, session, current, record, Date.now(), Chats.createId());
+  }
+
+  function showChat(conversation) {
+    current = conversation;
+    Chats.setOpenId(session, current.id);
+    showConversation();
+  }
+
+  function startNewChat() {
+    if (answering) {
+      return;
+    }
+    showChat(emptyChat());
+    window.scrollTo(0, 0);
+  }
+
+  function formatDate(time) {
+    try {
+      return new Date(time).toLocaleDateString(document.documentElement.lang || undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch (error) {
+      return "";
+    }
+  }
+
+  // Saved chats, newest first: the first question shortened, the date, a delete button.
+  function renderHistoryList() {
+    const list = Chats.loadList(local);
+    historyList.replaceChildren();
+    for (const conversation of list) {
+      const title = Chats.shorten(conversation.exchanges[0].question, TITLE_CHARS);
+
+      const reopen = document.createElement("button");
+      reopen.type = "button";
+      reopen.className = "history-open";
+      const titleText = document.createElement("span");
+      titleText.className = "history-question";
+      titleText.textContent = title;
+      const date = document.createElement("span");
+      date.className = "history-date";
+      date.textContent = formatDate(conversation.updated);
+      reopen.append(titleText, date);
+      reopen.addEventListener("click", function () {
+        reopenChat(conversation.id);
+      });
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "history-delete";
+      remove.textContent = texts["delete-chat"];
+      remove.setAttribute("aria-label", texts["delete-chat"] + ": " + title);
+      remove.addEventListener("click", function () {
+        deleteChat(conversation.id);
+      });
+
+      const item = document.createElement("li");
+      item.className = "history-item";
+      item.append(reopen, remove);
+      historyList.appendChild(item);
+    }
+    historyEmpty.hidden = list.length > 0;
+    deleteAllButton.hidden = list.length === 0;
+  }
+
+  function openHistory() {
+    if (answering) {
+      return;
+    }
+    renderHistoryList();
+    setBehindPanelInert(true);
+    historyPanel.hidden = false;
+    document.body.classList.add("panel-open");
+    historyClose.focus();
+  }
+
+  function closeHistory() {
+    historyPanel.hidden = true;
+    document.body.classList.remove("panel-open");
+    setBehindPanelInert(false);
+    historyButton.focus();
+  }
+
+  function setBehindPanelInert(value) {
+    for (const element of behindPanel) {
+      element.toggleAttribute("inert", value);
+    }
+  }
+
+  function reopenChat(id) {
+    if (answering) {
+      return;
+    }
+    // Read again: another tab may have deleted it. Then the panel stays open with the new list.
+    const stored = Chats.findConversation(local, id);
+    if (!stored) {
+      renderHistoryList();
+      historyClose.focus();
+      return;
+    }
+    closeHistory();
+    showChat({ id: stored.id, exchanges: stored.exchanges });
+  }
+
+  function deleteChat(id) {
+    if (answering || !window.confirm(texts["confirm-delete-chat"])) {
+      return;
+    }
+    Chats.deleteConversation(local, id);
+    if (id === current.id) {
+      showChat(emptyChat());
+    }
+    renderHistoryList();
+    historyClose.focus();
+  }
+
+  function deleteAllChats() {
+    if (answering || !window.confirm(texts["confirm-delete-all-chats"])) {
+      return;
+    }
+    Chats.deleteAll(local);
+    showChat(emptyChat());
+    renderHistoryList();
+    historyClose.focus();
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     ask(question.value, true);
   });
   retry.addEventListener("click", load);
+  newChatButton.addEventListener("click", startNewChat);
+  historyButton.addEventListener("click", openHistory);
+  historyClose.addEventListener("click", closeHistory);
+  deleteAllButton.addEventListener("click", deleteAllChats);
+  historyPanel.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeHistory();
+    }
+  });
 
+  current = Chats.startOpen(local, session, Chats.createId(), Date.now());
   load();
 })();

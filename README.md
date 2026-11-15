@@ -19,6 +19,7 @@ Ferdig og testet:
 - Filter som fjerner passnummer og thailandsk ID-nummer før spørsmålet sendes til KI-tjenesten (Story 1.4)
 - Svar fra Claude, strømmet med kildelenker (Story 1.5, 1.6)
 - Oppfølgingsspørsmål i samme samtale (Story 1.7)
+- Tidligere samtaler lagres på søkerens egen enhet (de siste 20) og kan åpnes og fortsettes; knapp for ny samtale, og sletting av én eller alle
 - Logg over kostnad, tokens og cache per spørsmål (Story 1.8)
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
@@ -138,6 +139,7 @@ Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  Claude 
 - Hele kunnskapsbasen (`knowledge-base/*.md`) sendes med i systemprompten og caches hos Anthropic, så gjentatte spørsmål blir billigere. Appen henter ingenting fra nettet mens den kjører.
 - Med `LLM_PROVIDER=ollama` går spørsmålet til en lokal Ollama-server i stedet for Claude (se over); resten av flyten er den samme.
 - Svaret må oppgi hvilke kilder det bygger på. Kildelenkene hentes fra [`knowledge-base/sources.yaml`](knowledge-base/sources.yaml). Viser svaret til en kilde som ikke står der, får den kilden ingen lenke, resten av svaret vises, og antallet telles i forespørselsloggen. Viser svaret ikke til noen kjent kilde, får søkeren den faste «vi har ikke svar»-teksten.
+- Serveren lagrer ingen samtaler. Tidligere samtaler lagres bare i nettleseren på søkerens egen enhet (`localStorage`), og bare den åpne samtalens siste 10 utvekslinger sendes med et spørsmål. Personvernmerknaden sier at alle som bruker enheten, kan lese dem.
 - Koden er delt i lag (porter og adaptere): `pipeline` kjenner ikke til FastAPI eller Anthropic, og `tests/test_layering.py` sjekker at det holder.
 
 Mer i [arkitekturoversikten](docs/planning/architecture/architecture-overview.md), skrevet for sensor, og i de bindende reglene i [ARCHITECTURE-SPINE.md](docs/planning/architecture/architecture-G94-sikveland-2026-11-02/ARCHITECTURE-SPINE.md).

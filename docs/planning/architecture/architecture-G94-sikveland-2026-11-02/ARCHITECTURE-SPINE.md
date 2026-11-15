@@ -74,7 +74,8 @@ flowchart TD
 
 - **Binds:** FR1 (follow-ups), FR5, NFR5
 - **Prevents:** a server-side session store holding conversation text; two parts disagreeing on where history lives or what it contains.
-- **Rule:** the page keeps the conversation in `sessionStorage` and sends it with every request as `{question, history: [{question, answer}]}` — at most the last 10 exchanges. The page stores an exchange only after `done`, never after `error`; `question` is the `clean_question` from the `meta` event and `answer` is exactly the text shown, fixed replies included. The pipeline alone turns history into alternating user/assistant messages, as plain text with no citation blocks. The server keeps nothing between requests and never writes question or answer text to disk, database or logs.
+- **Rule:** the page keeps the open conversation and sends it with every request as `{question, history: [{question, answer}]}` — at most the last 10 exchanges. The page stores an exchange only after `done`, never after `error`; `question` is the `clean_question` from the `meta` event and `answer` is exactly the text shown, fixed replies included. The pipeline alone turns history into alternating user/assistant messages, as plain text with no citation blocks. The server keeps nothing between requests and never writes question or answer text to disk, database or logs.
+- **Saved chats (changed 2026-11-15, replaces "closing the tab drops it"):** the page saves past conversations in `localStorage` under `conversations` on the applicant's own device, as `[{id, updated, exchanges: [{question, answer, sources, reminder}]}]`: the latest 20 by last activity, at most 50 exchanges each. The open conversation's id is kept in the tab's `sessionStorage` (`open-conversation`), so a reload keeps it and a new tab opens an empty new chat. The applicant can reopen and continue a saved chat, start a new chat, and delete one or all saved chats. Only the open conversation's last 10 exchanges are ever sent; the saved list never leaves the device. The list's `id` is local only and is not the feedback `conversation_id` of AD-10 (Story 2.3 decides how they relate).
 
 ### AD-4 — Personal information is removed from all incoming text first [ADOPTED]
 
@@ -189,7 +190,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    phone[Phone browser<br/>sessionStorage: conversation, conversation_id<br/>localStorage: checklist ticks] -->|/api/*| server[FastAPI app<br/>local, uvicorn]
+    phone[Phone browser<br/>sessionStorage: open conversation id, conversation_id<br/>localStorage: saved chats, checklist ticks] -->|/api/*| server[FastAPI app<br/>local, uvicorn]
     server -->|classify, answer, translate| claude[Claude API]
     server --> kb[(knowledge-base/<br/>Markdown snapshots)]
     server --> content[(content/<br/>texts, checklists, demo answers)]

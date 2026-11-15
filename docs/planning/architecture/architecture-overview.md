@@ -48,7 +48,7 @@ flowchart LR
 
 | What | Where it lives | Why |
 | --- | --- | --- |
-| The conversation | Only in the applicant's browser; deleted when the tab closes | The server never stores conversation text (NFR5) |
+| The conversation | Only in the applicant's browser: the latest 20 chats are saved on the device until the applicant deletes them | The server never stores conversation text (NFR5) |
 | Checklist ticks | Only on the applicant's phone | No account or login is needed, and ticks survive several days |
 | Feedback | On the server: Yes/No, time and a random anonymous ID | Needed to measure success (SM-1); contains nothing personal |
 | Personal information | Deleted before any processing | Never reaches the AI service or any log |

@@ -10,11 +10,15 @@ texts:
       โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน เบอร์โทรศัพท์ ชื่อ ที่อยู่ หรืออีเมลในคำถาม
       ระบบจะลบเลขหนังสือเดินทางและเลขบัตรประชาชนให้อัตโนมัติ
       แต่จะไม่ลบเบอร์โทรศัพท์ ชื่อ ที่อยู่ และอีเมล คำถามของคุณจะถูกส่งไปยังบริการ AI เพื่อสร้างคำตอบ
+      แชทของคุณ (20 แชทล่าสุด) จะถูกบันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ
+      ทุกคนที่ใช้เครื่องนี้สามารถอ่านได้
     en: >-
       Please do not include your passport number, ID card number, phone number,
       name, address or email in your question. Passport and ID card numbers are
       removed automatically, but phone numbers, names, addresses and emails are not.
       Your question is sent to an AI service to create the answer.
+      Your chats (the latest 20) are also saved on this device until you delete them;
+      anyone using this device can read them.
 
   personal-info-reminder:
     th: >-
@@ -59,6 +63,44 @@ texts:
   question-placeholder:
     th: พิมพ์คำถามเกี่ยวกับวีซ่านอร์เวย์ที่นี่
     en: Type your question about the Norway visa here
+
+  # Saved chats on this device. DRAFT Thai (2026-11-15), and the last sentence of
+  # privacy-notice: to be reviewed by the user/adviser before merge (NFR8).
+  history-button:
+    th: แชทที่บันทึกไว้
+    en: Saved chats
+
+  new-chat-button:
+    th: แชทใหม่
+    en: New chat
+
+  history-title:
+    th: แชทที่บันทึกไว้ในเครื่องนี้
+    en: Chats saved on this device
+
+  history-close:
+    th: ปิด
+    en: Close
+
+  history-empty:
+    th: ยังไม่มีแชทที่บันทึกไว้
+    en: No saved chats yet.
+
+  delete-chat:
+    th: ลบ
+    en: Delete
+
+  delete-all-chats:
+    th: ลบแชททั้งหมด
+    en: Delete all chats
+
+  confirm-delete-chat:
+    th: ต้องการลบแชทนี้ใช่ไหม
+    en: Delete this chat?
+
+  confirm-delete-all-chats:
+    th: ต้องการลบแชททั้งหมดในเครื่องนี้ใช่ไหม
+    en: Delete all chats on this device?
 
 example-questions:
   - id: tourist-visa-documents

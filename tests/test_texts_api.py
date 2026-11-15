@@ -40,3 +40,22 @@ def test_demo_mode_follows_mock_llm(settings: Settings) -> None:
     demo = settings.model_copy(update={"mock_llm": True})
 
     assert _get_texts(demo)["demo_mode"] is True
+
+
+def test_saved_chat_texts_are_served_in_thai(settings: Settings) -> None:
+    texts = _get_texts(settings)["texts"]
+
+    for key in (
+        "history-button",
+        "new-chat-button",
+        "history-title",
+        "history-close",
+        "history-empty",
+        "delete-chat",
+        "delete-all-chats",
+        "confirm-delete-chat",
+        "confirm-delete-all-chats",
+    ):
+        assert any("\u0e00" <= ch <= "\u0e7f" for ch in texts[key]), key
+    # The privacy notice says the chats are also saved on this device until deleted.
+    assert "บันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ" in texts["privacy-notice"]

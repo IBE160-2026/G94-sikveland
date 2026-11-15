@@ -27,6 +27,9 @@
 - source_spec: `docs/implementation/spec-1-7-follow-up-questions.md`
   summary: Extend the deferred browser-level page tests to Story 1.7: exchange stored in sessionStorage only after `done`, follow-up sends the last 10, reload replays the conversation with reminder and sources, closing the tab drops it, malformed stored entries ignored.
   evidence: Review of Story 1.7 (#7, #8): `tests/test_static.py` only matches strings in `app.js`; e.g. `slice(MAX_HISTORY)` instead of `slice(-MAX_HISTORY)` would pass CI.
+- source_spec: `docs/implementation/spec-chat-history-and-new-chat.md`
+  summary: Saved chats changed the Story 1.7 entry above: closing the tab no longer drops the conversation (a new tab opens an empty new chat; past chats stay in `localStorage`). The storage logic in `app/static/history.js` is tested in Node (`tests/test_history_js.py`); the UI wiring in `app.js` (top bar, history panel, reopen, delete with confirm, controls disabled while answering) still needs the deferred browser-level tests.
+  evidence: No browser test runner (Playwright deferred); `tests/test_static.py` only matches strings in `app.js`. A one-off headless-browser run passed on 2026-11-15 but is not in CI.
 - source_spec: `docs/implementation/spec-4-2-demo-mode-without-an-api-key.md`
   summary: In Story 2.3, make done-phrase matching ignore surrounding punctuation and emoji (`Thanks!`, `ok.`, `ขอบคุณค่ะ 🙏`), in the mock and in the real classifier's tests, and test a stored demo category other than `general`.
   evidence: Review of Story 4.2 (#17, #22): the mock matches done phrases exactly after trimming and casefolding; nothing consumes `classify` yet.
@@ -45,3 +48,12 @@
 - source_spec: `docs/implementation/spec-ollama-provider.md`
   summary: Browser check of the example questions with `LLM_PROVIDER=ollama` (AC 4): run MT-10 in `manual-test-plan.md` and record the result.
   evidence: Review of the Ollama build (#11): AC 4 was checked through the app by script, not tapped in a browser. The docs part of this entry (README, manual test plan, spine, PRD addendum, spec-1-6 and spec-1-8 change logs) was done on 2026-11-15.
+- source_spec: `docs/implementation/spec-chat-history-and-new-chat.md`
+  summary: Settle how Story 2.3's feedback flow fits saved chats: AD-10 and epics Story 2.3 say "Yes" ends the conversation and "the page clears the history", and `conversation_id` lives in `sessionStorage`; with saved chats it is undefined whether "Yes" deletes, closes or keeps the saved chat, and what `conversation_id` does on "new chat" or when an older chat is reopened.
+  evidence: Review of the saved-chats build (blind #10): the spine only says "Story 2.3 decides how they relate"; nothing else tracks it, so it would be missed when Story 2.3 is built.
+- source_spec: `docs/implementation/spec-chat-history-and-new-chat.md`
+  summary: Delete uses `window.confirm`; check that it works in Facebook's and LINE's in-app browsers and after a user ticks "prevent this page from creating additional dialogs" (then `confirm` returns false at once and delete silently does nothing). If it fails, use an in-page confirm built from the existing text keys.
+  evidence: Review of the saved-chats build (blind #6), medium, unverified: the decision to use `window.confirm` is in the approved spec; whether in-app webviews suppress it needs a real-phone test (MT-09 setup).
+- source_spec: `docs/implementation/spec-chat-history-and-new-chat.md`
+  summary: If `history.js` is missing when `app.js` runs (a stale cached `index.html` without the new script tag after the update), `window.ChatHistory` is undefined, `startOpenChat` throws before `load()`, and the page stays blank with no retry button; guard it or send `Cache-Control: no-cache` for the static files.
+  evidence: Review of the saved-chats build (edge #1), medium, unverified: FastAPI's StaticFiles sends ETag/Last-Modified but no Cache-Control, so browsers may serve a stale `index.html` heuristically; settle by loading the old page in a browser, updating, and reloading once.
