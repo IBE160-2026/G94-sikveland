@@ -69,6 +69,9 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     app.state.knowledge_base = load_knowledge_base(KNOWLEDGE_BASE_DIR)
     checklist_items = load_checklists(CHECKLISTS_FILE, app.state.knowledge_base, settings.adviser_contact)
     app.state.content = load_content(CONTENT_FILE, settings.adviser_contact, checklist_items)
+    # Which visit purposes each source's checklist items belong to: the `sources` event's
+    # checklist flags (AD-8, AD-11), the same for Claude, Ollama and demo mode.
+    app.state.checklist_purposes = chat.checklist_purposes_by_source(app.state.content.checklists())
     # Loaded even with a given `llm`, so a broken prompt file always stops startup.
     app.state.answer_prompt = load_prompt(ANSWER_PROMPT_FILE)
     app.state.classifier_prompt = load_prompt(CLASSIFIER_PROMPT_FILE)

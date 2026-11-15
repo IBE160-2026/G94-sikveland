@@ -17,7 +17,7 @@ They do not cover:
 
 | Mode | How to start | Used for |
 |---|---|---|
-| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14, MT-15 |
+| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14, MT-15, MT-16 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
 | Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13, MT-14 (part B) |
 | Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13, MT-14 (part B) |
@@ -218,6 +218,24 @@ Mode: demo, 360 px and then 320 px; then a real phone if one is at hand (MT-09 s
 
 Expected: (1) the button can be tapped while the answer arrives; the view covers the chat and offers the three purposes; (2) each item has a large tick box, its text and a source link that opens in a new tab; items with a condition also have the smaller "doesn't apply" choice; the progress line reads e.g. "0 of 18"; (3) the progress goes up with each tick; "doesn't apply" clears the item's tick, dims it and lowers the total by one; tapping it again makes the item count again; ticking a dimmed item clears "doesn't apply" and ticks it; (4) no request is made for a tick; (5) tourism has no ticks; family still has them; (6) the chat is exactly as before, and the answer from step 1 has finished with its source links; focus is on the Checklist button; (7) the same ticks and "doesn't apply" choices; (8) only `passport` is ticked, nothing breaks; (9) nothing is ticked, nothing breaks; (10) the all-done text is shown: every item that applies is ticked, hand in the documents with the signed embassy checklist at VFS, the embassy decides; (11) the fixed error text with a retry button; retry loads the list; (12) every control can be reached and used with the keyboard, focus is always visible, Escape closes the view and focus returns to the Checklist button, also after the failed load and retry (focus moves to the purpose heading when the list appears); a screen reader names the retry button (ลองอีกครั้ง); (13) the loading text (กำลังโหลดรายการเอกสาร) shows until the list appears. At 320 px nothing scrolls sideways, also with the longest items (the minor consent letter, the invitation letter).
 
+### MT-16 Open the checklist from the chat (Story 3.3)
+
+Mode: demo, 360 px and then 320 px. Part B: real key or Ollama.
+
+1. Tap the example question about tourist visa documents (ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง) and wait for the answer.
+2. Tap "Open checklist" (เปิดรายการเอกสาร) under the answer. Choose tourism, tick one item, then tap back (กลับไปที่แชท).
+3. Tap the example question on how to start (ถ้าจะขอวีซ่าไปนอร์เวย์ ต้องเริ่มต้นอย่างไร), and tap "Open checklist" under its answer; press Escape.
+4. Tap the example question about the visa fee.
+5. Send `ขอบคุณค่ะ`.
+6. Reload the page. Tap "Open checklist" under the first answer and choose tourism.
+7. Open the saved chats, open another chat or start a new one, then reopen this chat from the saved chats; tap the button under the first answer again.
+8. Ask the first example again, and while the answer is still arriving tap "Open checklist" under an earlier answer; go back.
+9. Keyboard only: Tab to "Open checklist" under an answer, Enter, then press Escape.
+10. In F12, Application, Local storage, edit `conversations`: on one exchange set `checklistPurposes` to `["visa"]`, on another delete the field; reload.
+11. Part B (real key or Ollama): ask "ผู้สนับสนุนต้องกรอกแบบฟอร์มอะไร" (which form does the sponsor fill in?), then "ค่าธรรมเนียมวีซ่าเท่าไร" (how much is the visa fee?).
+
+Expected: (1) the answer with its source links, and the "Open checklist" button under them; (2) the purpose choice with all three purposes (the answer cites the embassy's checklist, which every checklist links); the tick is saved; back shows the chat unchanged with focus on the button under the answer; (3) the button names the purpose (เปิดรายการเอกสาร: เยี่ยมครอบครัว), and the family checklist opens directly, without the purpose choice, with focus on its heading (the answer cites a source only the family checklist links); Escape returns to the chat; (4) no button under the fee answer; (5) the feedback question without a button; (6, 7) the buttons come back under the same answers only, and the tourism checklist still has the tick from step 2; (8) the checklist opens, and after going back the new answer has kept arriving and finishes normally; (9) focus is visible on the button, Escape returns focus to it; (10) no button on those two exchanges, nothing breaks, the others keep theirs; (11) for each answer, first read the source links shown under it: the button is there exactly when one of them is a checklist-linked source (“Document checklist Schengen visa to Norway”, “Gather the necessary documentation”, “Proof of sponsorship and/or private accommodation” or “Invitation for a visitor visa”), and absent otherwise; it opens the matching purposes (the embassy's checklist: the choice of all three; necessary documents only: the family checklist directly; the sponsorship form or invitation page: the choice of family and friends). At 320 px the button wraps its text and nothing scrolls sideways; it is at least 48 px high.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -239,3 +257,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-13 | | | Not run | Needs a real key, and Ollama |
 | | MT-14 | | | Not run | Part B needs a real key, and Ollama. A one-off headless Edge run (demo mode, 320 px) of steps 1 to 5, the failure in step 7 and the rows in step 8 passed on 2026-11-15; not a manual-test result |
 | | MT-15 | | | Not run | A one-off headless Edge run (demo mode, 320 px) of steps 1 to 11 (before steps 12 and 13 were added), with the browser closed and reopened for step 7 and a simulated failure for step 11, passed on 2026-11-15; not a manual-test result |
+| | MT-16 | | | Not run | Part B needs a real key or Ollama. A one-off headless Edge run in demo mode at 320 px passed 18 checks on 2026-11-15; not a manual-test result |

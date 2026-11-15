@@ -63,14 +63,16 @@
   let checklistRows = {};
   // Counts checklist loads; a response for an older one (purpose changed, view closed) is ignored.
   let checklistRequest = 0;
+  // The button that opened the checklist (top bar or under an answer); focus goes back to it.
+  let checklistOpener = null;
 
   let texts = {};
   let answering = false;
   // True while POST /api/feedback is in flight (see setSendingFeedback).
   let sendingFeedback = false;
   // The chat on screen. `id` is null until its first exchange is stored, so an empty
-  // new chat never becomes a list item. Each exchange: {question, answer, sources, reminder};
-  // only {question, answer} of the last 10 is sent.
+  // new chat never becomes a list item. Each exchange: {question, answer, sources, reminder,
+  // checklistPurposes}; only {question, answer} of the last 10 is sent.
   let current = emptyChat();
   // The feedback id of this chat when sessionStorage is blocked (kept by history.js).
   const feedbackMemory = { id: null };
@@ -178,6 +180,9 @@
       }
       reply.append(entry.answer);
       reply.sources(safeSources(entry.sources));
+      // The "Open checklist" button comes back too; an older exchange without purposes,
+      // or with unknown ones only, gets none.
+      reply.checklistOpen(Lists.validPurposes(entry.checklistPurposes));
     }
     keepInView(true);
   }
@@ -303,8 +308,34 @@
         }
         element.appendChild(list);
       },
+      // "Open checklist" under an answer that cites a checklist-linked source (AD-11):
+      // one purpose opens that checklist, several open the purpose choice.
+      checklistOpen: function (purposes) {
+        const target = Lists.openTarget(purposes);
+        if (!target) {
+          return;
+        }
+        stopTyping();
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "checklist-open";
+        button.setAttribute("aria-controls", "checklist-panel");
+        // With one purpose the button names it, since it opens that checklist directly.
+        button.textContent = target.purpose
+          ? texts["checklist-open"] + ": " + texts["checklist-purpose-" + target.purpose]
+          : texts["checklist-open"];
+        button.addEventListener("click", function () {
+          openChecklist(button, target.purpose);
+        });
+        element.appendChild(button);
+      },
       error: function () {
         stopTyping();
+        // A failed reply is never saved, so it keeps no "Open checklist" button either.
+        const open = element.querySelector(".checklist-open");
+        if (open) {
+          open.remove();
+        }
         const note = document.createElement("p");
         note.className = "error-text";
         note.setAttribute("role", "alert");
@@ -462,6 +493,10 @@
       case "sources":
         record.sources = safeSources(event.sources);
         reply.sources(record.sources);
+        // Set by the server from the fixed checklists; kept with the exchange so the
+        // button comes back when the chat is shown again.
+        record.checklistPurposes = event.checklist === true ? Lists.validPurposes(event.checklist_purposes) : [];
+        reply.checklistOpen(record.checklistPurposes);
         return false;
       case "done":
         return true;
@@ -540,7 +575,7 @@
     const reply = createReply();
     keepInView(true);
 
-    const record = { question: "", answer: "", sources: [], reminder: false };
+    const record = { question: "", answer: "", sources: [], reminder: false, checklistPurposes: [] };
     const info = { category: null };
     let answered = false;
     try {
@@ -707,12 +742,21 @@
   // choices are saved on this device only (checklist.js); the only request is the
   // checklist itself, GET /api/checklists/{purpose} (NFR5).
 
-  function openChecklist() {
+  // `opener` gets focus back on close. Without `purpose` (the top-bar button, or an answer
+  // linked to several purposes) the view starts with the purpose choice; with one, that
+  // checklist opens directly, as if it had been chosen.
+  function openChecklist(opener, purpose) {
+    checklistOpener = opener;
     showPurposeChoice();
     setBehindPanelInert(true);
     checklistPanel.hidden = false;
     document.body.classList.add("panel-open");
-    checklistClose.focus();
+    // With a purpose, choosePurpose moves focus to the checklist heading (focus moves once).
+    if (purpose) {
+      choosePurpose(purpose);
+    } else {
+      checklistClose.focus();
+    }
   }
 
   function closeChecklist() {
@@ -720,7 +764,9 @@
     checklistPanel.hidden = true;
     document.body.classList.remove("panel-open");
     setBehindPanelInert(false);
-    checklistButton.focus();
+    const opener = checklistOpener && checklistOpener.isConnected ? checklistOpener : checklistButton;
+    checklistOpener = null;
+    opener.focus();
   }
 
   function showPurposeChoice() {
@@ -908,7 +954,9 @@
       closeHistory();
     }
   });
-  checklistButton.addEventListener("click", openChecklist);
+  checklistButton.addEventListener("click", function () {
+    openChecklist(checklistButton, null);
+  });
   checklistClose.addEventListener("click", closeChecklist);
   checklistChangePurpose.addEventListener("click", changePurpose);
   checklistRetry.addEventListener("click", loadChecklist);

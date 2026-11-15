@@ -57,6 +57,9 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         # Shown while a checklist loads, and the name of the retry button (a symbol only).
         "checklist-loading",
         "checklist-retry",
+        # The "Open checklist" button under an answer that cites a checklist-linked source
+        # (Story 3.3, AD-11).
+        "checklist-open",
     }
 )
 

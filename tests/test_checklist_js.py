@@ -368,3 +368,50 @@ def test_checklist_js_never_talks_to_the_server() -> None:
         assert call not in source, call
     assert "window." not in source
     assert "localStorage." not in source and "sessionStorage." not in source
+
+
+# --- "Open checklist" under an answer (Story 3.3) ----------------------------------------
+# Rows of the I/O matrix in docs/implementation/spec-3-3-open-the-checklist-from-the-chat.md.
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [
+        ('["family", "friends"]', ["family", "friends"]),
+        ('["tourism", "family", "friends"]', ["tourism", "family", "friends"]),
+        # Server order is kept even if stored otherwise; each purpose once.
+        ('["friends", "tourism", "friends"]', ["tourism", "friends"]),
+        # Unknown purposes are dropped.
+        ('["visa", "family"]', ["family"]),
+        ('["visa"]', []),
+        ('["Family", " family", 1, null, {}]', []),
+        # Not a list, or missing (a chat saved before Story 3.3).
+        ('"family"', []),
+        ('{"0": "family", "length": 1}', []),
+        ("null", []),
+        ("undefined", []),
+        ("[]", []),
+    ],
+)
+def test_valid_purposes_keeps_known_purposes_in_order_once(value: str, valid: list[str]) -> None:
+    assert run(f"return C.validPurposes({value});") == valid
+
+
+@pytest.mark.parametrize(
+    ("value", "target"),
+    [
+        # One purpose: that checklist directly.
+        ('["tourism"]', {"purpose": "tourism"}),
+        ('["family", "visa"]', {"purpose": "family"}),
+        # Several: the purpose choice first.
+        ('["family", "friends"]', {"purpose": None}),
+        ('["tourism", "family", "friends"]', {"purpose": None}),
+        # None, or nothing usable: no button.
+        ("[]", None),
+        ('["visa"]', None),
+        ('"tourism"', None),
+        ("undefined", None),
+    ],
+)
+def test_open_target_is_the_checklist_or_the_choice_or_no_button(value: str, target: object) -> None:
+    assert run(f"return C.openTarget({value});") == target

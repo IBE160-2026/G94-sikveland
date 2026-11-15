@@ -121,6 +121,7 @@ CHECKLIST_KEYS = (
     "checklist-all-done",
     "checklist-loading",
     "checklist-retry",
+    "checklist-open",
 )
 
 
@@ -146,6 +147,7 @@ def test_checklist_texts_have_their_english_meaning(settings: Settings) -> None:
     texts = load_content(CONTENT_FILE, settings.adviser_contact, committed_checklists()).texts()
 
     assert texts["checklist-button"].en == "Checklist"
+    assert texts["checklist-open"].en == "Open checklist"
     assert texts["checklist-not-applicable"].en == "Doesn't apply to me"
     assert texts["checklist-progress"].en == "{done} of {total} ready"
     # All done is no promise that the application is complete.

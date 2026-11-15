@@ -16,6 +16,7 @@ from app.adapters.mock_llm import MockLLM
 from app.config import Settings
 from app.main import DEMO_ANSWERS_FILE, STATIC_DIR, create_app
 from app.pipeline.filter import REMOVED_MARKER
+from app.ports.content import VISIT_PURPOSES
 from app.ports.llm import AnswerChunk, LLMError, Usage
 from tests.fakes.fake_llm import ScriptedLLM
 
@@ -126,13 +127,36 @@ def test_every_example_streams_its_stored_answer_with_sources(client: TestClient
         for sid in stored.source_ids:
             source = state.knowledge_base.source(sid)
             expected.append({"id": source.id, "title": source.title, "url": source.url})
+        # Every purpose whose committed checklist links one of the cited sources (Story 3.3).
+        purposes = [
+            purpose
+            for purpose in VISIT_PURPOSES
+            if any(item.source_id in stored.source_ids for item in state.content.checklists()[purpose])
+        ]
         assert events[-2] == {
             "type": "sources",
             "sources": expected,
-            "checklist": False,
-            "checklist_purposes": [],
+            "checklist": bool(purposes),
+            "checklist_purposes": purposes,
         }
         assert events[-1] == {"type": "done"}
+
+
+def test_documents_example_gets_the_open_checklist_flags(client: TestClient) -> None:
+    [example] = [e for e in _examples(client) if e.id == "tourist-visa-documents"]
+
+    sources = _events(client, example.th)[-2]
+
+    # It cites the embassy's checklist, which every visit purpose's checklist links.
+    assert sources["checklist"] is True
+    assert sources["checklist_purposes"] == ["tourism", "family", "friends"]
+
+
+def test_demo_only_and_done_replies_get_no_checklist(client: TestClient) -> None:
+    for question in ("วีซ่าทำงานต้องใช้เอกสารอะไร", "ขอบคุณค่ะ"):
+        sources = _events(client, question)[-2]
+
+        assert (sources["checklist"], sources["checklist_purposes"]) == (False, []), question
 
 
 def test_spacing_and_english_get_the_same_answer(client: TestClient) -> None:

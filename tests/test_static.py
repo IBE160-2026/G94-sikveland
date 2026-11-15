@@ -239,7 +239,10 @@ def test_page_history_limits_match_the_server() -> None:
 def test_page_stores_only_the_clean_question() -> None:
     js = _app_js()
 
-    assert 'const record = { question: "", answer: "", sources: [], reminder: false };' in js
+    assert (
+        'const record = { question: "", answer: "", sources: [], reminder: false, checklistPurposes: [] };'
+        in js
+    )
     assert 'typeof event.clean_question === "string" ? event.clean_question : ""' in js
 
 
@@ -343,7 +346,10 @@ def test_feedback_buttons_come_only_after_a_finished_done_reply() -> None:
     replay = js.split("function showConversation(")[1].split("\n  }\n")[0]
     assert "feedback" not in replay
     # The category is never stored with the exchange.
-    assert 'const record = { question: "", answer: "", sources: [], reminder: false };' in js
+    assert (
+        'const record = { question: "", answer: "", sources: [], reminder: false, checklistPurposes: [] };'
+        in js
+    )
 
 
 def test_feedback_texts_and_button_labels_come_from_the_texts_api() -> None:
@@ -555,8 +561,18 @@ def test_checklist_view_is_a_full_screen_dialog_like_the_saved_chats() -> None:
     close_body = _body(js, "closeChecklist")
     assert "setBehindPanelInert(true);" in open_body and "checklistPanel.hidden = false;" in open_body
     assert "checklistClose.focus();" in open_body
-    # Inert is removed before focus goes back to the Checklist button.
-    assert close_body.index("setBehindPanelInert(false);") < close_body.index("checklistButton.focus();")
+    # Inert is removed before focus goes back to the button that opened it (Story 3.3), or
+    # the Checklist button when that one is gone.
+    assert close_body.index("setBehindPanelInert(false);") < close_body.index("opener.focus();")
+    assert (
+        "const opener = checklistOpener && checklistOpener.isConnected ? checklistOpener : checklistButton;"
+        in close_body
+    )
+    assert "checklistOpener = opener;" in open_body
+    assert (
+        'checklistButton.addEventListener("click", function () {\n    openChecklist(checklistButton, null);'
+        in js
+    )
     # Opening always starts with the purpose choice.
     assert "showPurposeChoice();" in open_body
     assert "checklistChoice.hidden = false;" in _body(js, "showPurposeChoice")
@@ -678,3 +694,93 @@ def test_checklist_view_fits_narrow_screens_and_targets_are_large_enough() -> No
     # The tick box is large; the "doesn't apply" box is smaller.
     assert "width: 28px;" in css.split(".checklist-box {")[1].split("}")[0]
     assert "width: 20px;" in css.split(".checklist-na-box {")[1].split("}")[0]
+
+
+# --- Open the checklist from the chat (Story 3.3) ----------------------------------------
+
+
+def _open_button(js: str) -> str:
+    """The reply's `checklistOpen` method: the "Open checklist" button under an answer."""
+    return js.split("checklistOpen: function (purposes) {")[1].split("\n      },\n")[0]
+
+
+def test_open_checklist_button_follows_the_sources_event() -> None:
+    js = _app_js()
+
+    handle = _body(js, "handle")
+    sources = handle.split('case "sources":')[1].split("return false;")[0]
+    # Only a `checklist: true` event counts; its purposes are checked and kept with the exchange.
+    assert (
+        "record.checklistPurposes = event.checklist === true"
+        " ? Lists.validPurposes(event.checklist_purposes) : [];" in sources
+    )
+    assert "reply.checklistOpen(record.checklistPurposes);" in sources
+    assert sources.index("reply.sources(record.sources);") < sources.index("reply.checklistOpen(")
+    # The exchange is stored as recorded (only after `done`).
+    assert "storeExchange(record);" in js
+
+
+def test_open_checklist_button_comes_back_on_a_replayed_chat() -> None:
+    replay = _body(_app_js(), "showConversation")
+
+    assert "reply.checklistOpen(Lists.validPurposes(entry.checklistPurposes));" in replay
+    assert replay.index("reply.sources(") < replay.index("reply.checklistOpen(")
+
+
+def test_open_checklist_button_opens_the_checklist_or_the_choice() -> None:
+    js = _app_js()
+
+    button = _open_button(js)
+    # No purposes: no button; one or several: decided in checklist.js (tested in Node).
+    assert "const target = Lists.openTarget(purposes);" in button
+    assert "if (!target) {\n          return;" in button
+    assert 'button.type = "button";' in button and 'button.className = "checklist-open";' in button
+    # One purpose: the label names it; several: the plain label.
+    assert (
+        "button.textContent = target.purpose\n"
+        '          ? texts["checklist-open"] + ": " + texts["checklist-purpose-" + target.purpose]\n'
+        '          : texts["checklist-open"];'
+    ) in button
+    assert 'button.setAttribute("aria-controls", "checklist-panel");' in button
+    assert "openChecklist(button, target.purpose);" in button
+    # With one purpose the view opens on that checklist, as if it had been chosen, and focus
+    # moves once: to its heading (choosePurpose), not first to Back.
+    open_body = _body(js, "openChecklist")
+    assert open_body.index("showPurposeChoice();") < open_body.index("choosePurpose(purpose);")
+    assert (
+        "if (purpose) {\n      choosePurpose(purpose);\n    } else {\n      checklistClose.focus();\n    }"
+        in open_body
+    )
+    assert open_body.count("checklistClose.focus();") == 1
+
+
+def test_a_failed_reply_keeps_no_open_checklist_button() -> None:
+    error = _app_js().split("error: function () {")[1].split("\n      },\n")[0]
+
+    assert 'const open = element.querySelector(".checklist-open");' in error
+    assert "open.remove();" in error
+
+
+def test_open_checklist_button_works_while_an_answer_streams() -> None:
+    js = _app_js()
+
+    # Never disabled while busy, and opening checks nothing about the chat.
+    assert "checklist-open" not in _body(js, "setControlsDisabled")
+    assert "busy()" not in _open_button(js)
+
+
+def test_nothing_about_checklists_is_sent_with_a_question() -> None:
+    js = _app_js()
+    history = _history_js()
+
+    # Only {question, answer} of the history goes to /api/chat (history.js, tested in Node).
+    assert "body: JSON.stringify({ question: text, history: Chats.historyToSend(current.exchanges) })," in js
+    assert "return { question: entry.question, answer: entry.answer };" in history
+    assert "checklistPurposes" not in _body(history, "historyToSend")
+
+
+def test_open_checklist_button_fits_narrow_screens_and_is_large_enough() -> None:
+    rule = _css().split(".checklist-open {")[1].split("}")[0]
+
+    assert "min-height: 48px;" in rule and "min-width: 48px;" in rule
+    assert "max-width: 100%;" in rule

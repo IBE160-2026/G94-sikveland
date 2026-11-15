@@ -25,8 +25,10 @@ from app.ports.llm import AnswerChunk, Exchange, LLMError, LLMRefusalError, Usag
 from app.web.chat import FIXED_REPLY_KEYS
 from tests.fakes.fake_llm import CLASSIFY_USAGE, ClassifyCall, ScriptedLLM
 
+# S1 is linked to an item of the family checklist only; S2 to no checklist item.
 S1 = "embassy-necessary-documents"
 S2 = "embassy-online-registration"
+S1_PURPOSES = ("family",)
 QUESTION = "How much is the visa fee?"
 
 
@@ -64,8 +66,13 @@ def _meta(question: str = QUESTION, removed: bool = False) -> dict[str, Any]:
     }
 
 
-def _sources(*items: dict[str, str]) -> dict[str, Any]:
-    return {"type": "sources", "sources": list(items), "checklist": False, "checklist_purposes": []}
+def _sources(*items: dict[str, str], purposes: tuple[str, ...] = ()) -> dict[str, Any]:
+    return {
+        "type": "sources",
+        "sources": list(items),
+        "checklist": bool(purposes),
+        "checklist_purposes": list(purposes),
+    }
 
 
 ERROR = {"type": "error", "key": "error"}
@@ -87,7 +94,7 @@ def test_cited_answer_streams_meta_text_sources_done(settings: Settings) -> None
         {"type": "text", "delta": "A"},
         {"type": "text", "delta": "B"},
         {"type": "text", "delta": "C"},
-        _sources(_source(client, S1)),
+        _sources(_source(client, S1), purposes=S1_PURPOSES),
         DONE,
     ]
 
@@ -98,7 +105,7 @@ def test_sources_in_first_cited_order_each_once(settings: Settings) -> None:
 
     events = _events(client, {"question": QUESTION, "history": []})
 
-    assert events[-2] == _sources(_source(client, S2), _source(client, S1))
+    assert events[-2] == _sources(_source(client, S2), _source(client, S1), purposes=S1_PURPOSES)
 
 
 def test_thai_is_sent_as_utf8_not_escaped(settings: Settings) -> None:
@@ -195,7 +202,7 @@ def test_unknown_cited_id_is_dropped_and_the_answer_continues(settings: Settings
         _meta(),
         {"type": "text", "delta": "A"},
         {"type": "text", "delta": "B"},
-        _sources(_source(client, S1)),
+        _sources(_source(client, S1), purposes=S1_PURPOSES),
         DONE,
     ]
     assert "no-such-source" not in json.dumps(events)
@@ -514,7 +521,7 @@ def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
     llm = ScriptedLLM([AnswerChunk("A", (S1,)), AnswerChunk("B"), AnswerChunk("C")], usage=SPEC_USAGE)
     kb = create_app(settings, llm=llm).state.knowledge_base
     events = answer_question(QUESTION, (), llm, kb, "no answer", fixed_replies={})
-    lines = _lines(events, lambda *args: logged.append(args))
+    lines = _lines(events, lambda *args: logged.append(args), {})
 
     assert json.loads(next(lines))["type"] == "meta"
     assert json.loads(next(lines)) == {"type": "text", "delta": "A"}
@@ -553,7 +560,7 @@ def test_client_gone_during_a_fixed_reply_still_logs_the_classify_cost(settings:
     kb = create_app(settings, llm=llm).state.knowledge_base
     fixed = {"individual_assessment": "only the embassy decides"}
     events = answer_question("จะได้วีซ่าไหม", (), llm, kb, "no answer", fixed_replies=fixed)
-    lines = _lines(events, log)
+    lines = _lines(events, log, {})
 
     assert json.loads(next(lines))["category"] == "individual_assessment"
     lines.close()  # the client went away after `meta`
@@ -606,7 +613,16 @@ def test_unwritable_log_does_not_break_the_answer(
         first = _events(client, {"question": QUESTION, "history": []})
         second = _events(client, {"question": QUESTION, "history": []})
 
-    assert first == second == [_meta(), {"type": "text", "delta": "A"}, _sources(_source(client, S1)), DONE]
+    assert (
+        first
+        == second
+        == [
+            _meta(),
+            {"type": "text", "delta": "A"},
+            _sources(_source(client, S1), purposes=S1_PURPOSES),
+            DONE,
+        ]
+    )
     warnings = [r.getMessage() for r in caplog.records if "request log" in r.getMessage()]
     assert len(warnings) == 1
     assert re.fullmatch(r"request log not written: \w+Error", warnings[0])
@@ -1137,3 +1153,131 @@ def test_classify_is_priced_with_the_small_prices_only_with_claude(settings: Set
     for update in ({"llm_provider": "ollama"}, {"mock_llm": True}):
         prices = create_app(settings.model_copy(update=update), llm=ScriptedLLM()).state.classify_prices
         assert (prices.input, prices.output, prices.cache_read, prices.cache_write) == (0, 0, 0, 0)
+
+
+# --- Open the checklist from the chat (Story 3.3) ----------------------------------------
+# The committed checklists (content/checklists.yaml) decide the purposes.
+
+SPONSOR_FORM = "udi-sponsorship-form"  # items in the family and friends checklists
+EMBASSY_CHECKLIST = "embassy-visitor-visa-checklist"  # items in all three checklists
+FEES = "udi-fees"  # no checklist item
+
+
+@pytest.mark.parametrize(
+    ("cited", "purposes"),
+    [
+        ((SPONSOR_FORM,), ("family", "friends")),
+        ((S1,), ("family",)),
+        ((EMBASSY_CHECKLIST,), ("tourism", "family", "friends")),
+        ((FEES,), ()),
+        ((FEES, S2), ()),
+        # In VISIT_PURPOSES order and each once, whatever the citation order.
+        ((SPONSOR_FORM, S1, FEES), ("family", "friends")),
+        ((FEES, SPONSOR_FORM, EMBASSY_CHECKLIST), ("tourism", "family", "friends")),
+    ],
+    ids=["family-sources", "one-purpose", "general-source", "no-link", "no-link-two", "repeats", "order"],
+)
+def test_sources_event_names_the_checklists_of_the_cited_sources(
+    settings: Settings, cited: tuple[str, ...], purposes: tuple[str, ...]
+) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", cited)])
+    client = _client(settings, llm)
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events[-2] == _sources(*(_source(client, sid) for sid in cited), purposes=purposes)
+    assert events[-1] == DONE
+    # One classify and one answer call only; no model call decides the button.
+    assert len(llm.classify_calls) == 1
+    assert len(llm.calls) == 1
+
+
+def test_unknown_cited_id_counts_for_no_checklist(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (FEES,)), AnswerChunk("B", ("no-such-source",))])
+    client = _client(settings, llm)
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events[-2] == _sources(_source(client, FEES))
+
+
+def test_only_unknown_cited_ids_give_no_checklist(settings: Settings) -> None:
+    events = _events(
+        _client(settings, ScriptedLLM([AnswerChunk("x", ("no-such-source",))])), {"question": QUESTION}
+    )
+
+    assert events[-2] == _sources()
+
+
+def test_one_tourism_purpose_comes_through_the_route(settings: Settings) -> None:
+    # No committed source is linked to tourism items only, so the map is replaced here.
+    client = _client(settings, ScriptedLLM([AnswerChunk("A", (FEES,))]))
+    client.app.state.checklist_purposes = {FEES: ("tourism",)}
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events[-2] == _sources(_source(client, FEES), purposes=("tourism",))
+
+
+def test_a_fixed_reply_never_links_a_checklist_even_with_linked_sources() -> None:
+    from app.pipeline.answer import Done, Meta, SourceRef, Sources, TextDelta
+    from app.web.chat import _lines
+
+    ref = SourceRef(SPONSOR_FORM, "t", "https://example.org/form")
+    by_source = {SPONSOR_FORM: ("family", "friends")}
+
+    def sources_event(category: str) -> dict[str, Any]:
+        events = iter([Meta(category, False, "q"), TextDelta("x"), Sources((ref,)), Done()])
+        return json.loads(list(_lines(events, lambda *args: None, by_source))[2])
+
+    assert sources_event("general")["checklist_purposes"] == ["family", "friends"]
+    for category in FIXED_REPLY_KEYS:
+        event = sources_event(category)
+        assert (event["checklist"], event["checklist_purposes"]) == (False, []), category
+
+
+def test_purposes_by_source_keeps_the_purpose_order_and_each_once() -> None:
+    from app.ports.content import ChecklistItem
+    from app.web.chat import checklist_purposes, checklist_purposes_by_source
+
+    def item(item_id: str, source_id: str) -> ChecklistItem:
+        return ChecklistItem(id=item_id, th="t", en="e", source_id=source_id)
+
+    checklists = {
+        "friends": (item("a", "shared"),),
+        "tourism": (item("b", "tourism-only"), item("c", "shared"), item("d", "shared")),
+        "family": (),
+    }
+
+    by_source = checklist_purposes_by_source(checklists)
+
+    assert by_source == {"tourism-only": ("tourism",), "shared": ("tourism", "friends")}
+    assert checklist_purposes(["tourism-only"], by_source) == ["tourism"]
+    assert checklist_purposes(["shared", "tourism-only", "shared"], by_source) == ["tourism", "friends"]
+    assert checklist_purposes(["not-linked"], by_source) == []
+    assert checklist_purposes([], by_source) == []
+
+
+@pytest.mark.parametrize("mode", ["anthropic", "ollama", "demo"])
+def test_every_mode_uses_the_committed_checklists(settings: Settings, mode: str) -> None:
+    from app.web.chat import checklist_purposes_by_source
+    from tests.fakes.content import committed_checklists
+
+    update = {"anthropic": {}, "ollama": {"llm_provider": "ollama"}, "demo": {"mock_llm": True}}[mode]
+    created = create_app(settings.model_copy(update=update))
+
+    assert created.state.checklist_purposes == checklist_purposes_by_source(committed_checklists())
+    assert created.state.checklist_purposes[SPONSOR_FORM] == ("family", "friends")
+    assert FEES not in created.state.checklist_purposes
+
+
+def test_ollama_answer_citing_a_linked_source_names_its_checklists(settings: Settings) -> None:
+    ollama = _ollama(settings)
+    body = _ollama_stream(f"ผู้สนับสนุนกรอกแบบฟอร์ม [[{SPONSOR_FORM}]] ค่าธรรมเนียม [[{FEES}]].")
+    client = _client(ollama, _ollama_llm(ollama, body))
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events[-2] == _sources(
+        _source(client, SPONSOR_FORM), _source(client, FEES), purposes=("family", "friends")
+    )

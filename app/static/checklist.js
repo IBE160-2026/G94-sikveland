@@ -1,7 +1,8 @@
-// Document checklist ticks on this device (FR6, AD-11). Pure functions that take the
-// storage object, so tests/test_checklist_js.py can run them in Node with an in-memory
-// storage. Ticks and "doesn't apply" choices stay in localStorage; nothing here talks to
-// the server (NFR5). No Thai here (AD-6).
+// Document checklist ticks on this device (FR6, AD-11), and what the "Open checklist"
+// button under an answer opens. Pure functions that take the storage object, so
+// tests/test_checklist_js.py can run them in Node with an in-memory storage. Ticks and
+// "doesn't apply" choices stay in localStorage; nothing here talks to the server (NFR5).
+// No Thai here (AD-6).
 "use strict";
 
 (function (root) {
@@ -165,6 +166,29 @@
     return String(template).split("{done}").join(String(counts.done)).split("{total}").join(String(counts.total));
   }
 
+  // The known visit purposes in `value`, in PURPOSES order and each once: the
+  // `checklist_purposes` of a `sources` event, or those stored with a saved exchange.
+  // Anything else (unknown purposes, not a list, missing in an older saved chat) gives [].
+  function validPurposes(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return PURPOSES.filter(function (purpose) {
+      return value.indexOf(purpose) >= 0;
+    });
+  }
+
+  // What the "Open checklist" button under an answer opens: null for no button (no
+  // purposes), {purpose: "..."} for one purpose (that checklist directly), and
+  // {purpose: null} for several (the purpose choice first).
+  function openTarget(purposes) {
+    const valid = validPurposes(purposes);
+    if (!valid.length) {
+      return null;
+    }
+    return { purpose: valid.length === 1 ? valid[0] : null };
+  }
+
   const Checklist = {
     PURPOSES: PURPOSES,
     isPurpose: isPurpose,
@@ -178,6 +202,8 @@
     toggleNotApplicable: toggleNotApplicable,
     progress: progress,
     progressText: progressText,
+    validPurposes: validPurposes,
+    openTarget: openTarget,
   };
 
   if (typeof module !== "undefined" && module.exports) {

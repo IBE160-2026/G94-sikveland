@@ -87,3 +87,9 @@
 - source_spec: `docs/implementation/spec-3-2-tick-off-documents-and-the-ticks-are-kept.md`
   summary: Let the applicant clear a checklist's ticks (a new application, or another traveller on the same phone), and decide whether "delete all chats" should also clear `checklist:*` and `checklist-na:*`.
   evidence: Review of Story 3.2 (blind #8): no reset exists; on a shared phone the ticks stay after "delete all chats". Ticks hold only item ids, no personal text.
+- source_spec: `docs/implementation/spec-3-3-open-the-checklist-from-the-chat.md`
+  summary: Extend the deferred browser-level page tests to the "Open checklist" button: shown under a live answer only for a `checklist: true` event, back on reload and reopen from the stored `checklistPurposes`, one purpose opening that checklist directly and several the purpose choice, focus back on the button after Back or Escape, and opening while another answer streams. The pure parts (`validPurposes`, `openTarget`) are tested in Node and the server flags in pytest; the DOM wiring in `app.js` only by source text.
+  evidence: Story 3.3 build: no browser test runner exists (Playwright deferred); MT-16 covers it by hand.
+- source_spec: `docs/implementation/spec-3-3-open-the-checklist-from-the-chat.md`
+  summary: A general answer can open the family checklist directly: "how to start" cites `embassy-necessary-documents`, which only the `eu-eea-family-member` pointer item uses, so `checklist_purposes` is `["family"]` and a tourist lands in the family list. Settle together with the Story 3.2 entry on non-tickable notes (exclude notes from the source → purpose map), or show the purpose choice when the only link comes from a conditional item.
+  evidence: Review of Story 3.3 (blind #2): verified in the demo run and in MT-16 step 3; the mapping rule follows the story's AC, the odd result comes from a pointer item citing a general source.

@@ -228,6 +228,12 @@ texts:
     th: ลองอีกครั้ง
     en: Try again
 
+  # The button under an answer that cites a source linked to a checklist item (Story 3.3).
+  # DRAFT Thai, awaiting the user's review (NFR8).
+  checklist-open:
+    th: เปิดรายการเอกสาร
+    en: Open checklist
+
 example-questions:
   - id: tourist-visa-documents
     th: ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง

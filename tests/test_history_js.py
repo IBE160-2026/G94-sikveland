@@ -193,6 +193,28 @@ def test_reopen_gives_exchanges_with_sources_and_reminder_and_sends_the_last_ten
     assert result["missing"] is None
 
 
+def test_checklist_purposes_are_kept_with_the_exchange_and_never_sent() -> None:
+    result = run("""
+        const local = memory();
+        const session = memory();
+        const linked = Object.assign(ex(1), { checklistPurposes: ["family", "friends"] });
+        const older = ex(2); // saved before Story 3.3: no checklistPurposes
+        const bad = Object.assign(ex(3), { checklistPurposes: "family" });
+        let open = H.appendExchange(local, session, { id: null, exchanges: [] }, linked, 1, "c1");
+        open = H.appendExchange(local, session, open, older, 2, "unused");
+        H.appendExchange(local, session, open, bad, 3, "unused");
+        const reopened = H.findConversation(local, "c1");
+        return {
+          purposes: reopened.exchanges.map(function (e) { return e.checklistPurposes; }),
+          history: H.historyToSend(reopened.exchanges),
+        };
+    """)
+
+    # Stored as given; the page checks them when it shows the chat (checklist.js).
+    assert result["purposes"] == [["family", "friends"], None, "family"]
+    assert result["history"] == [{"question": f"q{n}", "answer": f"a{n}"} for n in (1, 2, 3)]
+
+
 def test_history_to_send_leaves_out_turns_over_the_server_limits() -> None:
     result = run("""
         const long = { question: "q", answer: "x".repeat(10001) };

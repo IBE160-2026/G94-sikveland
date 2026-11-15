@@ -473,6 +473,25 @@ body.panel-open {
   margin-top: 0.75rem;
 }
 
+/* "Open checklist" under an answer that cites a checklist-linked source (Story 3.3). */
+.checklist-open {
+  display: block;
+  max-width: 100%;
+  min-width: 48px;
+  min-height: 48px;
+  margin-top: 0.75rem;
+  padding: 0.25rem 1rem;
+  text-align: left;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.checklist-open:active {
+  background: #e8eefb;
+}
+
 /* Document checklist (Story 3.2): purpose choice, then one row per item with a large tick
    box, a smaller "doesn't apply to me" box for conditional items, and the source link. */
 .checklist-choose {

@@ -6,7 +6,8 @@
 "use strict";
 
 (function (root) {
-  // localStorage: [{id, updated, exchanges: [{question, answer, sources, reminder}]}].
+  // localStorage: [{id, updated, exchanges: [{question, answer, sources, reminder, checklistPurposes}]}].
+  // `checklistPurposes` (Story 3.3) is missing in chats saved before it existed.
   const LIST_KEY = "conversations";
   // sessionStorage: id of the chat open in this tab, so a reload keeps it.
   const OPEN_KEY = "open-conversation";
@@ -31,7 +32,8 @@
     return typeof value === "string" && value.trim() !== "";
   }
 
-  // Keeps only exchanges with a question and an answer; the rest is checked when shown.
+  // Keeps only exchanges with a question and an answer; the rest (sources, reminder,
+  // checklistPurposes) is kept as stored and checked when shown.
   function validExchanges(value) {
     if (!Array.isArray(value)) {
       return [];
