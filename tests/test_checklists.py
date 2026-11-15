@@ -293,10 +293,11 @@ def test_an_id_shared_by_checklists_has_the_same_content(committed: dict[str, An
             assert seen.setdefault(item.id, item) == item, item.id
 
 
-def test_committed_file_is_marked_as_draft_with_the_id_rule() -> None:
+def test_committed_file_records_the_thai_review_and_the_id_rule() -> None:
     header = CHECKLISTS_FILE.read_text(encoding="utf-8").split("\ntourism:")[0]
 
-    assert "DRAFT" in header and "NFR8" in header
+    # The Thai was approved by the user (NFR8); a later change is a DRAFT again until reviewed.
+    assert "NFR8" in header and ("approved" in header or "DRAFT" in header)
     assert "NEVER reuse an id" in header
 
 
