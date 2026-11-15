@@ -121,7 +121,7 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | Date | Case | Tester | Device / browser | Result | Notes |
 |---|---|---|---|---|---|
 | 2026-11-15 | MT-01 | Wannapa Sikveland | Desktop browser, device mode 360 px | Pass | All four examples, other question, demo label |
-| | MT-02 | | | Not run | |
+| 2026-11-15 | MT-02 | Wannapa Sikveland | Browser device mode, 360 and 320 px | Pass | |
 | | MT-03 | | | Not run | |
 | | MT-04 | | | Not run | Needs a real key |
 | | MT-05 | | | Not run | Needs a real key |
