@@ -157,5 +157,5 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-07 | | | Not run | Needs a real key |
 | | MT-08 | | | Not run | Needs a real key |
 | | MT-09 | | | Not run | Needs a real key and a phone |
-| | MT-10 | | | Not run | Needs Ollama; branch `ollama` |
-| | MT-11 | | | Not run | |
+| 2026-11-15 | MT-10 | Wannapa Sikveland | Browser, branch `integration`, `LLM_PROVIDER=ollama` (qwen3.5:9b) | Pass | Reported by the tester as fine; tested together with saved chats |
+| 2026-11-15 | MT-11 | Wannapa Sikveland | Browser, branch `integration` | Pass | Reported by the tester as fine; tested together with Ollama |
