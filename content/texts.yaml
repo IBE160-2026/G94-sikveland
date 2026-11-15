@@ -64,8 +64,8 @@ texts:
     th: พิมพ์คำถามเกี่ยวกับวีซ่านอร์เวย์ที่นี่
     en: Type your question about the Norway visa here
 
-  # Saved chats on this device. DRAFT Thai (2026-11-15), and the last sentence of
-  # privacy-notice: to be reviewed by the user/adviser before merge (NFR8).
+  # Saved chats on this device: top bar, history panel, delete confirmations.
+  # Thai approved by the user on 2026-11-15, with the last sentence of privacy-notice (NFR8).
   history-button:
     th: แชทที่บันทึกไว้
     en: Saved chats

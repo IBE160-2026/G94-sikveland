@@ -81,7 +81,7 @@ context: []
 - The list `id` is local only (`Date.now` + random), not the AD-10 `conversation_id`; noted in AD-3.
 - Date in the list: `toLocaleDateString` with the page's `lang` (`th`), e.g. "15 พ.ย. 2569". Question shortened to 80 characters plus a two-line clamp.
 - The demo label now sits in a sticky `<header class="top">` with the top bar; `tests/test_demo_mode.py` checks the header instead of `.demo-label`.
-- Thai texts for the 9 new keys and the privacy-notice sentence are drafts marked in `content/texts.yaml`, awaiting user/adviser review (NFR8).
+- Thai texts for the 9 new keys and the privacy-notice sentence were drafts; approved by the user on 2026-11-15 (NFR8).
 - Verified also in headless Edge (demo mode, 320 px) with a one-off CDP script: every matrix row passed; not part of CI.
 
 ## Spec Change Log
