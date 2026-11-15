@@ -108,6 +108,8 @@ uv run ruff format --check  # formatering; uten --check rettes den
 
 [GitHub Actions](.github/workflows/ci.yml) kjører ruff og testene ved hver push.
 
+Det de automatiske testene ikke dekker (siden i en nettleser, ekte Claude-svar, ekte mobil og Facebooks innebygde nettleser), står i den [manuelle testplanen](docs/implementation/manual-test-plan.md) sammen med resultatene.
+
 ## Slik virker det
 
 ```text
