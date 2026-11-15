@@ -77,6 +77,8 @@ context:
 - Left out on purpose: the embassy checklist's "Business" section and its "OPTIONAL" items (power of attorney, previous visas), which the spec's decisions do not include.
 - Added after review: `signed-embassy-checklist` (print, tick, sign and hand in the embassy's checklist at VFS) and an unconditional `proof-of-occupation` in every list; `eu-eea-family-member` (source `embassy-necessary-documents`) in `family` only. The family/friends ties item has its own id `social-and-financial-ties`, since its text differs from tourism's `ties-to-thailand`; a test now checks that an id shared by checklists has identical content.
 
+- The user approved the Thai checklist texts on 2026-11-15 (NFR8); the DRAFT notes are replaced by the approval.
+
 ## Spec Change Log
 
 ## Review Triage Log

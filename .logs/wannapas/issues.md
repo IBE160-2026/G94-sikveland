@@ -57,4 +57,4 @@
 - [ ] 2026-11-15 [story-2-2-out-of-scope-and-reach-person](976-2026-11-15-14-53-20-story-2-2-out-of-scope-and-reach-person.md) — Run MT-13 (other visa types, requests for a person) with a real Claude key and with Ollama
 - [x] 2026-11-15 [story-2-3-feedback-question](975-2026-11-15-15-26-18-story-2-3-feedback-question.md) — Approve the draft Thai texts for Story 2.3 (five feedback keys and the new privacy-notice sentence) (NFR8) (resolved 2026-11-15: approved by the user, buttons kept as ใช่ / ไม่)
 - [ ] 2026-11-15 [story-2-3-feedback-question](975-2026-11-15-15-26-18-story-2-3-feedback-question.md) — Run MT-14 (feedback question and Yes/No) in demo mode, with a real Claude key and with Ollama
-- [ ] 2026-11-15 [story-3-1-checklists](974-2026-11-15-19-26-37-story-3-1-checklists.md) — Review the draft Thai checklist texts in content/checklists.yaml against the embassy's official checklist (NFR8)
+- [x] 2026-11-15 [story-3-1-checklists](974-2026-11-15-19-26-37-story-3-1-checklists.md) — Review the draft Thai checklist texts in content/checklists.yaml against the embassy's official checklist (NFR8) (resolved 2026-11-15: approved by the user)
