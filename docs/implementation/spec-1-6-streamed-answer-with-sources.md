@@ -88,7 +88,7 @@ Empty text deltas are never sent. The browser-level JS test deferred from Story 
 
 ## Implementation Notes
 
-- `Failed` carries a `reason` (exception class name, or `unknown source id`) so `app/web` can log why an answer failed without any question or answer text.
+- `Failed` carries a `reason` (exception class name, or `unknown source id`) so `app/web` can log why an answer failed without any question or answer text. *(Since 2026-11-15 `Failed("unknown source id")` is no longer emitted; see the Spec Change Log.)*
 - Grounding test fixtures send citations as separate empty-text chunks (`AnswerChunk("", ("s1",))`), the shape the Anthropic adapter yields; a chunk with text and a citation together releases the held text and its own text as one delta.
 - History turns are stripped and must be non-empty: question up to 1000 characters, answer up to 10000 (`MAX_ANSWER_CHARS`), so an empty turn cannot break the model request.
 - The 422 handler is app-wide (only `/api/chat` takes a body today); the message lists field paths and pydantic messages, never the input; for an unknown field the location (the client's own key) is left out.
@@ -96,6 +96,8 @@ Empty text deltas are never sent. The browser-level JS test deferred from Story 
 - Checked live with uvicorn and a slow fake model: `meta` arrives at once and each `text` line arrives as the model yields it (no buffering).
 
 ## Spec Change Log
+
+- 2026-11-15, [spec-ollama-provider.md](spec-ollama-provider.md) (user's decision): the matrix row "Unknown cited id → `error` event, stream ends" no longer holds. An unknown cited id is now dropped (no link), the rest of the answer streams and ends with `sources` and `done`, and `Sources` carries the count of dropped ids for the request log (`unknown_source_ids`). If only unknown ids were cited, the answer counts as uncited and `reply-no-answer` is sent. `Failed("unknown source id")` is no longer emitted. Applies to every provider. The frozen matrix above is left as approved.
 
 ## Review Triage Log
 

@@ -91,6 +91,8 @@ context: []
 
 ## Spec Change Log
 
+- 2026-11-15: `prompts/answer-citing-markers.md` version 2 adds a Thai-script rule ("write the answer in Thai script, never Chinese, Japanese or Korean characters or punctuation; Latin only for names and ids"), because a live run had Chinese words in the Thai. Live check through the app (`qwen3.5:9b`, `num_ctx` 32768, 6 questions × 6 runs per version, single-turn): version 1 had 5/36 answers with non-Thai script (Chinese words 行程, 结婚证 in 2; only the Chinese full stop 。 in 2; an Arabic word in 1), version 2 had 2/36 (探亲 in a fee answer; 。 in 1). No errors; 2/36 answers without sources in both. Fewer, not zero, and too few answers to prove the rule works: a native Thai reader still judges Ollama's Thai (NFR8). Claude's prompt is unchanged.
+
 ## Review Triage Log
 
 Review pass 1 (2026-11-15): blind hunter (B), edge-case hunter (E), verification gap (V).
