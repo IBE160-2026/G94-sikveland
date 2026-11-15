@@ -110,19 +110,36 @@ def test_loader_rejects_non_utf8(tmp_path: Path) -> None:
         load_prompt(path)
 
 
-def test_classifier_prompt_loads_with_version_1() -> None:
+def test_classifier_prompt_loads_with_version_2() -> None:
     prompt = load_prompt(CLASSIFIER_PROMPT)
 
-    assert prompt.version == "1"
+    assert prompt.version == "2"
     assert not prompt.text.startswith("version:")
 
 
-def test_classifier_prompt_names_exactly_the_two_categories_of_story_2_1() -> None:
+def test_classifier_prompt_names_the_four_categories_of_stories_2_1_and_2_2() -> None:
     text = load_prompt(CLASSIFIER_PROMPT).text
 
-    assert "general" in text and "individual_assessment" in text
-    for later in ("out_of_scope", "reach_person", '"done"'):
-        assert later not in text
+    for category in ("general", "individual_assessment", "out_of_scope", "reach_person"):
+        assert category in text
+    assert '"done"' not in text and "done:" not in text  # Story 2.3
+
+
+def test_classifier_prompt_has_the_story_2_2_rules_and_examples() -> None:
+    text = load_prompt(CLASSIFIER_PROMPT).text
+
+    assert "ขอวีซ่าทำงานที่นอร์เวย์ต้องทำอย่างไร" in text  # work visa: out of scope
+    assert "ขอคุยกับเจ้าหน้าที่ได้ไหม" in text  # talk to a person
+    # A request for a person wins; a mixed in/out-of-scope question is general;
+    # a short visit to family or a partner is in scope.
+    assert "A request for a person is reach_person, even when" in text
+    assert "out of scope and also asks something about short-stay" in text
+    assert "Visiting family, a partner or friends in Norway for a short stay is in scope" in text
+    # Norway with other Schengen countries is in scope; own chances for something out of
+    # scope are out of scope; greetings and thanks stay general until Story 2.3.
+    assert "A trip to Norway together with other Schengen countries is in scope" in text
+    assert "own chances for anything out of scope" in text
+    assert "Greetings, thanks and questions about how to use this chat are general." in text
 
 
 def test_classifier_prompt_has_thai_and_english_examples_and_the_rules() -> None:

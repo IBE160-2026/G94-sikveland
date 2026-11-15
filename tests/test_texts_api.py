@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -59,6 +60,23 @@ def test_saved_chat_texts_are_served_in_thai(settings: Settings) -> None:
         assert any("\u0e00" <= ch <= "\u0e7f" for ch in texts[key]), key
     # The privacy notice says the chats are also saved on this device until deleted.
     assert "บันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ" in texts["privacy-notice"]
+
+
+@pytest.mark.parametrize("key", ["reply-out-of-scope", "reply-reach-person"])
+def test_out_of_scope_and_reach_person_texts_are_thai_with_the_adviser_contact(
+    settings: Settings, key: str
+) -> None:
+    custom = settings.model_copy(update={"adviser_contact": "adviser@example.org"})
+    text = _get_texts(custom)["texts"][key]
+
+    assert any("฀" <= ch <= "๿" for ch in text)
+    assert "adviser@example.org" in text
+
+
+def test_out_of_scope_text_names_short_stay_visas_to_norway(settings: Settings) -> None:
+    text = _get_texts(settings)["texts"]["reply-out-of-scope"]
+
+    assert "ระยะสั้น" in text and "นอร์เวย์" in text  # short-stay, Norway
 
 
 def test_embassy_decides_text_is_served_in_thai_without_contact_or_claims(settings: Settings) -> None:

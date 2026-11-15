@@ -12,6 +12,9 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         "reply-no-answer",
         # Category `individual_assessment` (FR3): only the embassy decides.
         "reply-embassy-decides",
+        # Category `out_of_scope` (FR14) and `reach_person` (FR13): the adviser contact.
+        "reply-out-of-scope",
+        "reply-reach-person",
         # Demo mode (MOCK_LLM=true): the reply to anything but an example question.
         "reply-demo-only",
         "error",

@@ -12,8 +12,13 @@ from typing import Any
 
 from app.ports.llm import Category, Exchange, LLMError
 
-# Story 2.1 builds these two; 2.2 and 2.3 add the rest of the closed set.
-CLASSIFIER_CATEGORIES: tuple[Category, ...] = ("general", "individual_assessment")
+# Stories 2.1 and 2.2 build these; 2.3 adds `done`, the last of the closed set (AD-5).
+CLASSIFIER_CATEGORIES: tuple[Category, ...] = (
+    "general",
+    "individual_assessment",
+    "out_of_scope",
+    "reach_person",
+)
 
 # Each earlier answer is cut to this many characters (whole code points) in the classifier
 # message: its start is enough context, and the whole answer would add cost and latency.

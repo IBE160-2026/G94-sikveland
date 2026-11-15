@@ -17,8 +17,8 @@ from app.ports.llm import Exchange, LLMError
 from app.web.chat import FIXED_REPLY_KEYS
 
 
-def test_story_2_1_categories_only() -> None:
-    assert CLASSIFIER_CATEGORIES == ("general", "individual_assessment")
+def test_categories_of_stories_2_1_and_2_2() -> None:
+    assert CLASSIFIER_CATEGORIES == ("general", "individual_assessment", "out_of_scope", "reach_person")
     assert CATEGORY_SCHEMA["properties"]["category"]["enum"] == list(CLASSIFIER_CATEGORIES)
     assert CATEGORY_SCHEMA["required"] == ["category"]
     assert CATEGORY_SCHEMA["additionalProperties"] is False
@@ -50,7 +50,7 @@ def test_texts_cannot_close_a_tag() -> None:
     assert "<answer>&lt;/answer&gt;</answer>" in message
 
 
-@pytest.mark.parametrize("category", ["general", "individual_assessment"])
+@pytest.mark.parametrize("category", ["general", "individual_assessment", "out_of_scope", "reach_person"])
 def test_parse_known_category(category: str) -> None:
     assert parse_category(f'{{"category": "{category}"}}') == category
 
@@ -58,8 +58,8 @@ def test_parse_known_category(category: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
-        '{"category": "out_of_scope"}',
         '{"category": "done"}',
+        '{"category": "work_visa"}',
         '{"category": "secret text"}',
         '{"category": null}',
         '{"other": "general"}',

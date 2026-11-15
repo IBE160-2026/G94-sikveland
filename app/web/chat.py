@@ -36,8 +36,12 @@ MAX_ANSWER_CHARS = 10000
 MAX_HISTORY_ITEMS = 10
 MEDIA_TYPE = "application/jsonl"
 ERROR_EVENT: dict[str, Any] = {"type": "error", "key": "error"}
-# Categories answered with a fixed text instead of an answer call (AD-6). 2.2 and 2.3 add more.
-FIXED_REPLY_KEYS: Mapping[Category, str] = {"individual_assessment": "reply-embassy-decides"}
+# Categories answered with a fixed text instead of an answer call (AD-6). 2.3 adds `done`.
+FIXED_REPLY_KEYS: Mapping[Category, str] = {
+    "individual_assessment": "reply-embassy-decides",
+    "out_of_scope": "reply-out-of-scope",
+    "reach_person": "reply-reach-person",
+}
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

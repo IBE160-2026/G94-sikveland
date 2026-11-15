@@ -375,7 +375,7 @@ def test_classifier_sees_only_the_cleaned_question() -> None:
     )
 
 
-@pytest.mark.parametrize("category", ["done", "out_of_scope", "reach_person"])
+@pytest.mark.parametrize("category", ["done"])
 def test_categories_not_built_yet_are_answered_as_general(category: str) -> None:
     llm = ScriptedLLM([AnswerChunk("A", ("s1",))], category=category)
 

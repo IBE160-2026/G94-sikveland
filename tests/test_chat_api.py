@@ -22,6 +22,7 @@ from app.config import ROOT, Settings
 from app.main import create_app
 from app.pipeline.filter import REMOVED_MARKER
 from app.ports.llm import AnswerChunk, Exchange, LLMError, LLMRefusalError, Usage
+from app.web.chat import FIXED_REPLY_KEYS
 from tests.fakes.fake_llm import CLASSIFY_USAGE, ClassifyCall, ScriptedLLM
 
 S1 = "embassy-necessary-documents"
@@ -865,7 +866,12 @@ def test_broken_citing_prompt_stops_startup_only_with_ollama(
 
 @pytest.mark.parametrize(
     ("category", "expected"),
-    [("general", "general"), ("individual_assessment", "individual_assessment")],
+    [
+        ("general", "general"),
+        ("individual_assessment", "individual_assessment"),
+        ("out_of_scope", "out_of_scope"),
+        ("reach_person", "reach_person"),
+    ],
 )
 def test_ollama_classifies_and_routes(settings: Settings, category: str, expected: str) -> None:
     ollama = _ollama(settings)
@@ -882,11 +888,16 @@ def test_ollama_classifies_and_routes(settings: Settings, category: str, expecte
         False,
         {"num_ctx": ollama.ollama_num_ctx},
     )
-    assert classify["format"]["properties"]["category"]["enum"] == ["general", "individual_assessment"]
-    if category == "individual_assessment":
+    assert classify["format"]["properties"]["category"]["enum"] == [
+        "general",
+        "individual_assessment",
+        "out_of_scope",
+        "reach_person",
+    ]
+    if category != "general":
         assert len(requests) == 1  # no answer call
         assert events[1:] == [
-            {"type": "text", "delta": _texts(ollama)["reply-embassy-decides"]},
+            {"type": "text", "delta": _texts(ollama)[FIXED_REPLY_KEYS[category]]},
             _sources(),
             DONE,
         ]
@@ -956,6 +967,44 @@ def test_individual_assessment_gets_the_embassy_decides_text_and_no_answer_call(
     assert len(llm.classify_calls) == 1
 
 
+@pytest.mark.parametrize(
+    ("category", "question", "key"),
+    [
+        ("out_of_scope", "ขอวีซ่าทำงานที่นอร์เวย์ต้องทำอย่างไร", "reply-out-of-scope"),
+        ("reach_person", "ขอคุยกับเจ้าหน้าที่ได้ไหม", "reply-reach-person"),
+    ],
+)
+def test_out_of_scope_and_reach_person_get_their_fixed_text_with_the_contact(
+    settings: Settings, category: str, question: str, key: str
+) -> None:
+    custom = settings.model_copy(update={"adviser_contact": "adviser@example.org"})
+    llm = ScriptedLLM([AnswerChunk("a guess", (S1,))], category=category)
+    client = _client(custom, llm)
+
+    events = _events(client, {"question": question, "history": []})
+
+    text = _texts(custom)[key]
+    assert "adviser@example.org" in text
+    assert events == [
+        {"type": "meta", "category": category, "personal_info_removed": False, "clean_question": question},
+        {"type": "text", "delta": text},
+        _sources(),
+        DONE,
+    ]
+    assert llm.calls == []  # the answer model is never called
+    [line] = _log(custom)
+    assert (line["outcome"], line["category"]) == ("fixed_reply", category)
+    assert line["input_tokens"] is None
+
+
+def test_every_fixed_reply_category_has_its_own_text() -> None:
+    assert FIXED_REPLY_KEYS == {
+        "individual_assessment": "reply-embassy-decides",
+        "out_of_scope": "reply-out-of-scope",
+        "reach_person": "reply-reach-person",
+    }
+
+
 def test_individual_assessment_log_line(settings: Settings) -> None:
     client = _client(settings, ScriptedLLM(category="individual_assessment"))
 
@@ -1006,7 +1055,7 @@ def test_classifier_sees_only_the_cleaned_question(settings: Settings) -> None:
     assert events[0]["personal_info_removed"] is True
 
 
-@pytest.mark.parametrize("category", ["done", "out_of_scope", "reach_person"])
+@pytest.mark.parametrize("category", ["done"])
 def test_categories_not_built_yet_are_answered_as_general(settings: Settings, category: str) -> None:
     llm = ScriptedLLM([AnswerChunk("A", (S1,))], category=category)
     client = _client(settings, llm)
@@ -1067,8 +1116,8 @@ def test_missing_classifier_prompt_stops_startup_in_every_mode(
 def test_classifier_prompt_is_loaded_and_versioned(settings: Settings) -> None:
     created = create_app(settings, llm=ScriptedLLM())
 
-    assert created.state.classifier_prompt.version == "1"
-    assert created.state.prompt_versions["classifier"] == "1"
+    assert created.state.classifier_prompt.version == "2"
+    assert created.state.prompt_versions["classifier"] == "2"
 
 
 def test_classify_is_priced_with_the_small_prices_only_with_claude(settings: Settings) -> None:

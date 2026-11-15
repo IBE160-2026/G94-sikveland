@@ -19,8 +19,8 @@ They do not cover:
 |---|---|---|
 | Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
-| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12 |
-| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12 |
+| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13 |
+| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13 |
 
 Start the app with `uv run uvicorn app.main:app` and open <http://127.0.0.1:8000>. For the narrow-screen checks, use the browser's device mode (F12, then Ctrl+Shift+M) and set the width to 360 px and then 320 px (NFR1: works from 360 px, no horizontal scrolling down to 320 px).
 
@@ -81,7 +81,7 @@ Expected: a reminder above the answer says the numbers were removed before sendi
 
 Mode: real key.
 
-1. Ask something the knowledge base does not cover, e.g. `พรุ่งนี้ที่ออสโลฝนจะตกไหม` (will it rain in Oslo tomorrow?).
+1. Ask a question about short-stay visas that no source answers, e.g. `ต้องฉีดวัคซีนอะไรก่อนขอวีซ่าไหม` (which vaccinations do I need before applying for the visa?). (Before Story 2.2 this case used a weather question; that is now out of scope, see MT-13.)
 
 Expected: the fixed "we have no answer" text with the adviser contact, and no source links.
 
@@ -121,7 +121,7 @@ Expected: the page loads in Thai; the answer arrives in parts (not all at once a
 Mode: Ollama, 360 px. No key and no cost.
 
 1. Tap each of the four example questions.
-2. Ask the weather question from MT-06.
+2. Ask the no-answer question from MT-06.
 3. Ask a follow-up to the first answer, e.g. `แล้วค่าธรรมเนียมเท่าไร` (and how much is the fee?).
 4. Open `data/requests.jsonl` and read the last lines.
 5. Stop Ollama and ask a question.
@@ -155,6 +155,23 @@ Mode: real key, then Ollama. Run every step in both modes.
 
 Expected: (1, 2) the fixed "only the embassy decides" text, no source links, no estimate of the chances; (3) both get cited answers with source links, the follow-up in the context of the first; (4) a cited answer about the documents, not the fixed text, which gives no estimate of the applicant's chances and, if it mentions them, says the embassy decides (FR3); (5) a cited answer to the first question, then the fixed "only the embassy decides" text for the follow-up; (6) lines for (1, 2) and the follow-up in (5) have `category: "individual_assessment"`, `outcome: "fixed_reply"` and null answer tokens; every line has `classify_input_tokens`, `classify_output_tokens` and `prompt_versions.classifier`; with a real key `cost_usd` includes the classify call, with Ollama it is 0.
 
+### MT-13 Other visa types and requests for a person (Story 2.2)
+
+Mode: real key, then Ollama. Run every step in both modes.
+
+1. In a new chat, ask `ขอวีซ่าทำงานที่นอร์เวย์ต้องทำอย่างไร` (how do I get a work visa for Norway?).
+2. Ask `พรุ่งนี้ที่ออสโลฝนจะตกไหม` (will it rain in Oslo tomorrow?).
+3. Ask `ขอคุยกับเจ้าหน้าที่ได้ไหม` (can I talk to a staff member?).
+4. Ask `ช่วยดูเรื่องยื่นวีซ่าให้ทั้งหมดได้ไหม` (can you handle my whole visa application?).
+5. Ask `ไปเยี่ยมแฟนที่นอร์เวย์ต้องมีจดหมายเชิญไหม` (do I need an invitation letter to visit my partner in Norway?).
+6. Ask `อยากคุยกับคนจริงๆ ว่าจะได้วีซ่าไหม` (I want to talk to a real person about whether I will get the visa).
+7. Ask `วีซ่าทำงานกับวีซ่าท่องเที่ยว อันไหนดีกว่าสำหรับไปเยี่ยมแฟน` (work visa or tourist visa, which is better for visiting my partner?).
+8. In a new chat, ask `ต้องใช้เอกสารอะไรบ้าง` (which documents do I need?), then `แล้ววีซ่าทำงานล่ะ` (and for a work visa?).
+9. Ask `จะไปฝรั่งเศสกับนอร์เวย์ ต้องยื่นวีซ่าที่สถานทูตไหน` (I am going to France and Norway, which embassy do I apply to?).
+10. Open `data/requests.jsonl` and read the last lines.
+
+Expected: (1, 2) the fixed text saying the chatbot only covers short-stay tourist and visitor visas to Norway, with the adviser contact and no source links; (3, 4) the fixed text with the adviser contact, no source links; (5) a cited answer (a short visit to a partner is in scope); (6) the fixed adviser-contact text (a request for a person wins); (7) a cited answer, not the out-of-scope text; (8) a cited answer, then the out-of-scope text for the follow-up; (9) a cited answer (a trip to Norway and other Schengen countries is in scope); (10) lines for (1, 2) have `category: "out_of_scope"`, lines for (3, 4) `category: "reach_person"`, all four with `outcome: "fixed_reply"` and null answer tokens; `prompt_versions.classifier` is `"2"`.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -170,6 +187,7 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-07 | | | Not run | Needs a real key |
 | | MT-08 | | | Not run | Needs a real key |
 | | MT-09 | | | Not run | Needs a real key and a phone |
-| 2026-11-15 | MT-10 | Wannapa Sikveland | Browser, branch `integration`, `LLM_PROVIDER=ollama` (qwen3.5:9b) | Pass | Reported by the tester as fine; tested together with saved chats |
+| 2026-11-15 | MT-10 | Wannapa Sikveland | Browser, branch `integration`, `LLM_PROVIDER=ollama` (qwen3.5:9b) | Pass | Reported by the tester as fine; tested together with saved chats. Ran before Stories 2.1/2.2, when step 2 used the weather question (now out of scope); rerun step 2 with the current MT-06 question |
 | 2026-11-15 | MT-11 | Wannapa Sikveland | Browser, branch `integration` | Pass | Reported by the tester as fine; tested together with Ollama |
 | | MT-12 | | | Not run | Needs a real key, and Ollama |
+| | MT-13 | | | Not run | Needs a real key, and Ollama |

@@ -575,7 +575,12 @@ def test_classify_request_has_schema_no_thinking_num_ctx_and_no_stream() -> None
         "format": CATEGORY_SCHEMA,
         "options": {"num_ctx": 40000},
     }
-    assert CATEGORY_SCHEMA["properties"]["category"]["enum"] == ["general", "individual_assessment"]
+    assert CATEGORY_SCHEMA["properties"]["category"]["enum"] == [
+        "general",
+        "individual_assessment",
+        "out_of_scope",
+        "reach_person",
+    ]
 
 
 def test_classify_posts_the_request_with_the_settings(ollama_settings: Settings) -> None:
@@ -595,7 +600,7 @@ def test_classify_posts_the_request_with_the_settings(ollama_settings: Settings)
     assert "<document" not in json.dumps(server.json())
 
 
-@pytest.mark.parametrize("category", ["general", "individual_assessment"])
+@pytest.mark.parametrize("category", ["general", "individual_assessment", "out_of_scope", "reach_person"])
 def test_classify_returns_the_category_and_usage_at_no_cost(ollama_settings: Settings, category: str) -> None:
     server = Server(_classified(json.dumps({"category": category})))
 

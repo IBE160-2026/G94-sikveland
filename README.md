@@ -22,10 +22,11 @@ Ferdig og testet:
 - Tidligere samtaler lagres på søkerens egen enhet (de siste 20) og kan åpnes og fortsettes; knapp for ny samtale, og sletting av én eller alle
 - Logg over kostnad, tokens og cache per spørsmål (Story 1.8)
 - Spørsmål om søkerens egne sjanser («Får jeg visum?») får et fast svar om at bare ambassaden avgjør, uten at svarmodellen kalles (Story 2.1)
+- Spørsmål om andre visumtyper eller andre temaer, og ønske om å snakke med et menneske, får faste svar med rådgiverens kontakt (Story 2.2)
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 
-Ikke laget ennå: faste svar for andre visumtyper og ønske om å snakke med et menneske, og tilbakemeldingsspørsmålet (Story 2.2, 2.3), sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
+Ikke laget ennå: tilbakemeldingsspørsmålet (Story 2.3), sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
 ## Kom i gang
 
@@ -135,7 +136,9 @@ Det de automatiske testene ikke dekker (siden i en nettleser, ekte Claude-svar, 
 ```text
 Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  sortering (liten modell)
                                                                      ├─ general  →  Claude med kunnskapsbasen i prompten
-                                                                     └─ individual_assessment  →  fast tekst «bare ambassaden avgjør»
+                                                                     ├─ individual_assessment  →  fast tekst «bare ambassaden avgjør»
+                                                                     ├─ out_of_scope  →  fast tekst «bare kortvarige visum til Norge» + rådgiverens kontakt
+                                                                     └─ reach_person  →  fast tekst med rådgiverens kontakt
                         ←  strøm av JSON-linjer: tekstbiter, kilder, ferdig
 ```
 
@@ -147,9 +150,11 @@ Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  sorteri
 
 Mer i [arkitekturoversikten](docs/planning/architecture/architecture-overview.md), skrevet for sensor, og i de bindende reglene i [ARCHITECTURE-SPINE.md](docs/planning/architecture/architecture-G94-sikveland-2026-11-02/ARCHITECTURE-SPINE.md).
 
-### Spørsmål om egne sjanser
+### Spørsmål om egne sjanser, andre temaer og ønske om et menneske
 
-Før et spørsmål besvares, sorterer et eget, lite modellkall det rensede spørsmålet (sammen med de to siste spørsmålene og svarene i samtalen, der hvert svar kortes ned til de første 600 tegnene) som `general` eller `individual_assessment`. Prompten står i [`prompts/classifier-system.md`](prompts/classifier-system.md). Spørsmål som bare handler om søkerens egne sjanser («จะได้วีซ่าไหม», «Will I get the visa?») får den faste teksten `reply-embassy-decides` (bare ambassaden avgjør), uten kildelenker, og svarmodellen kalles ikke. Et spørsmål som også spør om noe kildene svarer på, f.eks. «จะได้วีซ่าไหม แล้วต้องใช้เอกสารอะไรบ้าง», er `general` og besvares med kilder; svarprompten sier allerede at ambassaden avgjør. Med Claude sorterer `MODEL_SMALL`, med Ollama samme modell som svarer (`OLLAMA_MODEL`), og i demomodus de lagrede kategoriene. Feiler sorteringen, vises den faste feilteksten og ingenting besvares.
+Før et spørsmål besvares, sorterer et eget, lite modellkall det rensede spørsmålet (sammen med de to siste spørsmålene og svarene i samtalen, der hvert svar kortes ned til de første 600 tegnene) som `general`, `individual_assessment`, `out_of_scope` eller `reach_person`. Prompten står i [`prompts/classifier-system.md`](prompts/classifier-system.md). Spørsmål som bare handler om søkerens egne sjanser («จะได้วีซ่าไหม», «Will I get the visa?») får den faste teksten `reply-embassy-decides` (bare ambassaden avgjør), uten kildelenker, og svarmodellen kalles ikke. Et spørsmål som også spør om noe kildene svarer på, f.eks. «จะได้วีซ่าไหม แล้วต้องใช้เอกสารอะไรบ้าง», er `general` og besvares med kilder; svarprompten sier allerede at ambassaden avgjør. Med Claude sorterer `MODEL_SMALL`, med Ollama samme modell som svarer (`OLLAMA_MODEL`), og i demomodus de lagrede kategoriene. Feiler sorteringen, vises den faste feilteksten og ingenting besvares.
+
+Sorteringen kjenner også to andre kategorier (Story 2.2). `out_of_scope` er alt annet enn kortvarige turist- og besøksvisum til Norge, f.eks. arbeidsvisum, studier, visum til en reise uten Norge eller været (en reise til Norge og andre Schengen-land er med); det får den faste teksten `reply-out-of-scope` med rådgiverens kontakt. Et spørsmål om kortvarige visum som kildene ikke svarer på, får fortsatt «vi har ikke svar»-teksten. `reach_person` er ønske om å snakke med et menneske eller få hjelp med hele søknaden; det får `reply-reach-person` med rådgiverens kontakt, også når samme melding spør om noe annet. Ingen av dem har kildelenker, og svarmodellen kalles ikke.
 
 ### Oppdatere kunnskapsbasen
 
@@ -202,8 +207,8 @@ Appen skriver én JSON-linje per spørsmål til `data/requests.jsonl` (innstilli
 |------|-----------|
 | `timestamp` | Tidspunkt i UTC (ISO 8601, slutter på `Z`) |
 | `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
-| `category` | Spørsmålskategori: `general` eller `individual_assessment`; `null` hvis forespørselen feilet før den ble kategorisert |
-| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "1"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "1", "citing": "2"}` |
+| `category` | Spørsmålskategori: `general`, `individual_assessment`, `out_of_scope` eller `reach_person`; `null` hvis forespørselen feilet før den ble kategorisert |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "2"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "2", "citing": "2"}` |
 | `model` | Modellen som svarte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama) |
 | `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet (ut inkluderer tenking); `null` når svarmodellen ikke ble kalt |
 | `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen i svarkallet (alltid 0 med Ollama, som ikke rapporterer det) |

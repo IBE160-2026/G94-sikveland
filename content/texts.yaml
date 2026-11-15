@@ -48,6 +48,28 @@ texts:
       The Norwegian embassy considers and decides each application, and no one else can answer this question.
       If you have general questions about the documents or the application steps, feel free to ask.
 
+  # Replies to categories out_of_scope (FR14) and reach_person (FR13): no answer call,
+  # no source links. DRAFT Thai (2026-11-15): to be reviewed by the user before release (NFR8).
+  reply-out-of-scope:
+    th: >-
+      ขออภัย แชทบอทนี้ตอบได้เฉพาะเรื่องวีซ่าท่องเที่ยวและวีซ่าเยี่ยมเยียนระยะสั้นสำหรับเดินทางไปนอร์เวย์เท่านั้น
+      หากมีคำถามเรื่องอื่น กรุณาติดต่อที่ปรึกษาที่ {ADVISER_CONTACT}
+      หากมีคำถามเกี่ยวกับวีซ่าระยะสั้นไปนอร์เวย์ ถามได้เลย
+    en: >-
+      Sorry, this chatbot only covers short-stay tourist and visitor visas to Norway.
+      For other questions, please contact the adviser at {ADVISER_CONTACT}.
+      If you have questions about short-stay visas to Norway, feel free to ask here.
+
+  reply-reach-person:
+    th: >-
+      คุณสามารถติดต่อที่ปรึกษาได้โดยตรงที่ {ADVISER_CONTACT}
+      ที่ปรึกษาจะช่วยตอบคำถามและให้คำแนะนำเกี่ยวกับการยื่นขอวีซ่าของคุณ
+      คุณยังถามคำถามทั่วไปเกี่ยวกับวีซ่าที่นี่ได้เช่นกัน
+    en: >-
+      You can contact the adviser directly at {ADVISER_CONTACT}.
+      The adviser can answer your questions and give advice on your visa application.
+      You can also keep asking general visa questions here.
+
   reply-demo-only:
     th: >-
       โหมดสาธิตตอบได้เฉพาะคำถามตัวอย่างเท่านั้น กรุณาแตะคำถามตัวอย่างด้านบน
