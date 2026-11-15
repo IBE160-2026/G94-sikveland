@@ -49,7 +49,7 @@ texts:
       If you have general questions about the documents or the application steps, feel free to ask.
 
   # Replies to categories out_of_scope (FR14) and reach_person (FR13): no answer call,
-  # no source links. DRAFT Thai (2026-11-15): to be reviewed by the user before release (NFR8).
+  # no source links. Thai approved by the user on 2026-11-15 (NFR8).
   reply-out-of-scope:
     th: >-
       ขออภัย แชทบอทนี้ตอบได้เฉพาะเรื่องวีซ่าท่องเที่ยวและวีซ่าเยี่ยมเยียนระยะสั้นสำหรับเดินทางไปนอร์เวย์เท่านั้น

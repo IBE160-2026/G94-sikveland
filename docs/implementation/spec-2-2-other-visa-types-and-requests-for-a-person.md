@@ -30,6 +30,7 @@ Rules taken from the PRD (no user decision needed): out of scope is anything oth
 - Tests: 853 pass (new: both categories through the chat API with the contact filled and no answer call, the fixed-reply key map, both texts served in Thai with the contact, prompt rules and examples; the Claude and Ollama classify tests run all four categories). Ruff clean.
 - Live check on Ollama (`qwen3.5:9b`): 14 of 14 questions sorted as intended (5 out of scope incl. study, Germany, permanent move to a spouse, weather; 4 reach_person incl. "talk to a real person about my chances"; 1 own chances; 4 general incl. visiting a partner, VFS hours, and a work-vs-tourist mixed question). About half are the prompt's own examples, so this is a smoke test, not an evaluation.
 - Review fixes (see the triage log): classifier prompt rules for Norway with other Schengen countries (general), own chances for something out of scope (out_of_scope), greetings and thanks (general until Story 2.3), "explain the steps" is not a request for a person, and an out-of-scope follow-up example; both Thai drafts end by inviting the applicant to keep asking here; MT-06 example changed to vaccinations; MT-13 gained precedence and follow-up steps; MT-10's pass noted as before Stories 2.1/2.2. Live Ollama recheck: 22 of 22 as intended.
+- The user approved the Thai of `reply-out-of-scope` and `reply-reach-person` on 2026-11-15 (NFR8).
 
 ## Review Triage Log
 

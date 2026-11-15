@@ -15,6 +15,7 @@ Build Story 2.2: questions outside short-stay tourist and visitor visas to Norwa
 - Review: 13 findings; 11 patched, 1 deferred (demo mode cannot show the new categories), 1 rejected.
 - `uv run pytest`: 853 passed; ruff clean. Live Ollama check (`qwen3.5:9b`): 22 of 22 questions sorted as intended, partly the prompt's own examples.
 
+- The user approved both Thai texts; the DRAFT note in `content/texts.yaml` is replaced by the approval.
+
 ### Open items
-- Approve the two draft Thai texts `reply-out-of-scope` and `reply-reach-person` in `content/texts.yaml` (NFR8).
 - Run MT-13 with a real Claude key (and Ollama).
