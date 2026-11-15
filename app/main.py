@@ -61,9 +61,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         examples = app.state.content.example_questions()
         demo = load_demo_answers(DEMO_ANSWERS_FILE, examples, app.state.knowledge_base)
         if llm is None:
-            llm = MockLLM(
-                demo, examples, app.state.content.texts(), pause_seconds=DEMO_CHUNK_PAUSE_SECONDS
-            )
+            llm = MockLLM(demo, examples, app.state.content.texts(), pause_seconds=DEMO_CHUNK_PAUSE_SECONDS)
         app.state.no_answer_key = DEMO_ONLY_KEY
         app.state.answer_model = MOCK_MODEL_NAME
         app.state.answer_prices = NO_PRICES

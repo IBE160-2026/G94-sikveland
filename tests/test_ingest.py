@@ -44,12 +44,15 @@ def _docx(paragraphs: list[str]) -> bytes:
     body = "".join(
         f"<w:p>{text}</w:p>"
         if text.startswith("<w:r>")
-        else f"<w:p><w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r></w:p>"
+        else f'<w:p><w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
         if text
         else "<w:p/>"
         for text in paragraphs
     )
-    xml = f'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="{_W}"><w:body>{body}</w:body></w:document>'
+    xml = (
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<w:document xmlns:w="{_W}"><w:body>{body}</w:body></w:document>'
+    )
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("[Content_Types].xml", "<Types/>")
@@ -84,8 +87,18 @@ def test_html_keeps_main_content_with_absolute_links() -> None:
     assert "Who can apply?" in text
     assert "Anyone with a passport." in text
     for noise in [
-        "Menu item", "Outside main", "tracking", "To top", "Search the site", "color: red",
-        "Enable JavaScript", "icon", "info", "Main footer", "Page footer", "##\n",
+        "Menu item",
+        "Outside main",
+        "tracking",
+        "To top",
+        "Search the site",
+        "color: red",
+        "Enable JavaScript",
+        "icon",
+        "info",
+        "Main footer",
+        "Page footer",
+        "##\n",
     ]:
         assert noise not in text, noise
     assert "\n\n\n" not in text
@@ -113,7 +126,9 @@ def test_html_links_follow_redirect_target() -> None:
 
 def test_docx_paragraphs_without_checkbox_only_lines() -> None:
     url = "https://www.norway.no/checklist.docx"
-    content = _docx(["CHECKLIST", "", "", "", "☐", " ☐ ", "Passport valid for three months", "□", "Two photos"])
+    content = _docx(
+        ["CHECKLIST", "", "", "", "☐", " ☐ ", "Passport valid for three months", "□", "Two photos"]
+    )
     docx_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     response = httpx.Response(200, content=content, headers={"content-type": docx_type})
     text = ingest.fetch_text(_client({url: response}), url)
@@ -198,7 +213,10 @@ def _text_stream(text: bytes) -> bytes:
 
 
 def test_pdf_to_text_reads_every_page_with_text() -> None:
-    page = b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F1 7 0 R >> >> /Contents %d 0 R >>"
+    page = (
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+        b"/Resources << /Font << /F1 7 0 R >> >> /Contents %d 0 R >>"
+    )
     content = _pdf(
         [
             b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -298,8 +316,13 @@ def test_run_reports_each_status_and_updates_only_changed_dates(tmp_path: Path) 
     assert (kb / "http-error.md").read_text(encoding="utf-8") == "Kept text\n"
     assert not (kb / "timeout.md").exists()
     assert _dates(kb) == {
-        "changed": TODAY, "new": TODAY, "same": OLD, "http-error": OLD,
-        "timeout": OLD, "unsupported": OLD, "empty": OLD,
+        "changed": TODAY,
+        "new": TODAY,
+        "same": OLD,
+        "http-error": OLD,
+        "timeout": OLD,
+        "unsupported": OLD,
+        "empty": OLD,
     }
     # Field order is kept when the file is rewritten.
     first = yaml.safe_load((kb / "sources.yaml").read_text(encoding="utf-8"))[0]
@@ -313,7 +336,9 @@ def test_run_unchanged_writes_nothing_and_exits_zero(tmp_path: Path) -> None:
     sources_before = (kb / "sources.yaml").read_bytes()
     out = io.StringIO()
 
-    code = ingest.run(kb, _client({"https://www.udi.no/same/": _page("<h2>Fee</h2><p>EUR 90</p>")}), TODAY, out)
+    code = ingest.run(
+        kb, _client({"https://www.udi.no/same/": _page("<h2>Fee</h2><p>EUR 90</p>")}), TODAY, out
+    )
 
     assert code == 0
     assert out.getvalue().splitlines() == [

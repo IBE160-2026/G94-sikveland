@@ -78,9 +78,7 @@ def test_misspelled_key_in_env_file_fails(tmp_path: Path) -> None:
 def test_env_example_lists_every_setting() -> None:
     lines = (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
     keys = {
-        line.split("=", 1)[0].strip()
-        for line in lines
-        if line.strip() and not line.lstrip().startswith("#")
+        line.split("=", 1)[0].strip() for line in lines if line.strip() and not line.lstrip().startswith("#")
     }
 
     assert keys == {name.upper() for name in Settings.model_fields}

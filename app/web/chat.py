@@ -174,9 +174,7 @@ def _event(event: AnswerEvent) -> dict[str, Any]:
         case Sources():
             return {
                 "type": "sources",
-                "sources": [
-                    {"id": ref.id, "title": ref.title, "url": ref.url} for ref in event.items
-                ],
+                "sources": [{"id": ref.id, "title": ref.title, "url": ref.url} for ref in event.items],
                 # Checklists come in Epic 3.
                 "checklist": False,
                 "checklist_purposes": [],

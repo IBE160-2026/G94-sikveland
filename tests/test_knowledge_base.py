@@ -33,7 +33,9 @@ def _valid() -> list[dict]:
     # Deliberately not in id order: documents() must sort them.
     return [
         _entry("udi-sponsor"),
-        _entry("embassy-checklist", "Royal Norwegian Embassy in Bangkok", "https://www.norway.no/en/thailand/x"),
+        _entry(
+            "embassy-checklist", "Royal Norwegian Embassy in Bangkok", "https://www.norway.no/en/thailand/x"
+        ),
         _entry("vfs-info", "VFS Global", "https://visa.vfsglobal.com/info.pdf"),
         _entry("eu-schengen", "European Commission", "https://home-affairs.ec.europa.eu/visa_en"),
     ]
@@ -77,7 +79,7 @@ def test_missing_snapshot_names_the_id(tmp_path: Path) -> None:
     _write(tmp_path, _valid())
     (tmp_path / "vfs-info.md").unlink()
 
-    with pytest.raises(KnowledgeBaseError, match="'vfs-info'.*cannot read snapshot"):
+    with pytest.raises(KnowledgeBaseError, match=r"'vfs-info'.*cannot read snapshot"):
         load_knowledge_base(tmp_path)
 
 
@@ -86,7 +88,7 @@ def test_empty_snapshot_names_the_id(tmp_path: Path, content: str) -> None:
     _write(tmp_path, _valid())
     (tmp_path / "eu-schengen.md").write_text(content, encoding="utf-8")
 
-    with pytest.raises(KnowledgeBaseError, match="'eu-schengen'.*empty"):
+    with pytest.raises(KnowledgeBaseError, match=r"'eu-schengen'.*empty"):
         load_knowledge_base(tmp_path)
 
 
@@ -94,7 +96,7 @@ def test_non_utf8_snapshot_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, _valid())
     (tmp_path / "udi-sponsor.md").write_text("ไทย", encoding="utf-16")
 
-    with pytest.raises(KnowledgeBaseError, match="'udi-sponsor'.*cannot read"):
+    with pytest.raises(KnowledgeBaseError, match=r"'udi-sponsor'.*cannot read"):
         load_knowledge_base(tmp_path)
 
 

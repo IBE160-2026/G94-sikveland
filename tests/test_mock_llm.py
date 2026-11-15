@@ -88,7 +88,9 @@ def test_nfd_input_matches_after_nfc() -> None:
     # Thai has no canonical decompositions, so check NFC with a composed letter.
     example = ExampleQuestion(id="q", th="ค่า café", en="cafe fee")
     demo = DemoAnswers(
-        answers=MappingProxyType({"q": DemoAnswer("q", "general", "ตอบ หนึ่ง สอง สาม สี่", "answer", ("udi-fees",))}),
+        answers=MappingProxyType(
+            {"q": DemoAnswer("q", "general", "ตอบ หนึ่ง สอง สาม สี่", "answer", ("udi-fees",))}
+        ),
         done_phrases=("ok",),
     )
     texts = {"reply-demo-only": FixedText("เฉพาะ", "only")}

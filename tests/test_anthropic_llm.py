@@ -67,7 +67,9 @@ def _other(kind: str) -> SimpleNamespace:
     return SimpleNamespace(type=kind)
 
 
-def _final(stop_reason: str = "end_turn", cache_read: int | None = 0, cache_write: int | None = 0) -> SimpleNamespace:
+def _final(
+    stop_reason: str = "end_turn", cache_read: int | None = 0, cache_write: int | None = 0
+) -> SimpleNamespace:
     usage = SimpleNamespace(
         input_tokens=1200,
         output_tokens=300,
@@ -205,9 +207,7 @@ def test_request_with_the_same_input_is_identical() -> None:
 
 def test_request_needs_documents() -> None:
     with pytest.raises(LLMError):
-        build_answer_request(
-            model="m", effort="low", system="s", documents=(), question="q", history=()
-        )
+        build_answer_request(model="m", effort="low", system="s", documents=(), question="q", history=())
 
 
 def test_adapter_sends_settings_and_documents_from_the_knowledge_base(settings: Settings) -> None:
@@ -415,12 +415,32 @@ def _sse_answer(stop_reason: str = "end_turn") -> bytes:
                     },
                 },
             },
-            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": "", "signature": ""}},
-            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "plan"}},
-            {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig"}},
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "thinking", "thinking": "", "signature": ""},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "thinking_delta", "thinking": "plan"},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "signature_delta", "signature": "sig"},
+            },
             {"type": "content_block_stop", "index": 0},
-            {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": "", "citations": []}},
-            {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "ค่าธรรมเนียม 90 ยูโร"}},
+            {
+                "type": "content_block_start",
+                "index": 1,
+                "content_block": {"type": "text", "text": "", "citations": []},
+            },
+            {
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "text_delta", "text": "ค่าธรรมเนียม 90 ยูโร"},
+            },
             {
                 "type": "content_block_delta",
                 "index": 1,

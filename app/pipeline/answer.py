@@ -130,4 +130,3 @@ def answer_question(
         yield Spent(usage)
     yield Sources(tuple(cited.values()))
     yield Done()
-

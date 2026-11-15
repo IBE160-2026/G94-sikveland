@@ -47,9 +47,7 @@ class _UniqueKeyLoader(yaml.SafeLoader):
             except TypeError:  # unhashable key: SafeLoader reports it below
                 continue
             if duplicate:
-                raise KnowledgeBaseError(
-                    f"duplicate key {key!r} at line {key_node.start_mark.line + 1}"
-                )
+                raise KnowledgeBaseError(f"duplicate key {key!r} at line {key_node.start_mark.line + 1}")
             seen.add(key)
         return super().construct_mapping(node, deep=deep)
 
@@ -117,9 +115,7 @@ def load_knowledge_base(directory: Path) -> FileKnowledgeBase:
         try:
             text = snapshot.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
-            raise KnowledgeBaseError(
-                f"source {entry.id!r}: cannot read snapshot {snapshot}: {exc}"
-            ) from exc
+            raise KnowledgeBaseError(f"source {entry.id!r}: cannot read snapshot {snapshot}: {exc}") from exc
         text = text.strip()
         if not text:
             raise KnowledgeBaseError(f"source {entry.id!r}: snapshot {snapshot} is empty")
@@ -151,9 +147,7 @@ def _entry(item: object, index: int) -> SourceEntry:
     if missing:
         raise KnowledgeBaseError(f"{where} is missing field(s): {', '.join(missing)}")
 
-    title, url, publisher, file = (
-        _text(item, name, where) for name in ("title", "url", "publisher", "file")
-    )
+    title, url, publisher, file = (_text(item, name, where) for name in ("title", "url", "publisher", "file"))
     if publisher not in PUBLISHER_DOMAINS:
         allowed = ", ".join(repr(p) for p in PUBLISHER_DOMAINS)
         raise KnowledgeBaseError(f"{where} has unknown publisher {publisher!r} (allowed: {allowed})")
@@ -164,12 +158,8 @@ def _entry(item: object, index: int) -> SourceEntry:
     retrieved = item["retrieved"]
     # A datetime is also a date; only a plain YYYY-MM-DD date is allowed.
     if not isinstance(retrieved, date) or isinstance(retrieved, datetime):
-        raise KnowledgeBaseError(
-            f"{where} 'retrieved' must be a date (YYYY-MM-DD), got {retrieved!r}"
-        )
-    return SourceEntry(
-        id=sid, title=title, url=url, publisher=publisher, retrieved=retrieved, file=file
-    )
+        raise KnowledgeBaseError(f"{where} 'retrieved' must be a date (YYYY-MM-DD), got {retrieved!r}")
+    return SourceEntry(id=sid, title=title, url=url, publisher=publisher, retrieved=retrieved, file=file)
 
 
 def _text(item: dict[Any, Any], name: str, where: str) -> str:

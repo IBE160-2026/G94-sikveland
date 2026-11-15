@@ -203,7 +203,7 @@ def run(kb_dir: Path, client: httpx.Client, today: date, out: TextIO) -> int:
                 continue
             try:
                 text = fetch_text(client, entry.url, PUBLISHER_DOMAINS[entry.publisher])
-            except Exception as exc:  # report and go on with the next source
+            except Exception as exc:  # noqa: BLE001 - report and go on with the next source
                 failed += 1
                 size = f"{len(old)} chars kept" if old is not None else "no snapshot"
                 print(f"{entry.id}: FAILED {_reason(exc)} ({size})", file=out)

@@ -79,7 +79,7 @@ def load_content(path: Path, adviser_contact: str) -> FileContentStore:
 def _load_texts(section: object, adviser_contact: str) -> dict[str, FixedText]:
     if not isinstance(section, dict):
         raise ContentError("'texts' must be a mapping of text key to {th, en}")
-    unknown = sorted((str(k) for k in section if k not in REQUIRED_TEXT_KEYS))
+    unknown = sorted(str(k) for k in section if k not in REQUIRED_TEXT_KEYS)
     if unknown:
         raise ContentError(f"unknown text key(s): {', '.join(unknown)}")
     missing = sorted(REQUIRED_TEXT_KEYS - set(section))

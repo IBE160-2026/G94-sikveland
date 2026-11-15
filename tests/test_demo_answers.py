@@ -67,7 +67,9 @@ def test_committed_done_phrases_have_thai_and_english_thanks() -> None:
 def test_how_to_start_gives_the_four_steps_in_order_with_websites() -> None:
     th = load_demo_answers(DEMO_ANSWERS_FILE, EXAMPLES, KB).answers["how-to-start"].th
 
-    positions = [th.index(marker) for marker in ("1.", "norway.no", "2.", "udi.no", "3.", "4.", "vfsglobal.com")]
+    positions = [
+        th.index(marker) for marker in ("1.", "norway.no", "2.", "udi.no", "3.", "4.", "vfsglobal.com")
+    ]
     assert positions == sorted(positions)
     # Step 3 (pay) is on udi.no too.
     step3 = th[th.index("3.") : th.index("4.")]
@@ -124,7 +126,7 @@ def test_invalid_category_is_rejected(tmp_path: Path, category: object) -> None:
 
 @pytest.mark.parametrize("done_phrases", [[], None, "ขอบคุณ", [""], ["  "], [3]])
 def test_done_phrases_missing_or_empty_is_rejected(tmp_path: Path, done_phrases: object) -> None:
-    with pytest.raises(DemoContentError, match="done.phrase"):
+    with pytest.raises(DemoContentError, match=r"done.phrase"):
         _load(tmp_path, _data(done_phrases=done_phrases))
 
 
@@ -143,7 +145,14 @@ def test_thai_answer_without_thai_is_rejected(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "changes",
-    [{"th": ""}, {"en": "  "}, {"en": None}, {"sources": []}, {"sources": "udi-fees"}, {"sources": [SOURCE, SOURCE]}],
+    [
+        {"th": ""},
+        {"en": "  "},
+        {"en": None},
+        {"sources": []},
+        {"sources": "udi-fees"},
+        {"sources": [SOURCE, SOURCE]},
+    ],
     ids=["empty-th", "blank-en", "null-en", "no-sources", "sources-string", "duplicate-source"],
 )
 def test_bad_answer_fields_are_rejected(tmp_path: Path, changes: dict[str, Any]) -> None:

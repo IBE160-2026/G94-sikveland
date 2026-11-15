@@ -149,9 +149,7 @@ def test_several_matches_are_each_replaced() -> None:
 def test_phone_next_to_id_is_kept() -> None:
     result = remove_personal_info("ID 1-2345-67890-12-3 tel 081-234-5678 fee 90 euro")
 
-    assert result == FilterResult(
-        text=f"ID {REMOVED_MARKER} tel 081-234-5678 fee 90 euro", removed=True
-    )
+    assert result == FilterResult(text=f"ID {REMOVED_MARKER} tel 081-234-5678 fee 90 euro", removed=True)
 
 
 ACCEPTED_FALSE_POSITIVES = ["081 234 5678 123", "A 1234567"]

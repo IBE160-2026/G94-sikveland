@@ -97,7 +97,16 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 uv run pytest
 ```
 
-Testene bruker en falsk KI-klient og kaller aldri Claude API, så de trenger ingen nøkkel og koster ingenting. De samme testene kjøres av [GitHub Actions](.github/workflows/ci.yml) ved hver push.
+Testene bruker en falsk KI-klient og kaller aldri Claude API, så de trenger ingen nøkkel og koster ingenting.
+
+Koden sjekkes med [ruff](https://docs.astral.sh/ruff/) (linter og formatterer, oppsett i `pyproject.toml`):
+
+```sh
+uv run ruff check           # feil og dårlig praksis
+uv run ruff format --check  # formatering; uten --check rettes den
+```
+
+[GitHub Actions](.github/workflows/ci.yml) kjører ruff og testene ved hver push.
 
 ## Slik virker det
 

@@ -40,7 +40,9 @@ def _events(client: TestClient, question: str) -> list[dict[str, Any]]:
 
 
 def _log(settings: Settings) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in Path(settings.request_log_path).read_text(encoding="utf-8").splitlines()]
+    return [
+        json.loads(line) for line in Path(settings.request_log_path).read_text(encoding="utf-8").splitlines()
+    ]
 
 
 def _examples(client: TestClient) -> list[Any]:
@@ -122,7 +124,12 @@ def test_every_example_streams_its_stored_answer_with_sources(client: TestClient
         for sid in stored.source_ids:
             source = state.knowledge_base.source(sid)
             expected.append({"id": source.id, "title": source.title, "url": source.url})
-        assert events[-2] == {"type": "sources", "sources": expected, "checklist": False, "checklist_purposes": []}
+        assert events[-2] == {
+            "type": "sources",
+            "sources": expected,
+            "checklist": False,
+            "checklist_purposes": [],
+        }
         assert events[-1] == {"type": "done"}
 
 

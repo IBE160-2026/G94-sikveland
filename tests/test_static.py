@@ -10,9 +10,7 @@ from app.main import STATIC_DIR, create_app
 THAI = re.compile("[\u0e00-\u0e7f]")
 # Text assets only: binary files (icons, fonts) cannot hold Thai text or links.
 TEXT_SUFFIXES = {".html", ".css", ".js"}
-STATIC_FILES = sorted(
-    p for p in Path(STATIC_DIR).rglob("*") if p.is_file() and p.suffix in TEXT_SUFFIXES
-)
+STATIC_FILES = sorted(p for p in Path(STATIC_DIR).rglob("*") if p.is_file() and p.suffix in TEXT_SUFFIXES)
 # An absolute or protocol-relative URL (`https://`, `//`) used as a resource:
 # in an HTML attribute (double, single or no quotes), a CSS url(...) or @import,
 # or a JS fetch(...).

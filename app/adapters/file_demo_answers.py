@@ -123,7 +123,8 @@ def _load_answers(
         category = entry.get("category")
         if not isinstance(category, str) or category not in CATEGORIES:
             raise DemoContentError(
-                f"{where} has an invalid category {category!r}; expected one of {', '.join(sorted(CATEGORIES))}"
+                f"{where} has an invalid category {category!r}; "
+                f"expected one of {', '.join(sorted(CATEGORIES))}"
             )
         th, en = (_text(entry, lang, where) for lang in LANGUAGES)
         if not _THAI.search(th):

@@ -62,7 +62,7 @@ def test_missing_key_names_it(tmp_path: Path) -> None:
     data = _valid()
     del data["texts"]["error"]
 
-    with pytest.raises(ContentError, match="missing text key.*'?error"):
+    with pytest.raises(ContentError, match=r"missing text key.*'?error"):
         _load(tmp_path, data)
 
 
@@ -83,9 +83,7 @@ def test_unknown_key_names_it(tmp_path: Path) -> None:
         ({"th": None, "en": "text"}, "th"),
     ],
 )
-def test_missing_or_empty_language_names_key_and_language(
-    tmp_path: Path, entry: dict, lang: str
-) -> None:
+def test_missing_or_empty_language_names_key_and_language(tmp_path: Path, entry: dict, lang: str) -> None:
     data = _valid()
     data["texts"]["error"] = entry
 

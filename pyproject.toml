@@ -19,6 +19,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest~=9.2.0",
+    "ruff~=0.17.5",
 ]
 
 [tool.uv]
@@ -27,3 +28,20 @@ package = false
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# BMAD's own skill scripts are vendored, not ours to lint.
+extend-exclude = [".claude", "_bmad"]
+
+[tool.ruff.format]
+# Only Python files; code examples in docs and session logs are left as written.
+exclude = ["**/*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "BLE", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# The filter tests use full-width digits and no-break spaces on purpose.
+"tests/**" = ["RUF001"]
