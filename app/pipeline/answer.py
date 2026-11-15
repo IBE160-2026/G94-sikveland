@@ -1,19 +1,30 @@
-"""The answer pipeline: filter, then a grounded answer or the no-answer reply (AD-1, AD-7).
+"""The answer pipeline: filter, classify, then a grounded answer or a fixed reply (AD-1, AD-5, AD-7).
 
 Pure logic: the events here are domain values. `app/web` turns them into stream
 events (AD-8); nothing here knows about HTTP, JSON or an SDK.
 
-Order of events: one `Meta`, zero or more `TextDelta`, one `Spent` when the model
-reported its token use, one `Sources`, then `Done`. `Failed` can come instead of
-any event after `Meta` and is always the last one.
+Order of events: one `Spent` for the classify call, one `Meta`, zero or more
+`TextDelta`, one `Spent` for the answer call when the model reported its token
+use, one `Sources`, then `Done`. A fixed reply has no answer call: `Spent`
+(classify), `Meta`, one `TextDelta`, an empty `Sources`, `Done`. `Failed` can come
+instead of any of these events, also the first ones when the classify call
+fails, and is always the last one.
 """
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Literal, get_args
 
 from app.pipeline.filter import remove_personal_info
 from app.ports.knowledge_base import KnowledgeBase
 from app.ports.llm import Category, Exchange, LLMClient, LLMError, Usage
+
+# The classifier sees the cleaned question and this many of the latest exchanges (AD-5).
+CLASSIFY_HISTORY_EXCHANGES = 2
+UNKNOWN_CATEGORY_REASON = "UnknownCategory"
+_CATEGORIES: frozenset[str] = frozenset(get_args(Category))
+
+ModelCall = Literal["classify", "answer"]
 
 
 @dataclass(frozen=True)
@@ -55,9 +66,15 @@ class Sources:
 
 @dataclass(frozen=True)
 class Spent:
-    """The tokens the answer call used, for the request log. Never shown to the applicant."""
+    """The tokens one model call used, for the request log. Never shown to the applicant.
+
+    `call` says which call: the two are priced differently (`PRICE_SMALL_*` for
+    classify, `PRICE_ANSWER_*` for the answer). Required, so no call is priced
+    as the wrong model by default.
+    """
 
     usage: Usage
+    call: ModelCall
 
 
 @dataclass(frozen=True)
@@ -81,11 +98,19 @@ def answer_question(
     llm: LLMClient,
     knowledge_base: KnowledgeBase,
     no_answer_text: str,
+    *,
+    fixed_replies: Mapping[Category, str],
 ) -> Iterator[AnswerEvent]:
     """Answer one question; see the module docstring for the order of events.
 
     The filter runs on the question and every history turn before the model is
     called (AD-4); `Meta.personal_info_removed` describes the new question only.
+    Then the classify call sorts the cleaned question, given the last
+    `CLASSIFY_HISTORY_EXCHANGES` cleaned exchanges (AD-1, AD-5). A category in
+    `fixed_replies` gets that text and no answer call. Every other category is
+    answered like `general` and reported as `general` (the categories of later
+    stories are not routed yet). A classify error, or a category outside the
+    closed set, ends in `Failed` before `Meta`: nothing is answered.
     Answer text is held back until the first cited chunk, then released (AD-7).
     With no citation at the end, the held text is dropped and `no_answer_text`
     is sent instead. Text already sent is never taken back. A cited id that is not
@@ -100,7 +125,25 @@ def answer_question(
         )
         for exchange in history
     )
-    # No classifier yet (Epic 2): every question is a general question.
+    try:
+        category, classify_usage = llm.classify(clean.text, clean_history[-CLASSIFY_HISTORY_EXCHANGES:])
+    except LLMError as exc:
+        yield Failed(reason=type(exc).__name__)
+        return
+    yield Spent(classify_usage, call="classify")
+    if category not in _CATEGORIES:
+        # Never the value itself: it came from the model.
+        yield Failed(reason=UNKNOWN_CATEGORY_REASON)
+        return
+
+    fixed = fixed_replies.get(category)
+    if fixed is not None:
+        yield Meta(category=category, personal_info_removed=clean.removed, clean_question=clean.text)
+        yield TextDelta(fixed)
+        yield Sources(())
+        yield Done()
+        return
+
     yield Meta(category="general", personal_info_removed=clean.removed, clean_question=clean.text)
 
     held: list[str] = []
@@ -136,6 +179,6 @@ def answer_question(
         yield TextDelta(no_answer_text)
     # Before `Sources`: a client that leaves at that event still gets its cost logged.
     if usage is not None:
-        yield Spent(usage)
+        yield Spent(usage, call="answer")
     yield Sources(tuple(cited.values()), unknown_source_ids=len(unknown))
     yield Done()

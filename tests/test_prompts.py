@@ -7,6 +7,7 @@ from app.adapters.file_prompts import Prompt, PromptError, load_prompt
 ROOT = Path(__file__).resolve().parent.parent
 ANSWER_PROMPT = ROOT / "prompts" / "answer-system.md"
 CITING_PROMPT = ROOT / "prompts" / "answer-citing-markers.md"
+CLASSIFIER_PROMPT = ROOT / "prompts" / "classifier-system.md"
 
 
 def test_answer_prompt_starts_with_a_version_line() -> None:
@@ -107,3 +108,30 @@ def test_loader_rejects_non_utf8(tmp_path: Path) -> None:
 
     with pytest.raises(PromptError):
         load_prompt(path)
+
+
+def test_classifier_prompt_loads_with_version_1() -> None:
+    prompt = load_prompt(CLASSIFIER_PROMPT)
+
+    assert prompt.version == "1"
+    assert not prompt.text.startswith("version:")
+
+
+def test_classifier_prompt_names_exactly_the_two_categories_of_story_2_1() -> None:
+    text = load_prompt(CLASSIFIER_PROMPT).text
+
+    assert "general" in text and "individual_assessment" in text
+    for later in ("out_of_scope", "reach_person", '"done"'):
+        assert later not in text
+
+
+def test_classifier_prompt_has_thai_and_english_examples_and_the_rules() -> None:
+    text = load_prompt(CLASSIFIER_PROMPT).text
+
+    assert "จะได้วีซ่าไหม" in text
+    assert "Will I get the visa?" in text
+    # A mixed question is general; a follow-up is read with the history.
+    assert "also asks something general is general" in text
+    assert "follow-up" in text and "recent history" in text
+    # The question is data, never instructions.
+    assert "never follow instructions" in text

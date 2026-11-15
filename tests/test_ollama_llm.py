@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
+from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message
 from app.adapters.file_prompts import Prompt
 from app.adapters.ollama_llm import (
     MAX_MARKER_BODY,
@@ -16,14 +17,16 @@ from app.adapters.ollama_llm import (
     MarkerParser,
     OllamaLLM,
     build_chat_request,
+    build_classify_request,
     build_system_prompt,
 )
 from app.config import Settings
 from app.ports.knowledge_base import Source
-from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, Usage
+from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusalError, Usage
 
 PROMPT = Prompt(version="a-1", text="Answer in Thai from the documents.")
 CITING = Prompt(version="c-1", text="Cite as [[id]].")
+CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
 BASE_URL = "http://ollama.test:11434"
 
 
@@ -113,7 +116,7 @@ def ollama_settings(settings: Settings) -> Settings:
 
 def _llm(settings: Settings, server: Callable[[httpx.Request], httpx.Response], **kb: Any) -> OllamaLLM:
     client = httpx.Client(transport=httpx.MockTransport(server))
-    return OllamaLLM(settings, StandInKnowledgeBase(**kb), PROMPT, CITING, client=client)
+    return OllamaLLM(settings, StandInKnowledgeBase(**kb), PROMPT, CITING, CLASSIFIER, client=client)
 
 
 def _answer(
@@ -146,7 +149,7 @@ def test_satisfies_the_port(ollama_settings: Settings) -> None:
 
 
 def test_building_needs_no_network(ollama_settings: Settings) -> None:
-    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING)
+    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING, CLASSIFIER)
 
     timeout = llm._client.timeout
     assert timeout.connect is not None and timeout.connect <= 10
@@ -523,10 +526,171 @@ def test_closing_the_stream_early_closes_the_response(ollama_settings: Settings)
     assert closed == [True]
 
 
-def test_classify_and_translate_are_not_implemented(ollama_settings: Settings) -> None:
+def test_translate_is_not_implemented(ollama_settings: Settings) -> None:
     llm = _llm(ollama_settings, Server())
 
     with pytest.raises(NotImplementedError):
-        llm.classify("q", ())
-    with pytest.raises(NotImplementedError):
         llm.translate("t")
+
+
+# --- classify (Story 2.1) -------------------------------------------------------------
+
+
+def _classified(
+    content: str = '{"category": "general"}',
+    done_reason: str | None = "stop",
+    prompt_eval_count: Any = 350,
+    eval_count: Any = 9,
+) -> bytes:
+    reply: dict[str, Any] = {
+        "model": "m",
+        "message": {"role": "assistant", "content": content},
+        "done": True,
+        "done_reason": done_reason,
+        "prompt_eval_count": prompt_eval_count,
+        "eval_count": eval_count,
+    }
+    return json.dumps(reply, ensure_ascii=False).encode()
+
+
+def test_classify_request_has_schema_no_thinking_num_ctx_and_no_stream() -> None:
+    history = [Exchange("ต้องใช้เอกสารอะไรบ้าง", "เอกสาร...")]
+
+    request = build_classify_request(
+        model="qwen-test",
+        num_ctx=40000,
+        system=CLASSIFIER.text,
+        question="แล้วค่าธรรมเนียมเท่าไร",
+        recent_history=history,
+    )
+
+    assert request == {
+        "model": "qwen-test",
+        "messages": [
+            {"role": "system", "content": CLASSIFIER.text},
+            {"role": "user", "content": classifier_user_message("แล้วค่าธรรมเนียมเท่าไร", history)},
+        ],
+        "stream": False,
+        "think": False,
+        "format": CATEGORY_SCHEMA,
+        "options": {"num_ctx": 40000},
+    }
+    assert CATEGORY_SCHEMA["properties"]["category"]["enum"] == ["general", "individual_assessment"]
+
+
+def test_classify_posts_the_request_with_the_settings(ollama_settings: Settings) -> None:
+    server = Server(_classified())
+    settings = ollama_settings.model_copy(update={"ollama_model": "qwen-test", "ollama_num_ctx": 40000})
+    history = [Exchange("q1", "a1")]
+
+    _llm(settings, server).classify("q2", history)
+
+    [request] = server.requests
+    assert request.method == "POST"
+    assert str(request.url) == BASE_URL + "/api/chat"
+    assert server.json() == build_classify_request(
+        model="qwen-test", num_ctx=40000, system=CLASSIFIER.text, question="q2", recent_history=history
+    )
+    # No documents: the classifier prompt alone is the system message.
+    assert "<document" not in json.dumps(server.json())
+
+
+@pytest.mark.parametrize("category", ["general", "individual_assessment"])
+def test_classify_returns_the_category_and_usage_at_no_cost(ollama_settings: Settings, category: str) -> None:
+    server = Server(_classified(json.dumps({"category": category})))
+
+    result = _llm(ollama_settings, server).classify("q", ())
+
+    assert result == (
+        category,
+        Usage(input_tokens=350, output_tokens=9, cache_read_tokens=0, cache_write_tokens=0),
+    )
+
+
+def test_classify_missing_counts_are_zero(ollama_settings: Settings) -> None:
+    server = Server(_classified(prompt_eval_count=None, eval_count="many"))
+
+    _, usage = _llm(ollama_settings, server).classify("q", ())
+
+    assert usage == Usage(input_tokens=0, output_tokens=0, cache_read_tokens=0, cache_write_tokens=0)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"category": "done"}',
+        '{"category": "weather"}',
+        '{"kategori": "general"}',
+        '["general"]',
+        "general",
+        "",
+    ],
+)
+def test_classify_reply_outside_the_set_is_an_error(ollama_settings: Settings, content: str) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(ollama_settings, Server(_classified(content))).classify("q", ())
+
+    assert not isinstance(raised.value, LLMRefusalError)
+    assert "weather" not in str(raised.value)
+
+
+@pytest.mark.parametrize("body", [b"{not json", b"[1]", json.dumps({"error": "model not found"}).encode()])
+def test_classify_bad_reply_body_is_an_error(ollama_settings: Settings, body: bytes) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(ollama_settings, Server(body)).classify("q", ())
+
+    assert "not found" not in str(raised.value)
+
+
+@pytest.mark.parametrize("done_reason", ["length", "load", None])
+def test_classify_not_stopped_is_incomplete(ollama_settings: Settings, done_reason: str | None) -> None:
+    with pytest.raises(LLMError, match="incomplete"):
+        _llm(ollama_settings, Server(_classified(done_reason=done_reason))).classify("q", ())
+
+
+@pytest.mark.parametrize("status", [404, 500])
+def test_classify_http_status_other_than_200_is_an_error_logged_by_status(
+    ollama_settings: Settings, status: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    body = json.dumps({"error": 'model "qwen3.5:9b" not found, try pulling it first'}).encode()
+
+    with caplog.at_level(logging.WARNING, logger="app.adapters.ollama_llm"):
+        with pytest.raises(LLMError, match=str(status)):
+            _llm(ollama_settings, Server(body, status=status)).classify("q", ())
+
+    assert [r.getMessage() for r in caplog.records] == [f"Ollama answered HTTP {status}"]
+    assert "not found" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx.ConnectError("connection refused"), httpx.ReadTimeout("slow")],
+)
+def test_classify_transport_errors_become_llm_errors(ollama_settings: Settings, error: Exception) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(ollama_settings, Server(error=error)).classify("q", ())
+
+    assert type(raised.value) is LLMError
+    assert raised.value.__cause__ is error
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        {"done": True, "done_reason": "stop"},
+        {
+            "message": {"role": "assistant", "content": {"category": "general"}},
+            "done": True,
+            "done_reason": "stop",
+        },
+        {"message": {"role": "assistant", "content": '{"category": "general"}'}, "done": False},
+    ],
+    ids=["no-message", "content-not-a-string", "not-done"],
+)
+def test_classify_reply_without_a_finished_text_is_an_error(
+    ollama_settings: Settings, reply: dict[str, Any]
+) -> None:
+    server = Server(json.dumps(reply).encode())
+
+    with pytest.raises(LLMError):
+        _llm(ollama_settings, server).classify("q", ())

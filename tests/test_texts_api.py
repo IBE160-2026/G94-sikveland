@@ -59,3 +59,13 @@ def test_saved_chat_texts_are_served_in_thai(settings: Settings) -> None:
         assert any("\u0e00" <= ch <= "\u0e7f" for ch in texts[key]), key
     # The privacy notice says the chats are also saved on this device until deleted.
     assert "บันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ" in texts["privacy-notice"]
+
+
+def test_embassy_decides_text_is_served_in_thai_without_contact_or_claims(settings: Settings) -> None:
+    texts = _get_texts(settings)["texts"]
+
+    text = texts["reply-embassy-decides"]
+    assert any("\u0e00" <= ch <= "\u0e7f" for ch in text)
+    assert "สถานทูต" in text  # the embassy
+    # No fees, deadlines or other figures in a fixed reply.
+    assert not any(ch.isdigit() for ch in text)

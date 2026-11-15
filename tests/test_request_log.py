@@ -12,7 +12,7 @@ import pytest
 from app.config import Settings
 from app.pipeline.cost import Prices
 from app.ports.llm import Usage
-from app.web.request_log import RequestLog, answer_prices, request_line
+from app.web.request_log import RequestLog, answer_prices, request_line, small_prices
 
 FIELDS = {
     "timestamp",
@@ -24,11 +24,16 @@ FIELDS = {
     "output_tokens",
     "cache_read_tokens",
     "cache_write_tokens",
+    "classify_input_tokens",
+    "classify_output_tokens",
     "cost_usd",
     "unknown_source_ids",
 }
 PRICES = Prices(input=4.00, output=20.00, cache_read=0.20, cache_write=5.00)
 USAGE = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
+SMALL_PRICES = Prices(input=0.10, output=0.50, cache_read=0.01, cache_write=0.125)
+CLASSIFY_USAGE = Usage(input_tokens=400, output_tokens=20, cache_read_tokens=0, cache_write_tokens=0)
+NO_PRICES = Prices(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0)
 
 
 def _read(path: Path) -> list[dict[str, object]]:
@@ -43,6 +48,8 @@ def test_line_with_usage() -> None:
         model="claude-opus-5-5",
         usage=USAGE,
         prices=PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
         unknown_source_ids=0,
         now=datetime(2026, 11, 14, 9, 30, 5, 123456, tzinfo=UTC),
     )
@@ -57,6 +64,8 @@ def test_line_with_usage() -> None:
         "output_tokens": 200,
         "cache_read_tokens": 50000,
         "cache_write_tokens": 0,
+        "classify_input_tokens": None,
+        "classify_output_tokens": None,
         "cost_usd": 0.018,
         "unknown_source_ids": 0,
     }
@@ -69,11 +78,14 @@ def test_line_records_dropped_unknown_ids_and_every_prompt_version() -> None:
         prompt_versions={"answer": "1", "citing": "2"},
         model="qwen3.5:9b",
         usage=Usage(input_tokens=500, output_tokens=80, cache_read_tokens=0, cache_write_tokens=0),
-        prices=Prices(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0),
+        prices=NO_PRICES,
+        classify_usage=CLASSIFY_USAGE,
+        classify_prices=NO_PRICES,
         unknown_source_ids=1,
     )
 
     assert line["prompt_versions"] == {"answer": "1", "citing": "2"}
+    assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (400, 20)
     assert line["unknown_source_ids"] == 1
     assert line["cost_usd"] == 0.0
 
@@ -86,6 +98,8 @@ def test_unknown_ids_are_null_when_the_sources_never_came() -> None:
         model="m",
         usage=None,
         prices=PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
     )
 
     assert line["unknown_source_ids"] is None
@@ -99,10 +113,12 @@ def test_line_without_usage_has_null_tokens_and_cost() -> None:
         model="m",
         usage=None,
         prices=PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
     )
 
     assert set(line) == FIELDS
-    assert [line[k] for k in sorted(FIELDS) if k.endswith("_tokens") or k == "cost_usd"] == [None] * 5
+    assert [line[k] for k in sorted(FIELDS) if k.endswith("_tokens") or k == "cost_usd"] == [None] * 7
 
 
 def test_timestamp_is_utc_with_z() -> None:
@@ -114,6 +130,8 @@ def test_timestamp_is_utc_with_z() -> None:
         model="m",
         usage=None,
         prices=PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
         now=datetime(2026, 11, 14, 10, 0, 0, tzinfo=oslo),
     )
 
@@ -128,6 +146,8 @@ def test_timestamp_now_is_iso_utc() -> None:
         model="m",
         usage=None,
         prices=PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
     )
 
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", str(line["timestamp"]))
@@ -135,6 +155,48 @@ def test_timestamp_now_is_iso_utc() -> None:
 
 def test_answer_prices_come_from_the_answer_settings(settings: Settings) -> None:
     assert answer_prices(settings) == PRICES
+
+
+def test_small_prices_come_from_the_small_settings(settings: Settings) -> None:
+    assert small_prices(settings) == SMALL_PRICES
+
+
+def _costed(usage: Usage | None, classify_usage: Usage | None) -> dict[str, object]:
+    return request_line(
+        outcome="answered",
+        category="general",
+        prompt_versions={"answer": "1", "classifier": "1"},
+        model="claude-opus-5-5",
+        usage=usage,
+        prices=PRICES,
+        classify_usage=classify_usage,
+        classify_prices=SMALL_PRICES,
+    )
+
+
+def test_cost_is_answer_cost_plus_classify_cost_at_small_prices() -> None:
+    line = _costed(USAGE, CLASSIFY_USAGE)
+
+    assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (400, 20)
+    assert line["input_tokens"] == 1000
+    # 0.018 for the answer + (400x0.10 + 20x0.50) / 1e6 = 0.00005 for the classify call
+    assert line["cost_usd"] == 0.01805
+    assert line["prompt_versions"] == {"answer": "1", "classifier": "1"}
+
+
+def test_classify_only_has_null_answer_tokens_and_the_classify_cost() -> None:
+    line = _costed(None, CLASSIFY_USAGE)
+
+    for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"):
+        assert line[field] is None, field
+    assert line["cost_usd"] == 0.00005
+
+
+def test_answer_only_has_null_classify_tokens() -> None:
+    line = _costed(USAGE, None)
+
+    assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (None, None)
+    assert line["cost_usd"] == 0.018
 
 
 def test_write_creates_the_folder_and_appends_lines(tmp_path: Path) -> None:

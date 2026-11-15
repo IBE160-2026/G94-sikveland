@@ -36,6 +36,18 @@ texts:
       Sorry, we could not find an answer to this question in our official sources.
       Please contact the adviser at {ADVISER_CONTACT}.
 
+  # Reply to category individual_assessment (FR3): no answer call, no source links.
+  # Thai approved by the user on 2026-11-15 (NFR8).
+  reply-embassy-decides:
+    th: >-
+      ขออภัย เราไม่สามารถประเมินได้ว่าคุณจะได้รับวีซ่าหรือไม่
+      สถานทูตนอร์เวย์เป็นผู้พิจารณาและตัดสินคำร้องแต่ละคำร้อง และไม่มีใครอื่นที่ตอบคำถามนี้ได้
+      หากมีคำถามทั่วไปเกี่ยวกับเอกสารหรือขั้นตอนการยื่นขอวีซ่า ถามได้เลย
+    en: >-
+      Sorry, we cannot assess whether you will get the visa.
+      The Norwegian embassy considers and decides each application, and no one else can answer this question.
+      If you have general questions about the documents or the application steps, feel free to ask.
+
   reply-demo-only:
     th: >-
       โหมดสาธิตตอบได้เฉพาะคำถามตัวอย่างเท่านั้น กรุณาแตะคำถามตัวอย่างด้านบน

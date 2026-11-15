@@ -21,10 +21,11 @@ Ferdig og testet:
 - Oppfølgingsspørsmål i samme samtale (Story 1.7)
 - Tidligere samtaler lagres på søkerens egen enhet (de siste 20) og kan åpnes og fortsettes; knapp for ny samtale, og sletting av én eller alle
 - Logg over kostnad, tokens og cache per spørsmål (Story 1.8)
+- Spørsmål om søkerens egne sjanser («Får jeg visum?») får et fast svar om at bare ambassaden avgjør, uten at svarmodellen kalles (Story 2.1)
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 
-Ikke laget ennå: «embassy decides»-svar for spørsmål om egen sak og andre visumtyper (Epic 2), sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
+Ikke laget ennå: faste svar for andre visumtyper og ønske om å snakke med et menneske, og tilbakemeldingsspørsmålet (Story 2.2, 2.3), sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
 ## Kom i gang
 
@@ -105,7 +106,7 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3.5:9b` | Ollama-serveren og modellen; brukes bare med `LLM_PROVIDER=ollama` |
 | `OLLAMA_NUM_CTX` | `32768` | Kontekstvindu i tokens som sendes til Ollama; minst 32768 |
 | `MODEL_ANSWER`, `EFFORT_ANSWER` | `claude-opus-5-5`, `medium` | Modellen som skriver svarene |
-| `MODEL_SMALL`, `EFFORT_SMALL` | `claude-haiku-5-5`, `low` | Liten modell til enkle oppgaver |
+| `MODEL_SMALL`, `EFFORT_SMALL` | `claude-haiku-5-5`, `low` | Liten modell til enkle oppgaver, som å sortere spørsmålene (se under) |
 | `ADVISER_CONTACT` | rådgiverens e-post | Vises når chatboten ikke kan hjelpe |
 | `REQUEST_LOG_PATH` | `data/requests.jsonl` | Forespørselsloggen (se under) |
 | `PRICE_*` | Anthropics priser | USD per million tokens, brukt til kostnadsloggen |
@@ -132,7 +133,9 @@ Det de automatiske testene ikke dekker (siden i en nettleser, ekte Claude-svar, 
 ## Slik virker det
 
 ```text
-Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  Claude med kunnskapsbasen i prompten
+Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  sortering (liten modell)
+                                                                     ├─ general  →  Claude med kunnskapsbasen i prompten
+                                                                     └─ individual_assessment  →  fast tekst «bare ambassaden avgjør»
                         ←  strøm av JSON-linjer: tekstbiter, kilder, ferdig
 ```
 
@@ -143,6 +146,10 @@ Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  Claude 
 - Koden er delt i lag (porter og adaptere): `pipeline` kjenner ikke til FastAPI eller Anthropic, og `tests/test_layering.py` sjekker at det holder.
 
 Mer i [arkitekturoversikten](docs/planning/architecture/architecture-overview.md), skrevet for sensor, og i de bindende reglene i [ARCHITECTURE-SPINE.md](docs/planning/architecture/architecture-G94-sikveland-2026-11-02/ARCHITECTURE-SPINE.md).
+
+### Spørsmål om egne sjanser
+
+Før et spørsmål besvares, sorterer et eget, lite modellkall det rensede spørsmålet (sammen med de to siste spørsmålene og svarene i samtalen, der hvert svar kortes ned til de første 600 tegnene) som `general` eller `individual_assessment`. Prompten står i [`prompts/classifier-system.md`](prompts/classifier-system.md). Spørsmål som bare handler om søkerens egne sjanser («จะได้วีซ่าไหม», «Will I get the visa?») får den faste teksten `reply-embassy-decides` (bare ambassaden avgjør), uten kildelenker, og svarmodellen kalles ikke. Et spørsmål som også spør om noe kildene svarer på, f.eks. «จะได้วีซ่าไหม แล้วต้องใช้เอกสารอะไรบ้าง», er `general` og besvares med kilder; svarprompten sier allerede at ambassaden avgjør. Med Claude sorterer `MODEL_SMALL`, med Ollama samme modell som svarer (`OLLAMA_MODEL`), og i demomodus de lagrede kategoriene. Feiler sorteringen, vises den faste feilteksten og ingenting besvares.
 
 ### Oppdatere kunnskapsbasen
 
@@ -159,7 +166,7 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 | `app/` | Appen: `main.py` (oppstart), `web/` (API-endepunkter), `pipeline/` (filter, svarflyt, kostnad), `ports/` og `adapters/` (Claude, Ollama, demo, filer), `static/` (chatsiden) |
 | `content/` | Faste tekster på thai og engelsk, og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
-| `prompts/` | Systemprompten for svar, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
+| `prompts/` | Systemprompten for svar, prompten som sorterer spørsmålene, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
 | `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen |
 | `tests/` | Pytest-tester og en falsk KI-klient (`tests/fakes/`) |
 | `data/` | Lokale kjøredata (forespørselslogg); git-ignorert |
@@ -194,16 +201,17 @@ Appen skriver én JSON-linje per spørsmål til `data/requests.jsonl` (innstilli
 | Felt | Betydning |
 |------|-----------|
 | `timestamp` | Tidspunkt i UTC (ISO 8601, slutter på `Z`) |
-| `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
-| `category` | Spørsmålskategori (foreløpig alltid `general`); `null` hvis forespørselen feilet før den ble kategorisert |
-| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "citing": "2"}` |
+| `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
+| `category` | Spørsmålskategori: `general` eller `individual_assessment`; `null` hvis forespørselen feilet før den ble kategorisert |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "1"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "1", "citing": "2"}` |
 | `model` | Modellen som svarte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama) |
-| `input_tokens`, `output_tokens` | Tokens inn og ut (ut inkluderer tenking) |
-| `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen (alltid 0 med Ollama, som ikke rapporterer det) |
-| `cost_usd` | Kostnad i USD med seks desimaler, regnet med `PRICE_ANSWER_*`-prisene (0 i demomodus og med Ollama) |
+| `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet (ut inkluderer tenking); `null` når svarmodellen ikke ble kalt |
+| `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen i svarkallet (alltid 0 med Ollama, som ikke rapporterer det) |
+| `classify_input_tokens`, `classify_output_tokens` | Tokens inn og ut i sorteringskallet; `null` når sorteringen feilet |
+| `cost_usd` | Kostnad i USD med seks desimaler: svarkallet regnet med `PRICE_ANSWER_*` pluss sorteringskallet regnet med `PRICE_SMALL_*` (0 i demomodus og med Ollama) |
 | `unknown_source_ids` | Hvor mange kilde-id-er i svaret som ikke finnes i `sources.yaml` og derfor ble droppet (0 når alle var kjente); `null` hvis svaret stoppet før kildene kom |
 
-Token-feltene og `cost_usd` er `null` når modellen ikke rapporterte forbruk (typisk ved feil).
+Token-feltene er `null` når kallet ikke rapporterte forbruk (typisk ved feil), og `cost_usd` er `null` når ingen av kallene gjorde det.
 
 **Virker cachen?** Still to spørsmål innen fem minutter. Den første linja har `cache_write_tokens` > 0, den andre skal ha `cache_read_tokens` > 0 og lavere `cost_usd`. Dette gjelder Claude. Med Ollama er cache-feltene alltid 0, så cachen kan ikke sjekkes i loggen.
 

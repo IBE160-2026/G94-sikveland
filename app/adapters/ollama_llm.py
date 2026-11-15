@@ -4,7 +4,9 @@ Ollama has no Citations, so the model marks its sources in the text as `[[source
 (`prompts/answer-citing-markers.md`). The marker parser here turns markers into
 `AnswerChunk.source_ids` and strips them, and the spaces and tabs before them, from
 the text (line breaks stay, so list items never merge); a split marker is never shown.
-Thinking is on, but its text is never passed on.
+Thinking is on, but its text is never passed on. Classifying is a short
+non-streaming call with thinking off and the reply held to the category schema
+(`format`).
 
 No `httpx` type or exception leaves this module: failures are `LLMError`. A non-200
 status or an `error` line is logged as a warning (status or a fixed reason, never the
@@ -20,6 +22,7 @@ from typing import Any
 
 import httpx
 
+from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message, parse_category
 from app.adapters.file_prompts import Prompt
 from app.config import Settings
 from app.ports.knowledge_base import KnowledgeBase, Source
@@ -77,6 +80,32 @@ def build_chat_request(
     }
 
 
+def build_classify_request(
+    *,
+    model: str,
+    num_ctx: int,
+    system: str,
+    question: str,
+    recent_history: Sequence[Exchange],
+) -> dict[str, Any]:
+    """The JSON body for the classify `POST /api/chat`: the classifier prompt, then the question.
+
+    Same model and `num_ctx` as the answer call, so Ollama does not reload the model
+    between the two calls. Not streamed, thinking off, the reply held to the schema.
+    """
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": classifier_user_message(question, recent_history)},
+        ],
+        "stream": False,
+        "think": False,
+        "format": CATEGORY_SCHEMA,
+        "options": {"num_ctx": num_ctx},
+    }
+
+
 class MarkerParser:
     """Turns streamed text with `[[id]]` markers into `AnswerChunk`s without the markers.
 
@@ -127,12 +156,14 @@ class OllamaLLM:
         knowledge_base: KnowledgeBase,
         prompt: Prompt,
         citing_prompt: Prompt,
+        classifier_prompt: Prompt,
         client: httpx.Client | None = None,
     ) -> None:
         self._settings = settings
         self._knowledge_base = knowledge_base
         self._prompt = prompt
         self._citing_prompt = citing_prompt
+        self._classifier_prompt = classifier_prompt
         self._client = client if client is not None else httpx.Client(timeout=TIMEOUT)
         self._url = settings.ollama_base_url.rstrip("/") + "/api/chat"
 
@@ -192,20 +223,55 @@ class OllamaLLM:
         )
 
     def classify(self, question: str, recent_history: Sequence[Exchange]) -> tuple[Category, Usage]:
-        raise NotImplementedError("classify comes with the classifier in Epic 2")
+        request = build_classify_request(
+            model=self._settings.ollama_model,
+            num_ctx=self._settings.ollama_num_ctx,
+            system=self._classifier_prompt.text,
+            question=question,
+            recent_history=recent_history,
+        )
+        try:
+            response = self._client.post(self._url, json=request)
+            if response.status_code != 200:
+                # 404 is usually a model that is not pulled; the body is never logged.
+                logger.warning("Ollama answered HTTP %d", response.status_code)
+                raise LLMError(f"classify call failed: HTTP {response.status_code}")
+            data = _parse_line(response.text)
+        except LLMError:
+            raise
+        except Exception as exc:
+            # Connection refused, timeouts and other transport errors.
+            raise LLMError(f"classify call failed: {type(exc).__name__}") from exc
+
+        if data.get("done") is not True or data.get("done_reason") != "stop":
+            raise LLMError(f"the classification is incomplete (done_reason: {data.get('done_reason')})")
+        message = data.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str):
+            raise LLMError("the classifier reply has no text")
+        usage = Usage(
+            input_tokens=_count(data.get("prompt_eval_count")),
+            output_tokens=_count(data.get("eval_count")),
+            cache_read_tokens=0,
+            cache_write_tokens=0,
+        )
+        return parse_category(content), usage
 
     def translate(self, text: str) -> tuple[str, Usage]:
         raise NotImplementedError("translate comes with the English translation in Epic 4")
 
 
 def _parse_line(line: str) -> dict[str, Any]:
-    """One JSON line of the stream. An `error` field or a malformed line is an `LLMError`."""
+    """One JSON line (of the stream, or the whole classify reply).
+
+    An `error` field or a malformed line is an `LLMError`.
+    """
     try:
         data = json.loads(line)
     except ValueError as exc:
-        raise LLMError("answer stream sent a line that is not JSON") from exc
+        raise LLMError("Ollama sent a line that is not JSON") from exc
     if not isinstance(data, dict):
-        raise LLMError("answer stream sent a line that is not a JSON object")
+        raise LLMError("Ollama sent a line that is not a JSON object")
     if "error" in data:
         # The error text is neither logged nor passed on: it may echo the request.
         logger.warning(OLLAMA_ERROR_REASON)

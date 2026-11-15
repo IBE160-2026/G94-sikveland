@@ -5,6 +5,7 @@ from typing import get_args
 import pytest
 
 from app.adapters.anthropic_llm import AnthropicLLM
+from app.adapters.ollama_llm import OllamaLLM
 from app.ports.llm import (
     AnswerChunk,
     Category,
@@ -14,7 +15,7 @@ from app.ports.llm import (
     LLMRefusalError,
     Usage,
 )
-from tests.fakes.fake_llm import DEFAULT_USAGE, AnswerCall, ScriptedLLM
+from tests.fakes.fake_llm import CLASSIFY_USAGE, DEFAULT_USAGE, AnswerCall, ClassifyCall, ScriptedLLM
 
 USAGE = Usage(input_tokens=10, output_tokens=5, cache_read_tokens=3, cache_write_tokens=2)
 
@@ -51,7 +52,7 @@ def _parameters(cls: type, method: str) -> list[str]:
     return list(inspect.signature(getattr(cls, method)).parameters)
 
 
-@pytest.mark.parametrize("implementation", [ScriptedLLM, AnthropicLLM])
+@pytest.mark.parametrize("implementation", [ScriptedLLM, AnthropicLLM, OllamaLLM])
 @pytest.mark.parametrize("method", ["answer", "classify", "translate"])
 def test_implementations_match_the_port_signatures(implementation: type, method: str) -> None:
     assert _parameters(implementation, method) == _parameters(LLMClient, method)
@@ -94,7 +95,28 @@ def test_fake_records_calls_when_called() -> None:
     assert llm.calls == [AnswerCall("q2", (Exchange("q1", "a1"),))]
 
 
-@pytest.mark.parametrize("method, args", [("classify", ("q", [])), ("translate", ("t",))])
-def test_fake_later_methods_are_not_implemented_yet(method: str, args: tuple) -> None:
+def test_fake_classifies_as_scripted_and_records_the_call() -> None:
+    llm = ScriptedLLM(category="individual_assessment", classify_usage=USAGE)
+
+    assert llm.classify("will I get it?", [Exchange("q1", "a1")]) == ("individual_assessment", USAGE)
+    assert llm.classify_calls == [ClassifyCall("will I get it?", (Exchange("q1", "a1"),))]
+    assert llm.calls == []
+
+
+def test_fake_classifies_as_general_by_default() -> None:
+    assert ScriptedLLM().classify("q", []) == ("general", CLASSIFY_USAGE)
+
+
+def test_fake_raises_the_scripted_classify_error() -> None:
+    error = LLMRefusalError("no")
+    llm = ScriptedLLM(classify_error=error)
+
+    with pytest.raises(LLMRefusalError) as raised:
+        llm.classify("q", [])
+    assert raised.value is error
+    assert len(llm.classify_calls) == 1
+
+
+def test_fake_translate_is_not_implemented_yet() -> None:
     with pytest.raises(NotImplementedError):
-        getattr(ScriptedLLM(), method)(*args)
+        ScriptedLLM().translate("t")

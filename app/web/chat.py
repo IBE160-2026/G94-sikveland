@@ -8,7 +8,7 @@ log (`app/web/request_log.py`).
 
 import json
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Request
@@ -36,6 +36,8 @@ MAX_ANSWER_CHARS = 10000
 MAX_HISTORY_ITEMS = 10
 MEDIA_TYPE = "application/jsonl"
 ERROR_EVENT: dict[str, Any] = {"type": "error", "key": "error"}
+# Categories answered with a fixed text instead of an answer call (AD-6). 2.2 and 2.3 add more.
+FIXED_REPLY_KEYS: Mapping[Category, str] = {"individual_assessment": "reply-embassy-decides"}
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,34 +78,48 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
     llm: LLMClient = state.llm
     knowledge_base: KnowledgeBase = state.knowledge_base
     history = [Exchange(question=item.question, answer=item.answer) for item in body.history]
+    texts = content.texts()
     events = answer_question(
         body.question,
         history,
         llm,
         knowledge_base,
         # `reply-demo-only` in demo mode, `reply-no-answer` otherwise (set in `app/main.py`).
-        no_answer_text=content.texts()[state.no_answer_key].th,
+        no_answer_text=texts[state.no_answer_key].th,
+        fixed_replies={category: texts[key].th for category, key in FIXED_REPLY_KEYS.items()},
     )
     request_log: RequestLog = state.request_log
-    # `answer`, and with Ollama also `citing` (set in `app/main.py`).
+    # `answer` and `classifier`, and with Ollama also `citing` (set in `app/main.py`).
     prompt_versions: dict[str, str] = state.prompt_versions
     # `mock_llm` at no cost in demo mode, the answer model and its prices otherwise.
     model: str = state.answer_model
     prices: Prices = state.answer_prices
+    # `PRICE_SMALL_*` with Claude, no cost in demo mode and with Ollama.
+    classify_prices: Prices = state.classify_prices
     # Zero usage in demo mode, so every demo line records cost 0.0; `None` otherwise.
     fallback_usage: Usage | None = state.fallback_usage
 
     def log_request(
-        outcome: Outcome, category: Category | None, usage: Usage | None, unknown_source_ids: int | None
+        outcome: Outcome,
+        category: Category | None,
+        usage: Usage | None,
+        classify_usage: Usage | None,
+        unknown_source_ids: int | None,
     ) -> None:
+        # The fallback stands in only for calls that were made: classify always runs
+        # first, the answer call only for `general`.
+        if usage is None and category == "general":
+            usage = fallback_usage
         request_log.write(
             request_line(
                 outcome=outcome,
                 category=category,
                 prompt_versions=prompt_versions,
                 model=model,
-                usage=usage if usage is not None else fallback_usage,
+                usage=usage,
                 prices=prices,
+                classify_usage=classify_usage if classify_usage is not None else fallback_usage,
+                classify_prices=classify_prices,
                 unknown_source_ids=unknown_source_ids,
             )
         )
@@ -115,7 +131,7 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
     )
 
 
-LogRequest = Callable[[Outcome, Category | None, Usage | None, int | None], None]
+LogRequest = Callable[[Outcome, Category | None, Usage | None, Usage | None, int | None], None]
 
 
 def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[str]:
@@ -123,11 +139,13 @@ def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[s
 
     `log_request` is called once when the stream ends, also when the server closes
     it because the client went away (outcome `incomplete`). `Spent` is never sent,
-    and the count of dropped unknown source ids goes to the log only.
+    and the count of dropped unknown source ids goes to the log only. A reply to any
+    category but `general` is a fixed reply (outcome `fixed_reply`).
     """
     outcome: Outcome = "incomplete"
     category: Category | None = None
     usage: Usage | None = None
+    classify_usage: Usage | None = None
     unknown_source_ids: int | None = None
     answered: Outcome = "no_answer"
     try:
@@ -139,12 +157,18 @@ def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[s
                     yield _line(ERROR_EVENT)
                     return
                 case Spent():
-                    usage = event.usage
+                    if event.call == "classify":
+                        classify_usage = event.usage
+                    else:
+                        usage = event.usage
                     continue
                 case Meta():
                     category = event.category
                 case Sources():
-                    answered = "answered" if event.items else "no_answer"
+                    if category != "general":
+                        answered = "fixed_reply"
+                    else:
+                        answered = "answered" if event.items else "no_answer"
                     unknown_source_ids = event.unknown_source_ids
                 case Done():
                     outcome = answered
@@ -162,7 +186,7 @@ def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[s
         except Exception as exc:  # noqa: BLE001 - logging below must still run
             logger.error("closing the answer stream failed: %s", type(exc).__name__)
         try:
-            log_request(outcome, category, usage, unknown_source_ids)
+            log_request(outcome, category, usage, classify_usage, unknown_source_ids)
         except Exception as exc:  # noqa: BLE001 - the log must never break an answer
             logger.error("request log failed: %s", type(exc).__name__)
 

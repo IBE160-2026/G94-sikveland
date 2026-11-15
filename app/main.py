@@ -19,12 +19,13 @@ from app.config import ROOT, Settings, get_settings
 from app.pipeline.cost import Prices
 from app.ports.llm import LLMClient
 from app.web import chat, health, texts
-from app.web.request_log import RequestLog, answer_prices
+from app.web.request_log import RequestLog, answer_prices, small_prices
 
 CONTENT_FILE = ROOT / "content" / "texts.yaml"
 DEMO_ANSWERS_FILE = ROOT / "content" / "demo-answers.yaml"
 KNOWLEDGE_BASE_DIR = ROOT / "knowledge-base"
 ANSWER_PROMPT_FILE = ROOT / "prompts" / "answer-system.md"
+CLASSIFIER_PROMPT_FILE = ROOT / "prompts" / "classifier-system.md"
 # Read only with `LLM_PROVIDER=ollama`: how the model marks its sources as `[[id]]`.
 CITING_PROMPT_FILE = ROOT / "prompts" / "answer-citing-markers.md"
 STATIC_DIR = ROOT / "app" / "static"
@@ -39,13 +40,14 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     Raises `ContentError` if `content/texts.yaml` is invalid, so the app never
     starts with missing or broken fixed texts, `KnowledgeBaseError` if
     `knowledge-base/sources.yaml` or a source snapshot is missing or invalid, and
-    `PromptError` if the answer prompt is missing or malformed. The knowledge base
-    is read from disk only; nothing is fetched at runtime.
+    `PromptError` if the answer or the classifier prompt is missing or malformed.
+    Both are logged as prompt versions `answer` and `classifier`. The knowledge
+    base is read from disk only; nothing is fetched at runtime.
 
     Without `llm`, answers go to the Anthropic API. Building that adapter needs no
     key: without `ANTHROPIC_API_KEY` every answer fails and the page shows the
     fixed error text. With `LLM_PROVIDER=ollama` they go to a local Ollama server
-    instead (`OLLAMA_MODEL`, no cost); `prompts/answer-citing-markers.md` is then
+    instead (`OLLAMA_MODEL`, also for classifying, no cost); `prompts/answer-citing-markers.md` is then
     read too (`PromptError` stops startup) and logged as prompt version `citing`.
     If Ollama is not running, every answer fails with the fixed error text.
 
@@ -54,7 +56,8 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     `mock_llm` adapter. Questions it has no answer for get `reply-demo-only`, and
     the request log records model `mock_llm` at no cost, with zero tokens also
     when no usage arrived. Demo mode wins over `LLM_PROVIDER`. In real mode the
-    demo answers file is never read.
+    demo answers file is never read. With Claude, the classify call is priced
+    with `PRICE_SMALL_*`; it costs nothing in demo mode and with Ollama.
     """
     settings = settings if settings is not None else get_settings()
     app = FastAPI(title="Norway Visa Guide For Thai")
@@ -63,6 +66,11 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     app.state.knowledge_base = load_knowledge_base(KNOWLEDGE_BASE_DIR)
     # Loaded even with a given `llm`, so a broken prompt file always stops startup.
     app.state.answer_prompt = load_prompt(ANSWER_PROMPT_FILE)
+    app.state.classifier_prompt = load_prompt(CLASSIFIER_PROMPT_FILE)
+    prompt_versions = {
+        "answer": app.state.answer_prompt.version,
+        "classifier": app.state.classifier_prompt.version,
+    }
     if settings.mock_llm:
         examples = app.state.content.example_questions()
         demo = load_demo_answers(DEMO_ANSWERS_FILE, examples, app.state.knowledge_base)
@@ -71,30 +79,38 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         app.state.no_answer_key = DEMO_ONLY_KEY
         app.state.answer_model = MOCK_MODEL_NAME
         app.state.answer_prices = NO_PRICES
+        app.state.classify_prices = NO_PRICES
         # Also a request that ends without a usage report (client gone, error) cost nothing.
         app.state.fallback_usage = NO_USAGE
-        app.state.prompt_versions = {"answer": app.state.answer_prompt.version}
+        app.state.prompt_versions = prompt_versions
     elif settings.llm_provider == "ollama":
         # Loaded even with a given `llm`, like the answer prompt, and logged with it.
         citing_prompt = load_prompt(CITING_PROMPT_FILE)
         if llm is None:
-            llm = OllamaLLM(settings, app.state.knowledge_base, app.state.answer_prompt, citing_prompt)
+            llm = OllamaLLM(
+                settings,
+                app.state.knowledge_base,
+                app.state.answer_prompt,
+                citing_prompt,
+                app.state.classifier_prompt,
+            )
         app.state.no_answer_key = "reply-no-answer"
         app.state.answer_model = settings.ollama_model
         app.state.answer_prices = NO_PRICES
+        app.state.classify_prices = NO_PRICES
         app.state.fallback_usage = None
-        app.state.prompt_versions = {
-            "answer": app.state.answer_prompt.version,
-            "citing": citing_prompt.version,
-        }
+        app.state.prompt_versions = {**prompt_versions, "citing": citing_prompt.version}
     else:
         if llm is None:
-            llm = AnthropicLLM(settings, app.state.knowledge_base, app.state.answer_prompt)
+            llm = AnthropicLLM(
+                settings, app.state.knowledge_base, app.state.answer_prompt, app.state.classifier_prompt
+            )
         app.state.no_answer_key = "reply-no-answer"
         app.state.answer_model = settings.model_answer
         app.state.answer_prices = answer_prices(settings)
+        app.state.classify_prices = small_prices(settings)
         app.state.fallback_usage = None
-        app.state.prompt_versions = {"answer": app.state.answer_prompt.version}
+        app.state.prompt_versions = prompt_versions
     app.state.llm = llm
     # Nothing is written until the first chat request ends.
     app.state.request_log = RequestLog(_from_root(settings.request_log_path))

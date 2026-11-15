@@ -21,8 +21,8 @@ from app.adapters.ollama_llm import OllamaLLM
 from app.config import ROOT, Settings
 from app.main import create_app
 from app.pipeline.filter import REMOVED_MARKER
-from app.ports.llm import AnswerChunk, Exchange, LLMError, Usage
-from tests.fakes.fake_llm import ScriptedLLM
+from app.ports.llm import AnswerChunk, Exchange, LLMError, LLMRefusalError, Usage
+from tests.fakes.fake_llm import CLASSIFY_USAGE, ClassifyCall, ScriptedLLM
 
 S1 = "embassy-necessary-documents"
 S2 = "embassy-online-registration"
@@ -254,7 +254,10 @@ def test_without_a_key_the_real_adapter_fails_as_an_error_event(settings: Settin
     client = TestClient(created)
     events = _events(client, {"question": QUESTION, "history": []})
 
-    assert events == [_meta(), ERROR]
+    # The classify call fails first, so nothing is categorised or answered.
+    assert events == [ERROR]
+    [line] = _log(settings)
+    assert (line["outcome"], line["category"], line["cost_usd"]) == ("error", None, None)
 
 
 def test_broken_prompt_file_stops_startup(
@@ -412,9 +415,13 @@ LOG_FIELDS = {
     "output_tokens",
     "cache_read_tokens",
     "cache_write_tokens",
+    "classify_input_tokens",
+    "classify_output_tokens",
     "cost_usd",
     "unknown_source_ids",
 }
+# (400 x 0.10 + 20 x 0.50) / 1e6 with the default PRICE_SMALL_* prices
+CLASSIFY_COST = 0.00005
 SPEC_USAGE = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
 
 
@@ -437,14 +444,19 @@ def test_cited_answer_logs_one_line_with_tokens_and_cost(settings: Settings) -> 
     assert {k: v for k, v in line.items() if k != "timestamp"} == {
         "outcome": "answered",
         "category": "general",
-        "prompt_versions": {"answer": client.app.state.answer_prompt.version},
+        "prompt_versions": {
+            "answer": client.app.state.answer_prompt.version,
+            "classifier": client.app.state.classifier_prompt.version,
+        },
         "model": settings.model_answer,
         "input_tokens": 1000,
         "output_tokens": 200,
         "cache_read_tokens": 50000,
         "cache_write_tokens": 0,
-        # (1000x4 + 200x20 + 50000x0.2 + 0x5) / 1e6 with the default prices
-        "cost_usd": 0.018,
+        "classify_input_tokens": CLASSIFY_USAGE.input_tokens,
+        "classify_output_tokens": CLASSIFY_USAGE.output_tokens,
+        # (1000x4 + 200x20 + 50000x0.2 + 0x5) / 1e6 with the default prices, plus the classify call
+        "cost_usd": 0.018 + CLASSIFY_COST,
         "unknown_source_ids": 0,
     }
 
@@ -456,7 +468,7 @@ def test_no_answer_logs_no_answer_with_tokens_and_cost(settings: Settings) -> No
 
     [line] = _log(settings)
     assert line["outcome"] == "no_answer"
-    assert (line["input_tokens"], line["cost_usd"]) == (1000, 0.018)
+    assert (line["input_tokens"], line["cost_usd"]) == (1000, 0.018 + CLASSIFY_COST)
 
 
 @pytest.mark.parametrize(
@@ -469,7 +481,9 @@ def test_no_answer_logs_no_answer_with_tokens_and_cost(settings: Settings) -> No
     ],
     ids=["error-before-text", "error-after-text", "refusal", "unexpected"],
 )
-def test_error_logs_error_with_null_tokens_and_cost(settings: Settings, llm: ScriptedLLM) -> None:
+def test_answer_error_logs_null_answer_tokens_and_the_classify_cost(
+    settings: Settings, llm: ScriptedLLM
+) -> None:
     events = _events(_client(settings, llm), {"question": QUESTION, "history": []})
 
     assert events[-1] == ERROR
@@ -482,11 +496,13 @@ def test_error_logs_error_with_null_tokens_and_cost(settings: Settings, llm: Scr
         "output_tokens",
         "cache_read_tokens",
         "cache_write_tokens",
-        "cost_usd",
         # The stream ended before the sources were known.
         "unknown_source_ids",
     ):
         assert line[field] is None, field
+    # The classify call ran and is paid for.
+    assert line["classify_input_tokens"] == CLASSIFY_USAGE.input_tokens
+    assert line["cost_usd"] == CLASSIFY_COST
 
 
 def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
@@ -496,7 +512,7 @@ def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
     logged: list[tuple[Any, ...]] = []
     llm = ScriptedLLM([AnswerChunk("A", (S1,)), AnswerChunk("B"), AnswerChunk("C")], usage=SPEC_USAGE)
     kb = create_app(settings, llm=llm).state.knowledge_base
-    events = answer_question(QUESTION, (), llm, kb, "no answer")
+    events = answer_question(QUESTION, (), llm, kb, "no answer", fixed_replies={})
     lines = _lines(events, lambda *args: logged.append(args))
 
     assert json.loads(next(lines))["type"] == "meta"
@@ -506,8 +522,48 @@ def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
     # when the client goes away (Starlette does not close it itself).
     lines.close()
 
-    assert logged == [("incomplete", "general", None, None)]
+    assert logged == [("incomplete", "general", None, CLASSIFY_USAGE, None)]
     assert events.gi_frame is None  # the pipeline (and the model stream) is closed too
+
+
+def test_client_gone_during_a_fixed_reply_still_logs_the_classify_cost(settings: Settings) -> None:
+    from app.pipeline.answer import answer_question
+    from app.web.chat import _lines
+    from app.web.request_log import answer_prices, request_line, small_prices
+
+    logged: list[dict[str, Any]] = []
+
+    def log(outcome: Any, category: Any, usage: Any, classify_usage: Any, unknown: Any) -> None:
+        logged.append(
+            request_line(
+                outcome=outcome,
+                category=category,
+                prompt_versions={},
+                model=settings.model_answer,
+                usage=usage,
+                prices=answer_prices(settings),
+                classify_usage=classify_usage,
+                classify_prices=small_prices(settings),
+                unknown_source_ids=unknown,
+            )
+        )
+
+    llm = ScriptedLLM(category="individual_assessment")
+    kb = create_app(settings, llm=llm).state.knowledge_base
+    fixed = {"individual_assessment": "only the embassy decides"}
+    events = answer_question("จะได้วีซ่าไหม", (), llm, kb, "no answer", fixed_replies=fixed)
+    lines = _lines(events, log)
+
+    assert json.loads(next(lines))["category"] == "individual_assessment"
+    lines.close()  # the client went away after `meta`
+
+    [line] = logged
+    assert (line["outcome"], line["category"]) == ("incomplete", "individual_assessment")
+    for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"):
+        assert line[field] is None, field
+    assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (400, 20)
+    assert line["cost_usd"] == CLASSIFY_COST
+    assert llm.calls == []
 
 
 def test_privacy_no_question_answer_or_personal_info_in_the_log(settings: Settings) -> None:
@@ -594,18 +650,42 @@ def _ollama(settings: Settings) -> Settings:
     return settings.model_copy(update={"llm_provider": "ollama", "ollama_model": "qwen-test:1b"})
 
 
-def _ollama_llm(settings: Settings, body: bytes, requests: list[httpx.Request] | None = None) -> OllamaLLM:
+def _ollama_classified(category: str = "general") -> bytes:
+    reply = {
+        "message": {"role": "assistant", "content": json.dumps({"category": category})},
+        "done": True,
+        "done_reason": "stop",
+        "prompt_eval_count": 350,
+        "eval_count": 9,
+    }
+    return json.dumps(reply).encode()
+
+
+def _ollama_handler(
+    body: bytes, requests: list[httpx.Request] | None = None, category: str = "general"
+) -> Any:
+    """Answers the classify call (not streamed) with `category`, the answer call with `body`."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         if requests is not None:
             requests.append(request)
+        if json.loads(request.content)["stream"] is False:
+            return httpx.Response(200, content=_ollama_classified(category))
         return httpx.Response(200, content=body)
 
+    return handler
+
+
+def _ollama_llm(
+    settings: Settings, body: bytes, requests: list[httpx.Request] | None = None, category: str = "general"
+) -> OllamaLLM:
     return OllamaLLM(
         settings,
         load_knowledge_base(app.main.KNOWLEDGE_BASE_DIR),
         load_prompt(app.main.ANSWER_PROMPT_FILE),
         load_prompt(app.main.CITING_PROMPT_FILE),
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
+        client=httpx.Client(transport=httpx.MockTransport(_ollama_handler(body, requests, category))),
     )
 
 
@@ -629,7 +709,10 @@ def test_default_provider_is_anthropic(settings: Settings) -> None:
 
     assert settings.llm_provider == "anthropic"
     assert isinstance(created.state.llm, AnthropicLLM)
-    assert created.state.prompt_versions == {"answer": created.state.answer_prompt.version}
+    assert created.state.prompt_versions == {
+        "answer": created.state.answer_prompt.version,
+        "classifier": created.state.classifier_prompt.version,
+    }
 
 
 def test_ollama_provider_wires_the_ollama_adapter(settings: Settings) -> None:
@@ -643,23 +726,26 @@ def test_ollama_provider_wires_the_ollama_adapter(settings: Settings) -> None:
     assert created.state.fallback_usage is None
     assert created.state.prompt_versions == {
         "answer": created.state.answer_prompt.version,
+        "classifier": created.state.classifier_prompt.version,
         "citing": load_prompt(app.main.CITING_PROMPT_FILE).version,
     }
 
 
-def test_wired_ollama_adapter_sends_both_prompts_and_the_documents(settings: Settings) -> None:
+def test_wired_ollama_adapter_classifies_then_answers_with_all_three_prompts(settings: Settings) -> None:
     created = create_app(_ollama(settings))
     requests: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, content=_ollama_stream("A [[udi-fees]]."))
-
+    handler = _ollama_handler(_ollama_stream("A [[udi-fees]]."), requests)
     created.state.llm._client = httpx.Client(transport=httpx.MockTransport(handler))
 
-    _events(TestClient(created), {"question": QUESTION, "history": []})
+    _events(TestClient(created), {"question": "Fee & form <now>?", "history": []})
 
-    [request] = requests
+    classify, request = requests
+    classify_messages = json.loads(classify.content)["messages"]
+    assert classify_messages == [
+        {"role": "system", "content": load_prompt(app.main.CLASSIFIER_PROMPT_FILE).text},
+        # The tagged question, escaped so it cannot close the tag.
+        {"role": "user", "content": "<question>Fee &amp; form &lt;now&gt;?</question>"},
+    ]
     system = json.loads(request.content)["messages"][0]
     assert system["role"] == "system"
     content = system["content"]
@@ -675,7 +761,10 @@ def test_demo_mode_wins_over_the_ollama_provider(settings: Settings) -> None:
 
     assert isinstance(created.state.llm, MockLLM)
     assert created.state.answer_model == MOCK_MODEL_NAME
-    assert created.state.prompt_versions == {"answer": created.state.answer_prompt.version}
+    assert created.state.prompt_versions == {
+        "answer": created.state.answer_prompt.version,
+        "classifier": created.state.classifier_prompt.version,
+    }
 
 
 def test_ollama_answer_streams_without_markers_and_logs_no_cost(settings: Settings) -> None:
@@ -692,7 +781,7 @@ def test_ollama_answer_streams_without_markers_and_logs_no_cost(settings: Settin
     assert not any("[" in e["delta"] or "]" in e["delta"] for e in events if e["type"] == "text")
     assert events[-2] == _sources(_source(client, "udi-fees"), _source(client, S2))
     assert events[-1] == DONE
-    assert json.loads(requests[0].content)["model"] == "qwen-test:1b"
+    assert [json.loads(r.content)["model"] for r in requests] == ["qwen-test:1b"] * 2
 
     [line] = _log(ollama)
     assert {k: v for k, v in line.items() if k != "timestamp"} == {
@@ -704,6 +793,8 @@ def test_ollama_answer_streams_without_markers_and_logs_no_cost(settings: Settin
         "output_tokens": 900,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
+        "classify_input_tokens": 350,
+        "classify_output_tokens": 9,
         "cost_usd": 0.0,
         "unknown_source_ids": 0,
     }
@@ -745,14 +836,21 @@ def test_ollama_down_shows_the_error_text(settings: Settings) -> None:
         load_knowledge_base(app.main.KNOWLEDGE_BASE_DIR),
         load_prompt(app.main.ANSWER_PROMPT_FILE),
         load_prompt(app.main.CITING_PROMPT_FILE),
+        load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(refused)),
     )
 
     events = _events(_client(ollama, llm), {"question": QUESTION, "history": []})
 
-    assert events == [_meta(), ERROR]
+    # The classify call is the first to fail.
+    assert events == [ERROR]
     [line] = _log(ollama)
-    assert (line["outcome"], line["model"], line["cost_usd"]) == ("error", "qwen-test:1b", None)
+    assert (line["outcome"], line["category"], line["model"], line["cost_usd"]) == (
+        "error",
+        None,
+        "qwen-test:1b",
+        None,
+    )
 
 
 def test_broken_citing_prompt_stops_startup_only_with_ollama(
@@ -763,3 +861,220 @@ def test_broken_citing_prompt_stops_startup_only_with_ollama(
     create_app(settings, llm=ScriptedLLM())  # Claude never reads it
     with pytest.raises(PromptError):
         create_app(_ollama(settings), llm=ScriptedLLM())
+
+
+@pytest.mark.parametrize(
+    ("category", "expected"),
+    [("general", "general"), ("individual_assessment", "individual_assessment")],
+)
+def test_ollama_classifies_and_routes(settings: Settings, category: str, expected: str) -> None:
+    ollama = _ollama(settings)
+    requests: list[httpx.Request] = []
+    body = _ollama_stream("A [[udi-fees]].")
+    client = _client(ollama, _ollama_llm(ollama, body, requests, category=category))
+
+    events = _events(client, {"question": QUESTION, "history": [{"question": "q0", "answer": "a0"}]})
+
+    assert events[0]["category"] == expected
+    classify = json.loads(requests[0].content)
+    assert (classify["stream"], classify["think"], classify["options"]) == (
+        False,
+        False,
+        {"num_ctx": ollama.ollama_num_ctx},
+    )
+    assert classify["format"]["properties"]["category"]["enum"] == ["general", "individual_assessment"]
+    if category == "individual_assessment":
+        assert len(requests) == 1  # no answer call
+        assert events[1:] == [
+            {"type": "text", "delta": _texts(ollama)["reply-embassy-decides"]},
+            _sources(),
+            DONE,
+        ]
+    else:
+        assert len(requests) == 2
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        httpx.Response(404, content=b'{"error": "model not found"}'),
+        httpx.Response(200, content=b"{not json"),
+        httpx.Response(
+            200,
+            content=b'{"message": {"content": "{\\"category\\": \\"weather\\"}"}, '
+            b'"done": true, "done_reason": "stop"}',
+        ),
+    ],
+    ids=["status", "bad-json", "unknown-category"],
+)
+def test_ollama_classify_failure_is_an_error_event(settings: Settings, reply: httpx.Response) -> None:
+    ollama = _ollama(settings)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return reply
+
+    llm = OllamaLLM(
+        ollama,
+        load_knowledge_base(app.main.KNOWLEDGE_BASE_DIR),
+        load_prompt(app.main.ANSWER_PROMPT_FILE),
+        load_prompt(app.main.CITING_PROMPT_FILE),
+        load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    events = _events(_client(ollama, llm), {"question": QUESTION, "history": []})
+
+    assert events == [ERROR]
+    assert len(requests) == 1  # never answered
+
+
+# --- Classify and route (Story 2.1) ------------------------------------------------------
+
+OWN_CHANCES = "จะได้วีซ่าไหม"
+
+
+def test_individual_assessment_gets_the_embassy_decides_text_and_no_answer_call(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("a guess", (S1,))], category="individual_assessment")
+    client = _client(settings, llm)
+
+    events = _events(client, {"question": OWN_CHANCES, "history": []})
+
+    assert events == [
+        {
+            "type": "meta",
+            "category": "individual_assessment",
+            "personal_info_removed": False,
+            "clean_question": OWN_CHANCES,
+        },
+        {"type": "text", "delta": _texts(settings)["reply-embassy-decides"]},
+        _sources(),
+        DONE,
+    ]
+    assert llm.calls == []  # the answer model is never called
+    assert len(llm.classify_calls) == 1
+
+
+def test_individual_assessment_log_line(settings: Settings) -> None:
+    client = _client(settings, ScriptedLLM(category="individual_assessment"))
+
+    _events(client, {"question": OWN_CHANCES, "history": []})
+
+    [line] = _log(settings)
+    assert set(line) == LOG_FIELDS
+    assert line["outcome"] == "fixed_reply"
+    assert line["category"] == "individual_assessment"
+    for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"):
+        assert line[field] is None, field
+    assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (400, 20)
+    assert line["cost_usd"] == CLASSIFY_COST
+    assert line["unknown_source_ids"] == 0
+    assert line["prompt_versions"]["classifier"] == client.app.state.classifier_prompt.version
+
+
+def test_follow_up_is_classified_with_the_last_two_cleaned_exchanges(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,))])
+    history = [
+        {"question": "first question", "answer": "first answer"},
+        {"question": "which documents? passport AA1234567", "answer": "These documents."},
+        {"question": "and the form?", "answer": "This form."},
+    ]
+
+    events = _events(_client(settings, llm), {"question": "and the fee?", "history": history})
+
+    assert llm.classify_calls == [
+        ClassifyCall(
+            "and the fee?",
+            (
+                Exchange(f"which documents? passport {REMOVED_MARKER}", "These documents."),
+                Exchange("and the form?", "This form."),
+            ),
+        )
+    ]
+    assert events[0]["category"] == "general"
+    assert events[-1] == DONE
+
+
+def test_classifier_sees_only_the_cleaned_question(settings: Settings) -> None:
+    llm = ScriptedLLM(category="individual_assessment")
+
+    events = _events(_client(settings, llm), {"question": "passport AA1234567 will I get it?", "history": []})
+
+    clean = f"passport {REMOVED_MARKER} will I get it?"
+    assert llm.classify_calls[0].question == clean
+    assert events[0]["personal_info_removed"] is True
+
+
+@pytest.mark.parametrize("category", ["done", "out_of_scope", "reach_person"])
+def test_categories_not_built_yet_are_answered_as_general(settings: Settings, category: str) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,))], category=category)
+    client = _client(settings, llm)
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events == [_meta(), {"type": "text", "delta": "A"}, _sources(_source(client, S1)), DONE]
+    [line] = _log(settings)
+    assert (line["outcome"], line["category"]) == ("answered", "general")
+
+
+@pytest.mark.parametrize(
+    "llm",
+    [
+        ScriptedLLM([AnswerChunk("A", (S1,))], classify_error=LLMError("boom")),
+        ScriptedLLM([AnswerChunk("A", (S1,))], classify_error=LLMRefusalError("no")),
+        ScriptedLLM([AnswerChunk("A", (S1,))], category="weather"),
+    ],
+    ids=["error", "refusal", "unknown-category"],
+)
+def test_classify_failure_sends_only_the_error_event(settings: Settings, llm: ScriptedLLM) -> None:
+    events = _events(_client(settings, llm), {"question": QUESTION, "history": []})
+
+    assert events == [ERROR]
+    assert llm.calls == []
+    [line] = _log(settings)
+    assert (line["outcome"], line["category"]) == ("error", None)
+    assert line["input_tokens"] is None
+    if llm.classify_error is None:
+        # The unknown category came from a call that ran and is paid for.
+        assert line["cost_usd"] == CLASSIFY_COST
+    else:
+        assert line["cost_usd"] is None
+
+
+def test_broken_classifier_prompt_stops_startup(
+    settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prompt = tmp_path / "classifier-system.md"
+    prompt.write_text("no version line\ntext\n", encoding="utf-8")
+    monkeypatch.setattr(app.main, "CLASSIFIER_PROMPT_FILE", prompt)
+
+    with pytest.raises(PromptError):
+        create_app(settings, llm=ScriptedLLM())
+
+
+@pytest.mark.parametrize("mode", ["anthropic", "ollama", "demo"])
+def test_missing_classifier_prompt_stops_startup_in_every_mode(
+    settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    monkeypatch.setattr(app.main, "CLASSIFIER_PROMPT_FILE", tmp_path / "missing.md")
+    update = {"anthropic": {}, "ollama": {"llm_provider": "ollama"}, "demo": {"mock_llm": True}}[mode]
+
+    with pytest.raises(PromptError):
+        create_app(settings.model_copy(update=update))
+
+
+def test_classifier_prompt_is_loaded_and_versioned(settings: Settings) -> None:
+    created = create_app(settings, llm=ScriptedLLM())
+
+    assert created.state.classifier_prompt.version == "1"
+    assert created.state.prompt_versions["classifier"] == "1"
+
+
+def test_classify_is_priced_with_the_small_prices_only_with_claude(settings: Settings) -> None:
+    from app.web.request_log import small_prices
+
+    assert create_app(settings, llm=ScriptedLLM()).state.classify_prices == small_prices(settings)
+    for update in ({"llm_provider": "ollama"}, {"mock_llm": True}):
+        prices = create_app(settings.model_copy(update=update), llm=ScriptedLLM()).state.classify_prices
+        assert (prices.input, prices.output, prices.cache_read, prices.cache_write) == (0, 0, 0, 0)

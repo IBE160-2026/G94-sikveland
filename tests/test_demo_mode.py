@@ -172,6 +172,8 @@ def test_request_log_records_mock_llm_at_no_cost(client: TestClient, demo_settin
         assert line["cost_usd"] == 0.0
         assert (line["input_tokens"], line["output_tokens"]) == (0, 0)
         assert (line["cache_read_tokens"], line["cache_write_tokens"]) == (0, 0)
+        assert (line["classify_input_tokens"], line["classify_output_tokens"]) == (0, 0)
+        assert line["prompt_versions"] == client.app.state.prompt_versions
 
 
 def test_texts_api_says_demo_mode(client: TestClient) -> None:
@@ -230,3 +232,37 @@ def test_real_mode_does_not_read_the_demo_answers(
     assert isinstance(created.state.llm, AnthropicLLM)
     assert created.state.answer_model == settings.model_answer
     assert created.state.no_answer_key == "reply-no-answer"
+
+
+def test_done_phrase_is_not_routed_yet_and_gets_the_demo_only_text(
+    client: TestClient, demo_settings: Settings
+) -> None:
+    # The mock classifies it as `done`; until Story 2.3 that is answered like `general`.
+    assert client.app.state.llm.classify("ขอบคุณค่ะ", [])[0] == "done"
+
+    events = _events(client, "ขอบคุณค่ะ")
+
+    assert events[0]["category"] == "general"
+    assert events[1] == {"type": "text", "delta": _demo_only(client)}
+    assert events[2]["sources"] == []
+    [line] = _log(demo_settings)
+    assert (line["outcome"], line["category"]) == ("no_answer", "general")
+
+
+def test_individual_assessment_in_demo_mode_has_no_answer_tokens(demo_settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("a guess")], category="individual_assessment")
+    client = TestClient(create_app(demo_settings, llm=llm))
+
+    events = _events(client, "จะได้วีซ่าไหม")
+
+    assert events[0]["category"] == "individual_assessment"
+    assert events[1] == {
+        "type": "text",
+        "delta": client.app.state.content.texts()["reply-embassy-decides"].th,
+    }
+    assert llm.calls == []
+    [line] = _log(demo_settings)
+    assert line["outcome"] == "fixed_reply"
+    # No answer call was made, so there is nothing to stand in for.
+    assert (line["input_tokens"], line["output_tokens"]) == (None, None)
+    assert line["cost_usd"] == 0.0

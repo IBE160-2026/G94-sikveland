@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from app.config import Settings
-from app.pipeline.cost import Prices, cost_usd
+from app.pipeline.cost import COST_DECIMALS, Prices, cost_usd
 from app.ports.llm import Category, Usage
 
-Outcome = Literal["answered", "no_answer", "error", "incomplete"]
+# `fixed_reply`: a category with a fixed text (e.g. `reply-embassy-decides`), no answer call.
+Outcome = Literal["answered", "no_answer", "fixed_reply", "error", "incomplete"]
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,16 @@ def answer_prices(settings: Settings) -> Prices:
     )
 
 
+def small_prices(settings: Settings) -> Prices:
+    """The prices of the small model (`PRICE_SMALL_*`), which classifies."""
+    return Prices(
+        input=settings.price_small_input,
+        output=settings.price_small_output,
+        cache_read=settings.price_small_cache_read,
+        cache_write=settings.price_small_cache_write,
+    )
+
+
 def request_line(
     *,
     outcome: Outcome,
@@ -66,16 +77,27 @@ def request_line(
     model: str,
     usage: Usage | None,
     prices: Prices,
+    classify_usage: Usage | None,
+    classify_prices: Prices,
     unknown_source_ids: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """The log line for one request. Token fields and `cost_usd` are `None` without `usage`.
+    """The log line for one request.
 
-    `prompt_versions` holds `answer` and, with Ollama, `citing`. `unknown_source_ids`
-    is how many cited ids were dropped as unknown (0 when none), `None` if the stream
-    ended before the sources were known.
+    `usage` is the answer call's (priced with `prices`), `classify_usage` the classify
+    call's (priced with `classify_prices`); the answer token fields are `None` without
+    `usage`, the classify ones without `classify_usage`. `cost_usd` is the sum of
+    both costs, `None` when neither call reported usage. `prompt_versions` holds
+    `answer`, `classifier` and, with Ollama, `citing`. `unknown_source_ids` is how
+    many cited ids were dropped as unknown (0 when none), `None` if the stream ended
+    before the sources were known.
     """
     moment = (now if now is not None else datetime.now(UTC)).astimezone(UTC)
+    costs = [
+        cost_usd(spent, priced)
+        for spent, priced in ((usage, prices), (classify_usage, classify_prices))
+        if spent is not None
+    ]
     return {
         "timestamp": moment.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "outcome": outcome,
@@ -86,6 +108,8 @@ def request_line(
         "output_tokens": usage.output_tokens if usage else None,
         "cache_read_tokens": usage.cache_read_tokens if usage else None,
         "cache_write_tokens": usage.cache_write_tokens if usage else None,
-        "cost_usd": cost_usd(usage, prices) if usage else None,
+        "classify_input_tokens": classify_usage.input_tokens if classify_usage else None,
+        "classify_output_tokens": classify_usage.output_tokens if classify_usage else None,
+        "cost_usd": round(sum(costs), COST_DECIMALS) if costs else None,
         "unknown_source_ids": unknown_source_ids,
     }

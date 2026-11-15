@@ -9,6 +9,7 @@ from typing import Any
 
 import anthropic
 
+from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message, parse_category
 from app.adapters.file_prompts import Prompt
 from app.config import Settings
 from app.ports.knowledge_base import KnowledgeBase, Source
@@ -22,6 +23,8 @@ from app.ports.llm import (
 )
 
 MAX_TOKENS_ANSWER = 32000
+# The reply is one short JSON object; the rest is room for the model's own thinking.
+MAX_TOKENS_CLASSIFY = 4096
 # Stop reasons that mean the answer is complete.
 _COMPLETE = frozenset({"end_turn", "stop_sequence"})
 
@@ -73,6 +76,32 @@ def build_answer_request(
     }
 
 
+def build_classify_request(
+    *,
+    model: str,
+    effort: str,
+    system: str,
+    question: str,
+    recent_history: Sequence[Exchange],
+) -> dict[str, Any]:
+    """Keyword arguments for `messages.create` (AD-5, AD-14).
+
+    Structured output (`output_config.format`) holds the reply to the category
+    schema; there are no tools, so no forced tool use. `thinking` is not sent:
+    the small model decides, and `effort` keeps it short.
+    """
+    return {
+        "model": model,
+        "max_tokens": MAX_TOKENS_CLASSIFY,
+        "system": system,
+        "messages": [{"role": "user", "content": classifier_user_message(question, recent_history)}],
+        "output_config": {
+            "effort": effort,
+            "format": {"type": "json_schema", "schema": CATEGORY_SCHEMA},
+        },
+    }
+
+
 class AnthropicLLM:
     """The real model. Building it needs no network: the SDK client connects on first call."""
 
@@ -81,11 +110,13 @@ class AnthropicLLM:
         settings: Settings,
         knowledge_base: KnowledgeBase,
         prompt: Prompt,
+        classifier_prompt: Prompt,
         client: Any = None,
     ) -> None:
         self._settings = settings
         self._knowledge_base = knowledge_base
         self._prompt = prompt
+        self._classifier_prompt = classifier_prompt
         key = settings.anthropic_api_key
         if client is None and key is not None:
             client = anthropic.Anthropic(api_key=key.get_secret_value())
@@ -122,7 +153,26 @@ class AnthropicLLM:
         yield _usage(message.usage)
 
     def classify(self, question: str, recent_history: Sequence[Exchange]) -> tuple[Category, Usage]:
-        raise NotImplementedError("classify comes with the classifier in Epic 2")
+        request = build_classify_request(
+            model=self._settings.model_small,
+            effort=self._settings.effort_small,
+            system=self._classifier_prompt.text,
+            question=question,
+            recent_history=recent_history,
+        )
+        try:
+            message = self._sdk_client().messages.create(**request)
+        except LLMError:
+            raise
+        except Exception as exc:
+            raise LLMError(f"classify call failed: {type(exc).__name__}") from exc
+
+        if message.stop_reason == "refusal":
+            raise LLMRefusalError("the model refused to classify")
+        if message.stop_reason not in _COMPLETE:
+            raise LLMError(f"the classification is incomplete (stop_reason: {message.stop_reason})")
+        text = "".join(block.text for block in message.content if block.type == "text")
+        return parse_category(text), _usage(message.usage)
 
     def translate(self, text: str) -> tuple[str, Usage]:
         raise NotImplementedError("translate comes with the English translation in Epic 4")

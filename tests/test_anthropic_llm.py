@@ -11,13 +11,21 @@ import httpx2
 import pytest
 from pydantic import SecretStr
 
-from app.adapters.anthropic_llm import MAX_TOKENS_ANSWER, AnthropicLLM, build_answer_request
+from app.adapters.anthropic_llm import (
+    MAX_TOKENS_ANSWER,
+    MAX_TOKENS_CLASSIFY,
+    AnthropicLLM,
+    build_answer_request,
+    build_classify_request,
+)
+from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message
 from app.adapters.file_prompts import Prompt
 from app.config import Settings
 from app.ports.knowledge_base import Source
 from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusalError, Usage
 
 PROMPT = Prompt(version="test-1", text="Answer in Thai from the documents.")
+CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
 
 
 def _source(sid: str) -> Source:
@@ -128,7 +136,7 @@ class StandInClient:
 
 
 def _llm(client: Any, settings: Settings) -> AnthropicLLM:
-    return AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, client=client)
+    return AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, client=client)
 
 
 # --- request shape ----------------------------------------------------------------
@@ -259,7 +267,7 @@ class UnsortedKnowledgeBase(StandInKnowledgeBase):
 
 def test_adapter_sorts_documents_by_id_for_request_and_citations(settings: Settings) -> None:
     client = StandInClient(events=[_text("x"), _cite(0)])
-    llm = AnthropicLLM(settings, UnsortedKnowledgeBase(), PROMPT, client=client)
+    llm = AnthropicLLM(settings, UnsortedKnowledgeBase(), PROMPT, CLASSIFIER, client=client)
 
     result = list(llm.answer("q", []))
 
@@ -348,13 +356,13 @@ def test_error_mid_stream_becomes_llm_error(settings: Settings, error: Exception
 
 
 def test_construction_needs_no_key_and_no_network(settings: Settings) -> None:
-    llm: LLMClient = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT)
+    llm: LLMClient = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
     assert llm is not None
 
 
 def test_sdk_client_is_built_once_from_the_key(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = settings.model_copy(update={"anthropic_api_key": SecretStr("sk-test")})
-    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT)
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
 
     client = llm._sdk_client()
     assert isinstance(client, anthropic.Anthropic)
@@ -375,16 +383,135 @@ def test_sdk_client_is_built_once_from_the_key(settings: Settings, monkeypatch: 
 
 
 def test_answer_without_key_raises_llm_error(settings: Settings) -> None:
-    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT)
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
 
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
         list(llm.answer("q", []))
 
 
-@pytest.mark.parametrize("method, args", [("classify", ("q", [])), ("translate", ("t",))])
-def test_later_methods_are_not_implemented_yet(settings: Settings, method: str, args: tuple) -> None:
+def test_translate_is_not_implemented_yet(settings: Settings) -> None:
     with pytest.raises(NotImplementedError):
-        getattr(AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT), method)(*args)
+        AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER).translate("t")
+
+
+# --- classify (Story 2.1) ---------------------------------------------------------------
+
+
+def _reply(text: str = '{"category": "general"}', stop_reason: str = "end_turn") -> SimpleNamespace:
+    usage = SimpleNamespace(
+        input_tokens=420, output_tokens=15, cache_read_input_tokens=None, cache_creation_input_tokens=None
+    )
+    content = [SimpleNamespace(type="thinking", thinking=""), SimpleNamespace(type="text", text=text)]
+    return SimpleNamespace(stop_reason=stop_reason, usage=usage, content=content)
+
+
+class StandInCreateClient:
+    """Records the `messages.create` request; returns `reply` or raises `error`."""
+
+    def __init__(self, reply: Any = None, error: Exception | None = None) -> None:
+        self.requests: list[dict[str, Any]] = []
+        self._reply = reply if reply is not None else _reply()
+        self._error = error
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs: Any) -> Any:
+        self.requests.append(kwargs)
+        if self._error is not None:
+            raise self._error
+        return self._reply
+
+
+def test_classify_request_uses_structured_output_and_no_tools_or_thinking() -> None:
+    history = [Exchange("ต้องใช้เอกสารอะไรบ้าง", "เอกสาร...")]
+
+    request = build_classify_request(
+        model="claude-haiku-5-5",
+        effort="low",
+        system=CLASSIFIER.text,
+        question="แล้วค่าธรรมเนียมเท่าไร",
+        recent_history=history,
+    )
+
+    assert request == {
+        "model": "claude-haiku-5-5",
+        "max_tokens": MAX_TOKENS_CLASSIFY,
+        "system": CLASSIFIER.text,
+        "messages": [{"role": "user", "content": classifier_user_message("แล้วค่าธรรมเนียมเท่าไร", history)}],
+        "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": CATEGORY_SCHEMA}},
+    }
+    assert CATEGORY_SCHEMA == {
+        "type": "object",
+        "properties": {"category": {"type": "string", "enum": ["general", "individual_assessment"]}},
+        "required": ["category"],
+        "additionalProperties": False,
+    }
+    assert not {"tools", "tool_choice", "thinking", "temperature", "top_p", "top_k", "betas"} & set(request)
+
+
+def test_classify_sends_the_small_model_and_effort(settings: Settings) -> None:
+    client = StandInCreateClient()
+    settings = settings.model_copy(update={"model_small": "small-x", "effort_small": "medium"})
+    history = [Exchange("q1", "a1")]
+
+    _llm(client, settings).classify("q2", history)
+
+    assert client.requests == [
+        build_classify_request(
+            model="small-x", effort="medium", system=CLASSIFIER.text, question="q2", recent_history=history
+        )
+    ]
+
+
+@pytest.mark.parametrize("category", ["general", "individual_assessment"])
+def test_classify_returns_the_category_and_usage(settings: Settings, category: str) -> None:
+    client = StandInCreateClient(_reply(json.dumps({"category": category})))
+
+    assert _llm(client, settings).classify("q", []) == (
+        category,
+        Usage(input_tokens=420, output_tokens=15, cache_read_tokens=0, cache_write_tokens=0),
+    )
+
+
+def test_classify_refusal_raises_refusal_error(settings: Settings) -> None:
+    client = StandInCreateClient(_reply("", stop_reason="refusal"))
+
+    with pytest.raises(LLMRefusalError):
+        _llm(client, settings).classify("q", [])
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "pause_turn"])
+def test_classify_cut_off_raises(settings: Settings, stop_reason: str) -> None:
+    client = StandInCreateClient(_reply('{"category": "gen', stop_reason=stop_reason))
+
+    with pytest.raises(LLMError) as raised:
+        _llm(client, settings).classify("q", [])
+    assert not isinstance(raised.value, LLMRefusalError)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['{"category": "out_of_scope"}', '{"category": "weather"}', '{"other": 1}', "[]", "not json", ""],
+)
+def test_classify_category_outside_the_set_raises(settings: Settings, text: str) -> None:
+    client = StandInCreateClient(_reply(text))
+
+    with pytest.raises(LLMError) as raised:
+        _llm(client, settings).classify("q", [])
+    assert "weather" not in str(raised.value)
+
+
+@pytest.mark.parametrize("error", SDK_ERRORS, ids=lambda e: type(e).__name__)
+def test_classify_sdk_error_becomes_llm_error(settings: Settings, error: Exception) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(StandInCreateClient(error=error), settings).classify("q", [])
+    assert raised.value.__cause__ is error
+
+
+def test_classify_without_key_raises_llm_error(settings: Settings) -> None:
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
+
+    with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
+        llm.classify("q", [])
 
 
 # --- the real SDK over a stand-in transport ------------------------------------------
@@ -524,3 +651,61 @@ def test_real_sdk_connection_error_becomes_llm_error(settings: Settings) -> None
     with pytest.raises(LLMError) as raised:
         list(_llm(_sdk_client(handler), settings).answer("q", []))
     assert isinstance(raised.value.__cause__, anthropic.APIConnectionError)
+
+
+def _json_reply(text: str, stop_reason: str = "end_turn") -> dict[str, Any]:
+    return {
+        "id": "msg_2",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-haiku-5-5",
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": stop_reason,
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": 380,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        },
+    }
+
+
+def test_real_sdk_classify_sends_structured_output_and_reads_the_category(settings: Settings) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=_json_reply('{"category": "individual_assessment"}'))
+
+    result = _llm(_sdk_client(handler), settings).classify("จะได้วีซ่าไหม", [Exchange("q0", "a0")])
+
+    assert result == (
+        "individual_assessment",
+        Usage(input_tokens=380, output_tokens=12, cache_read_tokens=0, cache_write_tokens=0),
+    )
+    body = sent[0]
+    assert body["model"] == settings.model_small
+    assert body["output_config"] == {
+        "effort": settings.effort_small,
+        "format": {"type": "json_schema", "schema": CATEGORY_SCHEMA},
+    }
+    assert body.get("stream", False) is False
+    assert not {"tools", "tool_choice", "thinking"} & set(body)
+
+
+def test_real_sdk_classify_refusal_raises_refusal_error(settings: Settings) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=_json_reply("", stop_reason="refusal"))
+
+    with pytest.raises(LLMRefusalError):
+        _llm(_sdk_client(handler), settings).classify("q", [])
+
+
+def test_real_sdk_classify_status_error_becomes_llm_error(settings: Settings) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(500, json={"type": "error", "error": {"type": "x", "message": "no"}})
+
+    with pytest.raises(LLMError) as raised:
+        _llm(_sdk_client(handler), settings).classify("q", [])
+    assert isinstance(raised.value.__cause__, anthropic.APIStatusError)

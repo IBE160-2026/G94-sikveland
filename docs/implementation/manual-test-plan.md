@@ -19,8 +19,8 @@ They do not cover:
 |---|---|---|
 | Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
-| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09 |
-| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10 |
+| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12 |
+| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12 |
 
 Start the app with `uv run uvicorn app.main:app` and open <http://127.0.0.1:8000>. For the narrow-screen checks, use the browser's device mode (F12, then Ctrl+Shift+M) and set the width to 360 px and then 320 px (NFR1: works from 360 px, no horizontal scrolling down to 320 px).
 
@@ -142,6 +142,19 @@ Mode: demo, 360 px and 320 px.
 
 Expected: (1) the new chat starts empty with the example questions; (2) the page opens an empty new chat, and the saved chats list both, newest first, with the first question and the date; (3) the chat is shown with its source links, the follow-up is added to it and it moves to the top of the list; (4) the same chat is shown; (5) cancel changes nothing, confirm removes it (deleting the open chat leaves an empty new chat), delete all empties the list. The new-chat and saved-chats buttons cannot be tapped while an answer is arriving; nothing scrolls sideways at 320 px with the list open; the privacy notice says chats are saved on this device; (6) the follow-up is answered, and the deleted chat does not come back: the list shows a new chat with only the follow-up; (7) the answer is shown; note what is saved (the chat while the window is open, nothing after it is closed, or nothing at all if storage is blocked) and that the page does not break.
 
+### MT-12 The embassy decides (Story 2.1)
+
+Mode: real key, then Ollama. Run every step in both modes.
+
+1. In a new chat, ask `จะได้วีซ่าไหม` (will I get the visa?).
+2. Ask `ฉันเคยถูกปฏิเสธวีซ่าเมื่อปีที่แล้ว ปีนี้จะได้ไหม` (I was refused last year, will I get it this time?).
+3. In a new chat, ask `ต้องใช้เอกสารอะไรบ้าง` (which documents do I need?), then `แล้วค่าธรรมเนียมเท่าไร` (and how much is the fee?).
+4. Ask `จะได้วีซ่าไหม แล้วต้องใช้เอกสารอะไรบ้าง` (will I get the visa, and which documents do I need?).
+5. In a new chat, ask `ต้องใช้เอกสารอะไรบ้าง` (which documents do I need?), then `แล้วปีนี้จะได้ไหม` (and will I get it this year?).
+6. Open `data/requests.jsonl` and read the last lines.
+
+Expected: (1, 2) the fixed "only the embassy decides" text, no source links, no estimate of the chances; (3) both get cited answers with source links, the follow-up in the context of the first; (4) a cited answer about the documents, not the fixed text, which gives no estimate of the applicant's chances and, if it mentions them, says the embassy decides (FR3); (5) a cited answer to the first question, then the fixed "only the embassy decides" text for the follow-up; (6) lines for (1, 2) and the follow-up in (5) have `category: "individual_assessment"`, `outcome: "fixed_reply"` and null answer tokens; every line has `classify_input_tokens`, `classify_output_tokens` and `prompt_versions.classifier`; with a real key `cost_usd` includes the classify call, with Ollama it is 0.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -159,3 +172,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-09 | | | Not run | Needs a real key and a phone |
 | 2026-11-15 | MT-10 | Wannapa Sikveland | Browser, branch `integration`, `LLM_PROVIDER=ollama` (qwen3.5:9b) | Pass | Reported by the tester as fine; tested together with saved chats |
 | 2026-11-15 | MT-11 | Wannapa Sikveland | Browser, branch `integration` | Pass | Reported by the tester as fine; tested together with Ollama |
+| | MT-12 | | | Not run | Needs a real key, and Ollama |
