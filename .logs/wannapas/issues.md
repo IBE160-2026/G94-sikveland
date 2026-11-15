@@ -12,7 +12,7 @@
 - [x] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Check that the first GitHub Actions CI run passes (resolved 2026-11-03: passes after pinning setup-uv@v10.3.3)
 - [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 2.3: resolve DATABASE_PATH against the project root (deferred-work.md)
 - [x] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — Story 1.5: test for layer/import rules, clear ANTHROPIC_AUTH_TOKEN in tests (deferred-work.md) (resolved 2026-11-14: tests/test_layering.py and conftest.py in Story 1.5)
-- [ ] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md
+- [x] 2026-11-03 [story-1-1-project-skeleton](996-2026-11-03-21-36-12-story-1-1-project-skeleton.md) — README.md links to the deleted docs/planning/epics-and-stories.md (resolved 2026-11-15: README rewritten, link removed)
 - [ ] 2026-11-12 [story-1-2-chat-page](995-2026-11-12-22-58-24-story-1-2-chat-page.md) — Story 1.6: browser-level test for the chat page JavaScript (render, tap-to-fill, retry, streaming) (deferred-work.md)
 - [x] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Story 1.4: adviser reviews the changed Thai privacy notice (names and addresses are not removed) (resolved 2026-11-14: adviser approved the new notice and reminder; committed in 4da7990)
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: response-time limit for NFR1 and a cost target for NFR6
@@ -20,7 +20,7 @@
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Ask Bård whether technology.md (Pytagoras Forlag's website) belongs in this repository
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: deadline for the finished app (only part 1, 2026-11-15, is known)
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Working core flow by 2026-11-15 (part 1 = the app, 70 %): knowledge base, Claude connection, streamed answer with sources, privacy filter, demo mode
-- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Rewrite README for the examiner before 2026-11-15 (what it is, install, run, .env, demo mode, tests, folders, links to process docs)
+- [x] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Rewrite README for the examiner before 2026-11-15 (what it is, install, run, .env, demo mode, tests, folders, links to process docs) (resolved 2026-11-15: see [readme-for-examiner](985-2026-11-15-09-34-23-readme-for-examiner.md))
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Add a linter/formatter (e.g. ruff) to the project and CI
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Write a short manual test plan (real phone, Facebook's in-app browser)
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Decide what to do with technology.md, which describes another app (grading-guide warning sign)
