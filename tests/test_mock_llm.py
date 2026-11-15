@@ -14,9 +14,10 @@ from app.adapters.mock_llm import MockLLM, done_key, normalise
 from app.main import CONTENT_FILE, DEMO_ANSWERS_FILE, KNOWLEDGE_BASE_DIR
 from app.ports.content import ExampleQuestion, FixedText
 from app.ports.llm import AnswerChunk, LLMClient, Usage
+from tests.fakes.content import committed_checklists
 
 ZERO = Usage(0, 0, 0, 0)
-CONTENT = load_content(CONTENT_FILE, "adviser@example.org")
+CONTENT = load_content(CONTENT_FILE, "adviser@example.org", committed_checklists())
 EXAMPLES = tuple(CONTENT.example_questions())
 DEMO = load_demo_answers(DEMO_ANSWERS_FILE, EXAMPLES, load_knowledge_base(KNOWLEDGE_BASE_DIR))
 MOCK_FILE = Path(__file__).resolve().parent.parent / "app" / "adapters" / "mock_llm.py"

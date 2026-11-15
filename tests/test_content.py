@@ -7,6 +7,7 @@ import yaml
 from app.adapters.file_content import ContentError, load_content
 from app.main import CONTENT_FILE
 from app.ports.content import REQUIRED_TEXT_KEYS
+from tests.fakes.content import committed_checklists
 
 CONTACT = "adviser@example.com"
 
@@ -30,7 +31,7 @@ def _write(tmp_path: Path, data: object) -> Path:
 
 
 def _load(tmp_path: Path, data: object):
-    return load_content(_write(tmp_path, data), CONTACT)
+    return load_content(_write(tmp_path, data), CONTACT, committed_checklists())
 
 
 def test_valid_content_loads_and_fills_contact(tmp_path: Path) -> None:
@@ -44,7 +45,7 @@ def test_valid_content_loads_and_fills_contact(tmp_path: Path) -> None:
 
 
 def test_committed_content_file_loads() -> None:
-    store = load_content(CONTENT_FILE, CONTACT)
+    store = load_content(CONTENT_FILE, CONTACT, committed_checklists())
 
     ids = [q.id for q in store.example_questions()]
     assert ids == ["tourist-visa-documents", "how-to-start", "visa-fee", "processing-time"]
@@ -132,7 +133,7 @@ def test_duplicate_yaml_text_key_is_rejected(tmp_path: Path) -> None:
     path.write_text(body, encoding="utf-8")
 
     with pytest.raises(ContentError, match="duplicate key 'error'"):
-        load_content(path, CONTACT)
+        load_content(path, CONTACT, committed_checklists())
 
 
 def test_leftover_placeholder_names_key(tmp_path: Path) -> None:
@@ -164,7 +165,7 @@ def test_mistyped_placeholder_in_example_question_names_id(tmp_path: Path) -> No
 
 
 def test_contact_with_braces_is_not_a_leftover_placeholder(tmp_path: Path) -> None:
-    store = load_content(_write(tmp_path, _valid()), "{ODD}")
+    store = load_content(_write(tmp_path, _valid()), "{ODD}", committed_checklists())
 
     assert store.texts()["reply-no-answer"].th == "ติดต่อ {ODD}"
 
@@ -192,17 +193,17 @@ def test_non_utf8_file_is_a_content_error(tmp_path: Path) -> None:
     path.write_text(yaml.safe_dump(_valid(), allow_unicode=True), encoding="utf-16")
 
     with pytest.raises(ContentError, match="cannot read"):
-        load_content(path, CONTACT)
+        load_content(path, CONTACT, committed_checklists())
 
 
 def test_missing_file_and_bad_yaml(tmp_path: Path) -> None:
     with pytest.raises(ContentError, match="cannot read"):
-        load_content(tmp_path / "missing.yaml", CONTACT)
+        load_content(tmp_path / "missing.yaml", CONTACT, committed_checklists())
 
     path = tmp_path / "bad.yaml"
     path.write_text("texts: [unclosed", encoding="utf-8")
     with pytest.raises(ContentError, match="invalid YAML"):
-        load_content(path, CONTACT)
+        load_content(path, CONTACT, committed_checklists())
 
 
 def test_app_refuses_to_start_with_invalid_content(

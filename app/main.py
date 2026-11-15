@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.adapters.anthropic_llm import AnthropicLLM
-from app.adapters.file_content import load_content
+from app.adapters.file_content import load_checklists, load_content
 from app.adapters.file_demo_answers import load_demo_answers
 from app.adapters.file_knowledge_base import load_knowledge_base
 from app.adapters.file_prompts import load_prompt
@@ -19,10 +19,11 @@ from app.adapters.sqlite_feedback import SqliteFeedbackStore
 from app.config import ROOT, Settings, get_settings
 from app.pipeline.cost import Prices
 from app.ports.llm import LLMClient
-from app.web import chat, feedback, health, texts
+from app.web import chat, checklists, feedback, health, texts
 from app.web.request_log import RequestLog, answer_prices, small_prices
 
 CONTENT_FILE = ROOT / "content" / "texts.yaml"
+CHECKLISTS_FILE = ROOT / "content" / "checklists.yaml"
 DEMO_ANSWERS_FILE = ROOT / "content" / "demo-answers.yaml"
 KNOWLEDGE_BASE_DIR = ROOT / "knowledge-base"
 ANSWER_PROMPT_FILE = ROOT / "prompts" / "answer-system.md"
@@ -39,7 +40,8 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     """Build the app. Tests pass their own settings and a fake `llm`; uvicorn uses `.env`.
 
     Raises `ContentError` if `content/texts.yaml` is invalid, so the app never
-    starts with missing or broken fixed texts, `KnowledgeBaseError` if
+    starts with missing or broken fixed texts, or if `content/checklists.yaml` is
+    invalid or cites a source that is not in the knowledge base, `KnowledgeBaseError` if
     `knowledge-base/sources.yaml` or a source snapshot is missing or invalid, and
     `PromptError` if the answer or the classifier prompt is missing or malformed.
     Both are logged as prompt versions `answer` and `classifier`. The knowledge
@@ -63,8 +65,10 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     settings = settings if settings is not None else get_settings()
     app = FastAPI(title="Norway Visa Guide For Thai")
     app.state.settings = settings
-    app.state.content = load_content(CONTENT_FILE, settings.adviser_contact)
+    # The knowledge base first: the checklists' source ids are checked against it.
     app.state.knowledge_base = load_knowledge_base(KNOWLEDGE_BASE_DIR)
+    checklist_items = load_checklists(CHECKLISTS_FILE, app.state.knowledge_base, settings.adviser_contact)
+    app.state.content = load_content(CONTENT_FILE, settings.adviser_contact, checklist_items)
     # Loaded even with a given `llm`, so a broken prompt file always stops startup.
     app.state.answer_prompt = load_prompt(ANSWER_PROMPT_FILE)
     app.state.classifier_prompt = load_prompt(CLASSIFIER_PROMPT_FILE)
@@ -123,6 +127,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     app.include_router(texts.router)
     app.include_router(chat.router)
     app.include_router(feedback.router)
+    app.include_router(checklists.router)
     # Mounted last so every /api/* route is matched before the static files.
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

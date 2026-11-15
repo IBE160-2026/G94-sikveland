@@ -1,4 +1,4 @@
-"""Fixed texts and example questions: the port every reader of `content/` uses."""
+"""Fixed texts, example questions and checklists: the port every reader of `content/` uses."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -43,6 +43,10 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
 )
 
 
+# The visit purposes that have a checklist (AD-11), in the order the page offers them.
+VISIT_PURPOSES: tuple[str, ...] = ("tourism", "family", "friends")
+
+
 @dataclass(frozen=True)
 class FixedText:
     """One fixed text in Thai, with the stored English version."""
@@ -60,9 +64,27 @@ class ExampleQuestion:
     en: str
 
 
+@dataclass(frozen=True)
+class ChecklistItem:
+    """One document on a visit purpose's checklist (AD-11).
+
+    `id` is stable: the page keeps ticks by it, so it is never reused for other content.
+    `source_id` is the id of the knowledge-base source the item comes from.
+    """
+
+    id: str
+    th: str
+    en: str
+    source_id: str
+
+
 class ContentStore(Protocol):
     """Validated fixed texts, with `{ADVISER_CONTACT}` already filled in."""
 
     def texts(self) -> Mapping[str, FixedText]: ...
 
     def example_questions(self) -> Sequence[ExampleQuestion]: ...
+
+    def checklists(self) -> Mapping[str, Sequence[ChecklistItem]]:
+        """Visit purpose → its items in file order; one entry per `VISIT_PURPOSES` value."""
+        ...

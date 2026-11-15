@@ -72,3 +72,9 @@
 - source_spec: `docs/implementation/spec-2-3-feedback-question-at-the-end.md`
   summary: Extend the deferred browser-level page tests to Story 2.3: the Yes/No flow in `app.js` (follow-up or thanks text after a 204, `endChat` after Yes and a new chat at the next question, buttons back with the error text after a failed POST, controls blocked while a feedback POST is in flight). The pure parts in `history.js` are tested in Node; the DOM wiring is pinned only by source-text checks.
   evidence: Review of Story 2.3 (verification gap #1): swapping `element.append(group, note)` to `(note, group)` makes `group.nextElementSibling` null, so no text shows and Yes never ends the chat, and every test stays green. A one-off headless run passed on 2026-11-15 but is not in CI; MT-14 covers it by hand.
+- source_spec: `docs/implementation/spec-3-1-checklists-per-visit-purpose.md`
+  summary: Story 3.2: decide how conditional checklist items ("if employed", "if under 18", "if relevant") are shown, so an applicant they do not apply to can still reach a fully ticked list (e.g. a `condition` flag or field per item, or a "not relevant" state on the page).
+  evidence: Review of Story 3.1 (blind #5): about half the items are conditional and `ChecklistItem` has no marker for it; cheaper to add before ticks exist in real use.
+- source_spec: `docs/implementation/spec-3-1-checklists-per-visit-purpose.md`
+  summary: Story 4.1 ("Show English"): checklist items store `en` but `GET /api/checklists/{purpose}` serves only Thai; decide how the English reaches the page (serve `en`, or let `/api/translate` look up stored checklist English).
+  evidence: Review of Story 3.1 (blind #10): nothing in the spec, README or epic context says how 4.1 reaches checklist English.

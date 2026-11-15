@@ -13,10 +13,13 @@ from app.adapters.file_demo_answers import DemoContentError, load_demo_answers
 from app.adapters.file_knowledge_base import load_knowledge_base
 from app.main import CONTENT_FILE, DEMO_ANSWERS_FILE, KNOWLEDGE_BASE_DIR
 from app.ports.content import ExampleQuestion
+from tests.fakes.content import committed_checklists
 
 THAI = re.compile("[\u0e00-\u0e7f]")
 KB = load_knowledge_base(KNOWLEDGE_BASE_DIR)
-EXAMPLES = tuple(load_content(CONTENT_FILE, "adviser@example.org").example_questions())
+EXAMPLES = tuple(
+    load_content(CONTENT_FILE, "adviser@example.org", committed_checklists()).example_questions()
+)
 EXAMPLE = ExampleQuestion(id="visa-fee", th="ค่าธรรมเนียมเท่าไร", en="How much is the fee?")
 SOURCE = "udi-fees"
 

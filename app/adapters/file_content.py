@@ -1,4 +1,4 @@
-"""`ContentStore` read from `content/texts.yaml`, validated once at startup."""
+"""`ContentStore` read from `content/texts.yaml` and `content/checklists.yaml`, validated once at startup."""
 
 import re
 from collections.abc import Mapping, Sequence
@@ -8,7 +8,8 @@ from typing import Any
 
 import yaml
 
-from app.ports.content import REQUIRED_TEXT_KEYS, ExampleQuestion, FixedText
+from app.ports.content import REQUIRED_TEXT_KEYS, VISIT_PURPOSES, ChecklistItem, ExampleQuestion, FixedText
+from app.ports.knowledge_base import KnowledgeBase
 
 LANGUAGES = ("th", "en")
 CONTACT_PLACEHOLDER = "{ADVISER_CONTACT}"
@@ -38,11 +39,24 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 
 
 class FileContentStore:
-    """Validated texts and example questions, held in memory."""
+    """Validated texts, example questions and checklists, held in memory."""
 
-    def __init__(self, texts: Mapping[str, FixedText], questions: Sequence[ExampleQuestion]) -> None:
+    def __init__(
+        self,
+        texts: Mapping[str, FixedText],
+        questions: Sequence[ExampleQuestion],
+        checklists: Mapping[str, Sequence[ChecklistItem]],
+    ) -> None:
+        # Exactly one checklist per visit purpose, so a known purpose can never 404.
+        if set(checklists) != set(VISIT_PURPOSES) or len(checklists) != len(VISIT_PURPOSES):
+            raise ContentError(
+                f"checklists must be given for exactly the visit purposes {', '.join(VISIT_PURPOSES)}"
+            )
         self._texts = MappingProxyType(dict(texts))
         self._questions = tuple(questions)
+        self._checklists = MappingProxyType(
+            {purpose: tuple(checklists[purpose]) for purpose in VISIT_PURPOSES}
+        )
 
     def texts(self) -> Mapping[str, FixedText]:
         return self._texts
@@ -50,18 +64,20 @@ class FileContentStore:
     def example_questions(self) -> Sequence[ExampleQuestion]:
         return self._questions
 
+    def checklists(self) -> Mapping[str, Sequence[ChecklistItem]]:
+        return self._checklists
 
-def load_content(path: Path, adviser_contact: str) -> FileContentStore:
-    """Read, validate and fill in the content file. Raises `ContentError` on any problem."""
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ContentError(f"cannot read content file {path}: {exc}") from exc
-    try:
-        data = yaml.load(raw, Loader=_UniqueKeyLoader)
-    except yaml.YAMLError as exc:
-        raise ContentError(f"invalid YAML in {path}: {exc}") from exc
 
+def load_content(
+    path: Path,
+    adviser_contact: str,
+    checklists: Mapping[str, Sequence[ChecklistItem]],
+) -> FileContentStore:
+    """Read, validate and fill in the content file. Raises `ContentError` on any problem.
+
+    `checklists` comes from `load_checklists`; it must hold exactly the `VISIT_PURPOSES`.
+    """
+    data = _read_yaml(path, "content file")
     if not isinstance(data, dict):
         raise ContentError("content file must be a mapping with 'texts' and 'example-questions'")
     unknown = sorted(set(data) - _TOP_LEVEL_KEYS, key=str)
@@ -73,7 +89,80 @@ def load_content(path: Path, adviser_contact: str) -> FileContentStore:
 
     texts = _load_texts(data["texts"], adviser_contact)
     questions = _load_questions(data["example-questions"], adviser_contact)
-    return FileContentStore(texts, questions)
+    return FileContentStore(texts, questions, checklists)
+
+
+def load_checklists(
+    path: Path, knowledge_base: KnowledgeBase, adviser_contact: str
+) -> Mapping[str, tuple[ChecklistItem, ...]]:
+    """Read and validate `content/checklists.yaml` (AD-11). Raises `ContentError` on any problem.
+
+    The file maps each visit purpose in `VISIT_PURPOSES`, no more and no fewer, to a
+    non-empty list of items `{id, th, en, source}`. Item ids are kebab-case and unique
+    within their checklist (the same id may appear in another checklist), and every
+    `source` must be a source id in the knowledge base.
+    """
+    data = _read_yaml(path, "checklists file")
+    if not isinstance(data, dict):
+        raise ContentError("checklists file must be a mapping of visit purpose to a list of items")
+    unknown = sorted(str(k) for k in data if k not in VISIT_PURPOSES)
+    if unknown:
+        raise ContentError(f"unknown visit purpose(s) in checklists: {', '.join(unknown)}")
+    missing = [purpose for purpose in VISIT_PURPOSES if purpose not in data]
+    if missing:
+        raise ContentError(f"missing checklist(s) for visit purpose(s): {', '.join(missing)}")
+    return MappingProxyType(
+        {
+            purpose: _load_checklist(purpose, data[purpose], knowledge_base, adviser_contact)
+            for purpose in VISIT_PURPOSES
+        }
+    )
+
+
+def _load_checklist(
+    purpose: str, section: object, knowledge_base: KnowledgeBase, adviser_contact: str
+) -> tuple[ChecklistItem, ...]:
+    if not isinstance(section, list) or not section:
+        raise ContentError(f"checklist {purpose!r} must be a non-empty list of {{id, th, en, source}}")
+
+    items: list[ChecklistItem] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(section):
+        if not isinstance(entry, dict):
+            raise ContentError(
+                f"checklist {purpose!r} item #{index + 1} must be a mapping with id, th, en, source"
+            )
+        item_id = entry.get("id")
+        if not isinstance(item_id, str) or not _KEBAB_CASE.fullmatch(item_id):
+            raise ContentError(
+                f"checklist {purpose!r} item #{index + 1} needs a kebab-case 'id', got {item_id!r}"
+            )
+        if item_id in seen:
+            raise ContentError(f"checklist {purpose!r} has duplicate item id {item_id!r}")
+        seen.add(item_id)
+        where = f"checklist {purpose!r} item {item_id!r}"
+        _reject_extra_fields(entry, {"id", "source", *LANGUAGES}, where)
+        th, en = (_language(entry, lang, where, adviser_contact) for lang in LANGUAGES)
+        source_id = entry.get("source")
+        if not isinstance(source_id, str) or not source_id:
+            raise ContentError(f"{where} needs a 'source' id from knowledge-base/sources.yaml")
+        try:
+            knowledge_base.source(source_id)
+        except KeyError:
+            raise ContentError(f"{where} cites unknown source {source_id!r}") from None
+        items.append(ChecklistItem(id=item_id, th=th, en=en, source_id=source_id))
+    return tuple(items)
+
+
+def _read_yaml(path: Path, what: str) -> object:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ContentError(f"cannot read {what} {path}: {exc}") from exc
+    try:
+        return yaml.load(raw, Loader=_UniqueKeyLoader)
+    except yaml.YAMLError as exc:
+        raise ContentError(f"invalid YAML in {path}: {exc}") from exc
 
 
 def _load_texts(section: object, adviser_contact: str) -> dict[str, FixedText]:

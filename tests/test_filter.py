@@ -7,6 +7,7 @@ import app.pipeline.filter as filter_module
 from app.adapters.file_content import load_content
 from app.main import CONTENT_FILE
 from app.pipeline.filter import REMOVED_MARKER, FilterResult, remove_personal_info
+from tests.fakes.content import committed_checklists
 
 FILTER_FILE = Path(filter_module.__file__)
 
@@ -198,7 +199,7 @@ def test_module_is_pure() -> None:
 
 
 def test_committed_privacy_texts_say_phone_numbers_are_not_removed() -> None:
-    texts = load_content(CONTENT_FILE, "adviser@example.com").texts()
+    texts = load_content(CONTENT_FILE, "adviser@example.com", committed_checklists()).texts()
 
     notice = texts["privacy-notice"]
     reminder = texts["personal-info-reminder"]

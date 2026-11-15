@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-03-2026 21:23
-last_updated: 11-15-2026 15:20
+last_updated: 11-15-2026 15:45
 project: G94-sikveland
 project_key: NOKEY
 tracking_system: file-system
@@ -52,8 +52,8 @@ development_status:
   2-3-feedback-question-at-the-end-of-the-conversation: review
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-checklists-per-visit-purpose: backlog
+  epic-3: in-progress
+  3-1-checklists-per-visit-purpose: review
   3-2-tick-off-documents-and-the-ticks-are-kept: backlog
   3-3-open-the-checklist-from-the-chat: backlog
   epic-3-retrospective: optional

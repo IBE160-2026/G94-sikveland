@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app
 from app.ports.content import REQUIRED_TEXT_KEYS
+from tests.fakes.content import committed_checklists
 
 
 def _get_texts(settings: Settings) -> dict:
@@ -110,7 +111,7 @@ def test_feedback_texts_have_their_english_meaning(settings: Settings) -> None:
     from app.adapters.file_content import load_content
     from app.main import CONTENT_FILE
 
-    texts = load_content(CONTENT_FILE, settings.adviser_contact).texts()
+    texts = load_content(CONTENT_FILE, settings.adviser_contact, committed_checklists()).texts()
 
     assert texts["feedback-question"].en == "Have you received all the information you need?"
     assert texts["feedback-follow-up"].en.startswith("What would you still like to know?")

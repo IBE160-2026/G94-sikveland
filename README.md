@@ -27,7 +27,7 @@ Ferdig og testet:
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 
-Ikke laget ennå: sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
+Under arbeid: sjekklister for dokumenter (Epic 3). Faste sjekklister per besøksformål og API-et som leverer dem er laget (Story 3.1); siden som viser dem og avkrysningene kommer i Story 3.2. Ikke laget ennå: knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
 ## Kom i gang
 
@@ -180,6 +180,12 @@ Det skriver `(prosent Ja, antall samtaler)`, f.eks. `(85.0, 20)`. Uten svar i ta
 sqlite3 data/feedback.sqlite3 "SELECT ROUND(100.0 * SUM(answer = 'yes') / COUNT(*), 1) AS prosent_ja, COUNT(*) AS samtaler FROM (SELECT f.answer FROM feedback f WHERE f.rowid = (SELECT MIN(rowid) FROM feedback WHERE conversation_id = f.conversation_id))"
 ```
 
+### Sjekklister for dokumenter
+
+Hvert besøksformål har én fast dokumentsjekkliste i [`content/checklists.yaml`](content/checklists.yaml): `tourism` (turisme), `family` (besøke familie) og `friends` (besøke venner). Listene er skrevet på forhånd ut fra ambassadens sjekkliste og UDIs sider, og lages aldri av KI-en. Hvert punkt har en fast `id`, tekst på thai og engelsk, og en kilde fra `knowledge-base/sources.yaml`. Familie- og vennelista har med sponsorskjemaet og invitasjonsbrevet, som personen i Norge fyller ut eller skriver, med lenke til UDI, og familielista sier at ambassaden har en egen sjekkliste når familiemedlemmet er borger av et EU/EØS-land. Det er UDIs krav som gjelder (FR6). For søkere i Thailand kommer de som ambassadens offisielle sjekkliste, som søkeren skriver ut, krysser av, signerer og leverer hos VFS. Appens sjekkliste leder søkeren dit gjennom et eget punkt (`signed-embassy-checklist`) med lenke til den. De thai tekstene er utkast til rådgiveren har gått dem gjennom mot ambassadens sjekkliste (NFR8).
+
+`GET /api/checklists/{purpose}` gir `{purpose, items: [{id, text, source: {title, url}}]}` med thai tekst, i samme rekkefølge som i fila, uten noe KI-kall (også i demomodus). Ukjent formål gir 404 med `{"error": {"code": "unknown_purpose", ...}}`. Appen starter ikke hvis fila mangler et formål, har et ukjent formål eller felt, et punkt uten thai eller engelsk tekst, en `id` som ikke er kebab-case eller som står to ganger i samme liste, eller en kilde som ikke finnes. En `id` brukes aldri om igjen til annet innhold, fordi avkrysningene på søkerens telefon (Story 3.2) lagres per `id`.
+
 ### Oppdatere kunnskapsbasen
 
 ```sh
@@ -193,7 +199,7 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 | Mappe | Innhold |
 |---|---|
 | `app/` | Appen: `main.py` (oppstart), `web/` (API-endepunkter), `pipeline/` (filter, svarflyt, kostnad), `ports/` og `adapters/` (Claude, Ollama, demo, filer), `static/` (chatsiden) |
-| `content/` | Faste tekster på thai og engelsk, og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
+| `content/` | Faste tekster på thai og engelsk, dokumentsjekklistene og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
 | `prompts/` | Systemprompten for svar, prompten som sorterer spørsmålene, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
 | `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen |

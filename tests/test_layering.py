@@ -12,6 +12,7 @@ OLLAMA_ADAPTER = APP / "adapters" / "ollama_llm.py"
 SQLITE_FEEDBACK_ADAPTER = APP / "adapters" / "sqlite_feedback.py"
 FEEDBACK_PORT = APP / "ports" / "feedback.py"
 FEEDBACK_ROUTE = APP / "web" / "feedback.py"
+CHECKLISTS_ROUTE = APP / "web" / "checklists.py"
 
 
 def _imports(path: Path) -> set[str]:
@@ -76,6 +77,15 @@ def test_web_uses_ports_never_adapters() -> None:
     }
     assert {path: names for path, names in offenders.items() if names} == {}
     assert "app.ports.feedback" in _imports(FEEDBACK_ROUTE)
+
+
+def test_checklists_route_never_reaches_the_llm_or_pipeline() -> None:
+    # Checklists are fixed data (AD-11): served from the content and knowledge-base ports only.
+    imports = _imports(CHECKLISTS_ROUTE)
+    assert {"app.ports.content", "app.ports.knowledge_base"} <= imports
+    assert not {
+        name for name in imports if name.startswith(("app.ports.llm", "app.pipeline", "app.adapters"))
+    }
 
 
 def test_sqlite_feedback_adapter_implements_the_port_only() -> None:
