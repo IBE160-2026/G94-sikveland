@@ -107,9 +107,9 @@ def answer_question(
     called (AD-4); `Meta.personal_info_removed` describes the new question only.
     Then the classify call sorts the cleaned question, given the last
     `CLASSIFY_HISTORY_EXCHANGES` cleaned exchanges (AD-1, AD-5). A category in
-    `fixed_replies` gets that text and no answer call. Every other category is
-    answered like `general` and reported as `general` (the categories of later
-    stories are not routed yet). A classify error, or a category outside the
+    `fixed_replies` gets that text and no answer call (`done` gets the feedback
+    question). Any other category is answered like `general` and reported as
+    `general`. A classify error, or a category outside the
     closed set, ends in `Failed` before `Meta`: nothing is answered.
     Answer text is held back until the first cited chunk, then released (AD-7).
     With no citation at the end, the held text is dropped and `no_answer_text`

@@ -36,10 +36,16 @@
 
   let texts = {};
   let answering = false;
+  // True while POST /api/feedback is in flight (see setSendingFeedback).
+  let sendingFeedback = false;
   // The chat on screen. `id` is null until its first exchange is stored, so an empty
   // new chat never becomes a list item. Each exchange: {question, answer, sources, reminder};
   // only {question, answer} of the last 10 is sent.
   let current = emptyChat();
+  // The feedback id of this chat when sessionStorage is blocked (kept by history.js).
+  const feedbackMemory = { id: null };
+  // True after "Yes": the chat stays on screen, and the next question starts a new chat.
+  let chatEnded = false;
 
   // Some browsers throw on merely reading `window.localStorage` when storage is blocked.
   function storage(name) {
@@ -147,6 +153,23 @@
 
   function setAnswering(value) {
     answering = value;
+    // Screen readers wait for the whole reply instead of announcing every fragment.
+    messages.setAttribute("aria-busy", value ? "true" : "false");
+    setControlsDisabled(busy());
+  }
+
+  // While a feedback answer is being sent, nothing else can start either: a late "Yes"
+  // must end the chat it belongs to, not one opened or asked in the meantime.
+  function setSendingFeedback(value) {
+    sendingFeedback = value;
+    setControlsDisabled(busy());
+  }
+
+  function busy() {
+    return answering || sendingFeedback;
+  }
+
+  function setControlsDisabled(value) {
     question.disabled = value;
     send.disabled = value;
     newChatButton.disabled = value;
@@ -157,9 +180,11 @@
     for (const button of historyPanel.querySelectorAll("button")) {
       button.disabled = value;
     }
+    // Only buttons not yet answered; an answered or closed question stays disabled.
+    for (const button of messages.querySelectorAll('.feedback[data-state="open"] button')) {
+      button.disabled = value;
+    }
     form.setAttribute("aria-busy", value ? "true" : "false");
-    // Screen readers wait for the whole reply instead of announcing every fragment.
-    messages.setAttribute("aria-busy", value ? "true" : "false");
   }
 
   function nearBottom() {
@@ -236,14 +261,143 @@
         note.textContent = texts["error"];
         element.appendChild(note);
       },
+      // Yes/No buttons under a live feedback question (never on a replayed chat).
+      feedback: function () {
+        addFeedbackButtons(element);
+      },
     };
+  }
+
+  // The Yes and No buttons, and below them the text that follows an answer. Only the
+  // latest feedback question can be answered: earlier unanswered buttons close.
+  function addFeedbackButtons(element) {
+    closeFeedbackGroups();
+    const group = document.createElement("div");
+    group.className = "feedback";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", texts["feedback-question"]);
+    group.dataset.state = "open";
+    const buttons = [];
+    for (const answer of ["yes", "no"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "feedback-button";
+      button.dataset.answer = answer;
+      button.textContent = texts["feedback-" + answer];
+      button.addEventListener("click", function () {
+        sendFeedback(group, buttons, answer);
+      });
+      buttons.push(button);
+      group.appendChild(button);
+    }
+    // Announced when it appears (role status), like the rest of the conversation.
+    const note = document.createElement("p");
+    note.className = "feedback-note";
+    note.setAttribute("role", "status");
+    note.hidden = true;
+    element.append(group, note);
+  }
+
+  // Every feedback group not closed yet (open or sending) closes for good; a request
+  // still in flight for one of them is then ignored when it ends.
+  function closeFeedbackGroups() {
+    for (const group of messages.querySelectorAll('.feedback:not([data-state="closed"])')) {
+      group.dataset.state = "closed";
+      for (const button of group.querySelectorAll("button")) {
+        button.disabled = true;
+      }
+    }
+  }
+
+  // POST /api/feedback. The buttons are disabled from the first tap, so one tap is one row,
+  // and nothing else can start until the request ends. On failure the buttons come back
+  // with the fixed error text, so the applicant can tap again.
+  async function sendFeedback(group, buttons, answer) {
+    if (group.dataset.state !== "open" || busy()) {
+      return;
+    }
+    group.dataset.state = "sending";
+    for (const button of buttons) {
+      button.disabled = true;
+    }
+    const reply = group.parentElement;
+    const failed = reply.querySelector(".feedback-error");
+    if (failed) {
+      failed.remove();
+    }
+    setSendingFeedback(true);
+    let stored = false;
+    try {
+      const id = Chats.conversationId(session, feedbackMemory, newConversationId);
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(Chats.feedbackBody(id, answer)),
+      });
+      if (response.status !== 204) {
+        throw new Error("POST /api/feedback failed: " + response.status);
+      }
+      stored = true;
+    } catch (error) {
+      console.error(error);
+    }
+    setSendingFeedback(false);
+    if (group.dataset.state !== "sending") {
+      return; // closed meanwhile: a late result changes nothing
+    }
+    if (!stored) {
+      group.dataset.state = "open";
+      for (const button of buttons) {
+        button.disabled = busy();
+      }
+      const note = document.createElement("p");
+      note.className = "error-text feedback-error";
+      note.setAttribute("role", "alert");
+      note.textContent = texts["error"];
+      reply.appendChild(note);
+      return;
+    }
+    group.dataset.state = "closed";
+    for (const button of buttons) {
+      if (button.dataset.answer === answer) {
+        // The chosen answer stays marked (one-shot actions, not toggle buttons).
+        button.classList.add("feedback-chosen");
+        button.setAttribute("aria-current", "true");
+      }
+    }
+    const result = Chats.afterFeedback(answer);
+    const note = group.nextElementSibling;
+    const follow = nearBottom();
+    note.textContent = texts[result.textKey];
+    note.hidden = false;
+    if (result.ends) {
+      endChat();
+    }
+    keepInView(follow);
+  }
+
+  function newConversationId() {
+    return Chats.uuid4(window.crypto);
+  }
+
+  // After "Yes": the chat stays on screen and in the saved chats, its conversation_id is
+  // dropped, and every other feedback group in it closes. The next question starts a new
+  // chat; a reload opens an empty new chat too.
+  function endChat() {
+    chatEnded = true;
+    Chats.dropConversationId(session, feedbackMemory);
+    Chats.setOpenId(session, null);
+    closeFeedbackGroups();
   }
 
   // Applies one stream event. Returns true once the stream is finished.
   // `record` collects the exchange as shown, to store it after `done`.
-  function handle(event, reply, record) {
+  // `info.category` is the reply's category; it is never stored with the exchange.
+  function handle(event, reply, record, info) {
     switch (event.type) {
       case "meta":
+        info.category = typeof event.category === "string" ? event.category : null;
         // Only the cleaned question is ever stored (AD-3, AD-4).
         record.question = typeof event.clean_question === "string" ? event.clean_question : "";
         record.reminder = Boolean(event.personal_info_removed);
@@ -269,7 +423,7 @@
     }
   }
 
-  async function stream(text, reply, record) {
+  async function stream(text, reply, record, info) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -297,7 +451,7 @@
           }
           const event = JSON.parse(line);
           const follow = nearBottom();
-          const finished = handle(event, reply, record);
+          const finished = handle(event, reply, record, info);
           keepInView(follow);
           if (finished) {
             return event.type === "done";
@@ -318,9 +472,15 @@
   // `fromField`: the question was typed, so the field is cleared (an example tap keeps a draft).
   async function ask(text, fromField) {
     text = text.trim();
-    if (answering || !text) {
+    if (busy() || !text) {
       return;
     }
+    if (chatEnded) {
+      // After "Yes": this question opens an empty new chat and is asked there.
+      showChat(emptyChat());
+    }
+    // The feedback id (AD-10): made at the first question of a chat, kept for the next ones.
+    Chats.conversationId(session, feedbackMemory, newConversationId);
     setAnswering(true);
     if (fromField) {
       question.value = "";
@@ -331,12 +491,17 @@
     keepInView(true);
 
     const record = { question: "", answer: "", sources: [], reminder: false };
+    const info = { category: null };
     let answered = false;
     try {
-      answered = await stream(text, reply, record);
+      answered = await stream(text, reply, record, info);
       // Stored only after `done`, never after `error` (AD-3).
       if (answered && record.question.trim() && record.answer.trim()) {
         storeExchange(record);
+      }
+      // The feedback question gets Yes/No buttons; a replayed one never does (FR5).
+      if (Chats.showsFeedback(info.category, answered)) {
+        reply.feedback();
       }
     } catch (error) {
       console.error(error);
@@ -353,17 +518,21 @@
   // The open chat keeps its exchanges in memory too, so follow-ups work even when
   // storage is blocked or full; then the answer is shown but not saved.
   function storeExchange(record) {
-    current = Chats.appendExchange(local, session, current, record, Date.now(), Chats.createId());
+    current = Chats.appendExchange(local, session, current, record, Date.now(), Chats.createId(), feedbackMemory);
   }
 
+  // New chat, a reopened chat, or the open one deleted: a new conversation for feedback,
+  // so the next question makes a new conversation_id (AD-10).
   function showChat(conversation) {
     current = conversation;
+    chatEnded = false;
     Chats.setOpenId(session, current.id);
+    Chats.dropConversationId(session, feedbackMemory);
     showConversation();
   }
 
   function startNewChat() {
-    if (answering) {
+    if (busy()) {
       return;
     }
     showChat(emptyChat());
@@ -422,7 +591,7 @@
   }
 
   function openHistory() {
-    if (answering) {
+    if (busy()) {
       return;
     }
     renderHistoryList();
@@ -446,7 +615,7 @@
   }
 
   function reopenChat(id) {
-    if (answering) {
+    if (busy()) {
       return;
     }
     // Read again: another tab may have deleted it. Then the panel stays open with the new list.
@@ -461,7 +630,7 @@
   }
 
   function deleteChat(id) {
-    if (answering || !window.confirm(texts["confirm-delete-chat"])) {
+    if (busy() || !window.confirm(texts["confirm-delete-chat"])) {
       return;
     }
     Chats.deleteConversation(local, id);
@@ -473,7 +642,7 @@
   }
 
   function deleteAllChats() {
-    if (answering || !window.confirm(texts["confirm-delete-all-chats"])) {
+    if (busy() || !window.confirm(texts["confirm-delete-all-chats"])) {
       return;
     }
     Chats.deleteAll(local);

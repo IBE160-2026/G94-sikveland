@@ -5,6 +5,8 @@
 # REQUIRED_TEXT_KEYS in app/ports/content.py.
 
 texts:
+  # The last sentence (feedback stored on the server, Story 2.3) is a DRAFT for the
+  # user's review (NFR8); the rest was approved earlier.
   privacy-notice:
     th: >-
       โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน เบอร์โทรศัพท์ ชื่อ ที่อยู่ หรืออีเมลในคำถาม
@@ -12,6 +14,8 @@ texts:
       แต่จะไม่ลบเบอร์โทรศัพท์ ชื่อ ที่อยู่ และอีเมล คำถามของคุณจะถูกส่งไปยังบริการ AI เพื่อสร้างคำตอบ
       แชทของคุณ (20 แชทล่าสุด) จะถูกบันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ
       ทุกคนที่ใช้เครื่องนี้สามารถอ่านได้
+      บนเซิร์ฟเวอร์จะเก็บเฉพาะคำตอบ ใช่ หรือ ไม่ ของคำถามท้ายแชท พร้อมหมายเลขที่ไม่ระบุตัวตนและเวลาเท่านั้น
+      ไม่เก็บข้อความในแชท
     en: >-
       Please do not include your passport number, ID card number, phone number,
       name, address or email in your question. Passport and ID card numbers are
@@ -19,6 +23,8 @@ texts:
       Your question is sent to an AI service to create the answer.
       Your chats (the latest 20) are also saved on this device until you delete them;
       anyone using this device can read them.
+      The server stores only your Yes or No answer to the question at the end of a chat,
+      with an anonymous number and the time, never the chat text.
 
   personal-info-reminder:
     th: >-
@@ -69,6 +75,30 @@ texts:
       You can contact the adviser directly at {ADVISER_CONTACT}.
       The adviser can answer your questions and give advice on your visa application.
       You can also keep asking general visa questions here.
+
+  # Category done (FR5): the reply is the feedback question; the page shows the
+  # Yes/No buttons under it. After "No" the page shows feedback-follow-up and the
+  # chat goes on; after "Yes" it shows feedback-thanks and the next question starts
+  # a new chat. Thai drafted on 2026-11-15, to be reviewed by the user (NFR8).
+  feedback-question:
+    th: คุณได้รับข้อมูลที่ต้องการครบถ้วนแล้วหรือไม่
+    en: Have you received all the information you need?
+
+  feedback-follow-up:
+    th: คุณยังอยากทราบเรื่องอะไรอีก พิมพ์คำถามได้เลย
+    en: What would you still like to know? Just type your question.
+
+  feedback-thanks:
+    th: ขอบคุณสำหรับคำตอบ หากมีคำถามใหม่ พิมพ์ได้เลย คำถามถัดไปจะเริ่มเป็นแชทใหม่
+    en: Thank you for your answer. If you have a new question, just type it; your next question starts a new chat.
+
+  feedback-yes:
+    th: ใช่
+    en: "Yes"
+
+  feedback-no:
+    th: ไม่
+    en: "No"
 
   reply-demo-only:
     th: >-

@@ -17,10 +17,10 @@ They do not cover:
 
 | Mode | How to start | Used for |
 |---|---|---|
-| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11 |
+| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
-| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13 |
-| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13 |
+| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13, MT-14 (part B) |
+| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13, MT-14 (part B) |
 
 Start the app with `uv run uvicorn app.main:app` and open <http://127.0.0.1:8000>. For the narrow-screen checks, use the browser's device mode (F12, then Ctrl+Shift+M) and set the width to 360 px and then 320 px (NFR1: works from 360 px, no horizontal scrolling down to 320 px).
 
@@ -170,7 +170,33 @@ Mode: real key, then Ollama. Run every step in both modes.
 9. Ask `จะไปฝรั่งเศสกับนอร์เวย์ ต้องยื่นวีซ่าที่สถานทูตไหน` (I am going to France and Norway, which embassy do I apply to?).
 10. Open `data/requests.jsonl` and read the last lines.
 
-Expected: (1, 2) the fixed text saying the chatbot only covers short-stay tourist and visitor visas to Norway, with the adviser contact and no source links; (3, 4) the fixed text with the adviser contact, no source links; (5) a cited answer (a short visit to a partner is in scope); (6) the fixed adviser-contact text (a request for a person wins); (7) a cited answer, not the out-of-scope text; (8) a cited answer, then the out-of-scope text for the follow-up; (9) a cited answer (a trip to Norway and other Schengen countries is in scope); (10) lines for (1, 2) have `category: "out_of_scope"`, lines for (3, 4) `category: "reach_person"`, all four with `outcome: "fixed_reply"` and null answer tokens; `prompt_versions.classifier` is `"2"`.
+Expected: (1, 2) the fixed text saying the chatbot only covers short-stay tourist and visitor visas to Norway, with the adviser contact and no source links; (3, 4) the fixed text with the adviser contact, no source links; (5) a cited answer (a short visit to a partner is in scope); (6) the fixed adviser-contact text (a request for a person wins); (7) a cited answer, not the out-of-scope text; (8) a cited answer, then the out-of-scope text for the follow-up; (9) a cited answer (a trip to Norway and other Schengen countries is in scope); (10) lines for (1, 2) have `category: "out_of_scope"`, lines for (3, 4) `category: "reach_person"`, all four with `outcome: "fixed_reply"` and null answer tokens; `prompt_versions.classifier` is `"3"` (it was `"2"` before Story 2.3).
+
+### MT-14 Feedback question at the end (Story 2.3)
+
+Part A, the page and the stored answers. Mode: demo, 360 px and then 320 px. Start with `DATABASE_PATH` pointing to a fresh file, or delete `data/feedback.sqlite3` first.
+
+1. In a new chat, tap an example question, then send `ขอบคุณค่ะ 🙏` (thank you).
+2. Tap No.
+3. Send `ok.`, then tap Yes.
+4. Type or tap any question.
+5. Send `Thanks!`, reload the page before tapping a button, then send `ขอบคุณค่ะ` again.
+6. Tap the new-chat button, tap an example question and send `thanks, and the fee?`.
+7. Send `ok` so the buttons show, stop the server and tap Yes; start the server again and tap Yes once more.
+8. Run `sqlite3 data/feedback.sqlite3 "select * from feedback"` (or with your `DATABASE_PATH`).
+
+Expected: (1) the fixed Thai feedback question with Yes and No buttons under it, large enough to tap, side by side or wrapped, no sideways scroll at 320 px; (2) both buttons are disabled, the chosen one stays marked, the follow-up text ("what else would you like to know?") is shown below and the field stays open; (3) the question and buttons come again; after Yes the thanks text is shown under the buttons and the chat stays on screen; (4) the page opens an empty new chat and asks the question there; the saved chats list holds both chats; (5) after the reload the feedback question is shown without buttons; asking again shows them; (6) `thanks, and the fee?` is not answered with the feedback question (in demo mode it gets the "demo only" text); (7) with the server stopped the buttons come back with the fixed error text; with the server running, Yes is stored, the error text goes and the thanks text is shown; (8) one row per successful tap, with `conversation_id`, `answer` (`yes` or `no`) and `created_at` (UTC, ending in `Z`) only: steps 2 and 3 share one `conversation_id`, every later chat has its own.
+
+Part B, how the real classifier sorts done signals (the riskiest change: classifier prompt version 3). Mode: real key, then Ollama. Run every step in both modes, each in a new chat after one example question.
+
+1. Send `ขอบคุณค่ะ 🙏` (thank you).
+2. Send `Thanks!`.
+3. Send `ok.`.
+4. Send `ขอบคุณค่ะ แล้วค่าธรรมเนียมเท่าไร` (thank you, and how much is the fee?).
+5. Send `สวัสดีค่ะ` (hello).
+6. Open `data/requests.jsonl` and read the last lines.
+
+Expected: (1, 2, 3) the feedback question with Yes and No buttons, no source links; (4) a cited answer about the fee, not the feedback question; (5) not the feedback question (a greeting is `general`); (6) lines for (1, 2, 3) have `category: "done"` and `outcome: "fixed_reply"`, and `prompt_versions.classifier` is `"3"`.
 
 ## Results
 
@@ -191,3 +217,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | 2026-11-15 | MT-11 | Wannapa Sikveland | Browser, branch `integration` | Pass | Reported by the tester as fine; tested together with Ollama |
 | | MT-12 | | | Not run | Needs a real key, and Ollama |
 | | MT-13 | | | Not run | Needs a real key, and Ollama |
+| | MT-14 | | | Not run | Part B needs a real key, and Ollama. A one-off headless Edge run (demo mode, 320 px) of steps 1 to 5, the failure in step 7 and the rows in step 8 passed on 2026-11-15; not a manual-test result |

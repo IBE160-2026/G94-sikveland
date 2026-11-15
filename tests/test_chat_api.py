@@ -871,6 +871,7 @@ def test_broken_citing_prompt_stops_startup_only_with_ollama(
         ("individual_assessment", "individual_assessment"),
         ("out_of_scope", "out_of_scope"),
         ("reach_person", "reach_person"),
+        ("done", "done"),
     ],
 )
 def test_ollama_classifies_and_routes(settings: Settings, category: str, expected: str) -> None:
@@ -893,6 +894,7 @@ def test_ollama_classifies_and_routes(settings: Settings, category: str, expecte
         "individual_assessment",
         "out_of_scope",
         "reach_person",
+        "done",
     ]
     if category != "general":
         assert len(requests) == 1  # no answer call
@@ -1002,6 +1004,7 @@ def test_every_fixed_reply_category_has_its_own_text() -> None:
         "individual_assessment": "reply-embassy-decides",
         "out_of_scope": "reply-out-of-scope",
         "reach_person": "reply-reach-person",
+        "done": "feedback-question",
     }
 
 
@@ -1055,16 +1058,23 @@ def test_classifier_sees_only_the_cleaned_question(settings: Settings) -> None:
     assert events[0]["personal_info_removed"] is True
 
 
-@pytest.mark.parametrize("category", ["done"])
-def test_categories_not_built_yet_are_answered_as_general(settings: Settings, category: str) -> None:
-    llm = ScriptedLLM([AnswerChunk("A", (S1,))], category=category)
+@pytest.mark.parametrize("question", ["ขอบคุณค่ะ", "ขอบคุณค่ะ 🙏", "Thanks!", "ok."])
+def test_done_signal_gets_the_feedback_question_without_sources(settings: Settings, question: str) -> None:
+    llm = ScriptedLLM([AnswerChunk("a reply", (S1,))], category="done")
     client = _client(settings, llm)
 
-    events = _events(client, {"question": QUESTION, "history": []})
+    events = _events(client, {"question": question, "history": [{"question": "q0", "answer": "a0"}]})
 
-    assert events == [_meta(), {"type": "text", "delta": "A"}, _sources(_source(client, S1)), DONE]
+    assert events == [
+        {"type": "meta", "category": "done", "personal_info_removed": False, "clean_question": question},
+        {"type": "text", "delta": _texts(settings)["feedback-question"]},
+        _sources(),
+        DONE,
+    ]
+    assert llm.calls == []  # the answer model is never called
     [line] = _log(settings)
-    assert (line["outcome"], line["category"]) == ("answered", "general")
+    assert (line["outcome"], line["category"]) == ("fixed_reply", "done")
+    assert line["input_tokens"] is None
 
 
 @pytest.mark.parametrize(
@@ -1116,8 +1126,8 @@ def test_missing_classifier_prompt_stops_startup_in_every_mode(
 def test_classifier_prompt_is_loaded_and_versioned(settings: Settings) -> None:
     created = create_app(settings, llm=ScriptedLLM())
 
-    assert created.state.classifier_prompt.version == "2"
-    assert created.state.prompt_versions["classifier"] == "2"
+    assert created.state.classifier_prompt.version == "3"
+    assert created.state.prompt_versions["classifier"] == "3"
 
 
 def test_classify_is_priced_with_the_small_prices_only_with_claude(settings: Settings) -> None:

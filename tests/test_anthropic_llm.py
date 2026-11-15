@@ -444,7 +444,7 @@ def test_classify_request_uses_structured_output_and_no_tools_or_thinking() -> N
         "properties": {
             "category": {
                 "type": "string",
-                "enum": ["general", "individual_assessment", "out_of_scope", "reach_person"],
+                "enum": ["general", "individual_assessment", "out_of_scope", "reach_person", "done"],
             }
         },
         "required": ["category"],
@@ -467,7 +467,9 @@ def test_classify_sends_the_small_model_and_effort(settings: Settings) -> None:
     ]
 
 
-@pytest.mark.parametrize("category", ["general", "individual_assessment", "out_of_scope", "reach_person"])
+@pytest.mark.parametrize(
+    "category", ["general", "individual_assessment", "out_of_scope", "reach_person", "done"]
+)
 def test_classify_returns_the_category_and_usage(settings: Settings, category: str) -> None:
     client = StandInCreateClient(_reply(json.dumps({"category": category})))
 
@@ -495,7 +497,7 @@ def test_classify_cut_off_raises(settings: Settings, stop_reason: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ['{"category": "done"}', '{"category": "weather"}', '{"other": 1}', "[]", "not json", ""],
+    ['{"category": "thanks"}', '{"category": "weather"}', '{"other": 1}', "[]", "not json", ""],
 )
 def test_classify_category_outside_the_set_raises(settings: Settings, text: str) -> None:
     client = StandInCreateClient(_reply(text))

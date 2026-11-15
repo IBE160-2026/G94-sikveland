@@ -1,6 +1,8 @@
 """Demo mode end to end: `MOCK_LLM=true` without an API key (Story 4.2)."""
 
 import json
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -234,19 +236,39 @@ def test_real_mode_does_not_read_the_demo_answers(
     assert created.state.no_answer_key == "reply-no-answer"
 
 
-def test_done_phrase_is_not_routed_yet_and_gets_the_demo_only_text(
-    client: TestClient, demo_settings: Settings
+@pytest.mark.parametrize("phrase", ["ขอบคุณค่ะ", "ขอบคุณค่ะ 🙏", "Thanks!", "ok.", " OK ", "thank you!!"])
+def test_done_phrase_gets_the_feedback_question(
+    client: TestClient, demo_settings: Settings, phrase: str
 ) -> None:
-    # The mock classifies it as `done`; until Story 2.3 that is answered like `general`.
-    assert client.app.state.llm.classify("ขอบคุณค่ะ", [])[0] == "done"
+    events = _events(client, phrase)
 
-    events = _events(client, "ขอบคุณค่ะ")
+    assert events[0]["category"] == "done"
+    assert events[1] == {
+        "type": "text",
+        "delta": client.app.state.content.texts()["feedback-question"].th,
+    }
+    assert events[2]["sources"] == []
+    assert events[3] == {"type": "done"}
+    [line] = _log(demo_settings)
+    assert (line["outcome"], line["category"], line["cost_usd"]) == ("fixed_reply", "done", 0.0)
+
+
+def test_done_phrase_with_a_question_is_not_done(client: TestClient) -> None:
+    events = _events(client, "thanks, and the fee?")
 
     assert events[0]["category"] == "general"
     assert events[1] == {"type": "text", "delta": _demo_only(client)}
-    assert events[2]["sources"] == []
-    [line] = _log(demo_settings)
-    assert (line["outcome"], line["category"]) == ("no_answer", "general")
+
+
+def test_demo_mode_stores_feedback_too(client: TestClient, demo_settings: Settings) -> None:
+    conversation_id = "1b4e28ba-2fa1-41d2-883f-0016d3cca427"
+
+    response = client.post("/api/feedback", json={"conversation_id": conversation_id, "answer": "no"})
+
+    assert response.status_code == 204
+    with closing(sqlite3.connect(demo_settings.database_path)) as connection:
+        rows = connection.execute("SELECT conversation_id, answer FROM feedback").fetchall()
+    assert rows == [(conversation_id, "no")]
 
 
 def test_individual_assessment_in_demo_mode_has_no_answer_tokens(demo_settings: Settings) -> None:

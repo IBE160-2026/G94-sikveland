@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 ANTHROPIC_ADAPTER = APP / "adapters" / "anthropic_llm.py"
 OLLAMA_ADAPTER = APP / "adapters" / "ollama_llm.py"
+SQLITE_FEEDBACK_ADAPTER = APP / "adapters" / "sqlite_feedback.py"
+FEEDBACK_PORT = APP / "ports" / "feedback.py"
+FEEDBACK_ROUTE = APP / "web" / "feedback.py"
 
 
 def _imports(path: Path) -> set[str]:
@@ -55,9 +58,36 @@ def test_only_the_ollama_adapter_imports_httpx() -> None:
     assert importers == [OLLAMA_ADAPTER]
 
 
+def test_only_the_sqlite_feedback_adapter_imports_sqlite() -> None:
+    importers = [p for p in _python_files(APP) if "sqlite3" in _top_level_imports(p)]
+    assert importers == [SQLITE_FEEDBACK_ADAPTER]
+
+
+def test_feedback_modules_exist() -> None:
+    for path in (FEEDBACK_PORT, SQLITE_FEEDBACK_ADAPTER, FEEDBACK_ROUTE):
+        assert path.is_file(), path
+
+
+def test_web_uses_ports_never_adapters() -> None:
+    # The feedback route writes through the `FeedbackStore` port; `app/main.py` wires the adapter.
+    offenders = {
+        str(p.relative_to(ROOT)): sorted(name for name in _imports(p) if name.startswith("app.adapters"))
+        for p in _python_files(APP / "web")
+    }
+    assert {path: names for path, names in offenders.items() if names} == {}
+    assert "app.ports.feedback" in _imports(FEEDBACK_ROUTE)
+
+
+def test_sqlite_feedback_adapter_implements_the_port_only() -> None:
+    imports = _imports(SQLITE_FEEDBACK_ADAPTER)
+    assert "app.ports.feedback" in imports
+    assert not {name for name in imports if name.startswith(("app.web", "app.pipeline"))}
+    assert not _top_level_imports(SQLITE_FEEDBACK_ADAPTER) & {"fastapi", "starlette", "pydantic"}
+
+
 @pytest.mark.parametrize("layer", ["pipeline", "ports"])
 def test_pipeline_and_ports_import_no_web_framework_or_sdk(layer: str) -> None:
-    forbidden = {"fastapi", "starlette", "anthropic", "httpx", "httpx2"}
+    forbidden = {"fastapi", "starlette", "anthropic", "httpx", "httpx2", "sqlite3"}
     files = _python_files(APP / layer)
     assert files, f"no Python files in app/{layer}"
     offenders = {str(p.relative_to(ROOT)): sorted(_top_level_imports(p) & forbidden) for p in files}

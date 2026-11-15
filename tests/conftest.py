@@ -18,5 +18,9 @@ get_settings.cache_clear()
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    """Default settings, ignoring any local `.env` file; the request log goes to `tmp_path`."""
-    return Settings(_env_file=None, request_log_path=str(tmp_path / "requests.jsonl"))
+    """Default settings, ignoring any local `.env` file; the request log and feedback go to `tmp_path`."""
+    return Settings(
+        _env_file=None,
+        request_log_path=str(tmp_path / "requests.jsonl"),
+        database_path=str(tmp_path / "feedback.sqlite3"),
+    )

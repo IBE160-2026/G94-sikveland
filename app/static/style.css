@@ -420,3 +420,49 @@ body.panel-open {
   opacity: 0.6;
   cursor: default;
 }
+
+/* Feedback question (Story 2.3): Yes and No under the reply, side by side when they fit. */
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.feedback-button {
+  flex: 1 1 6rem;
+  min-width: 48px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 0.25rem 1rem;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.feedback-button:active {
+  background: #e8eefb;
+}
+
+.feedback-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The chosen answer stays readable after the buttons are disabled. */
+.feedback-button.feedback-chosen {
+  color: #fff;
+  background: #0b3d91;
+  border-color: #0b3d91;
+  opacity: 1;
+}
+
+.feedback-note {
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+}
+
+.feedback-error {
+  margin-top: 0.75rem;
+}

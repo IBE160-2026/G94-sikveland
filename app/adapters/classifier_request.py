@@ -1,6 +1,6 @@
 """What both real classifiers send and how they read the reply (AD-5, AD-14).
 
-The categories the classifiers return so far, the JSON schema their structured
+The categories the classifiers return, the JSON schema their structured
 output must follow, the user message that carries the question and the recent
 history as data, and the parsing of the model's JSON reply. No SDK, no network.
 """
@@ -12,12 +12,13 @@ from typing import Any
 
 from app.ports.llm import Category, Exchange, LLMError
 
-# Stories 2.1 and 2.2 build these; 2.3 adds `done`, the last of the closed set (AD-5).
+# The whole closed set (AD-5): Stories 2.1 and 2.2 built the first four, 2.3 adds `done`.
 CLASSIFIER_CATEGORIES: tuple[Category, ...] = (
     "general",
     "individual_assessment",
     "out_of_scope",
     "reach_person",
+    "done",
 )
 
 # Each earlier answer is cut to this many characters (whole code points) in the classifier

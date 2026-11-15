@@ -15,10 +15,11 @@ from app.adapters.file_prompts import load_prompt
 from app.adapters.mock_llm import DEMO_ONLY_KEY, NO_USAGE, MockLLM
 from app.adapters.mock_llm import MODEL_NAME as MOCK_MODEL_NAME
 from app.adapters.ollama_llm import OllamaLLM
+from app.adapters.sqlite_feedback import SqliteFeedbackStore
 from app.config import ROOT, Settings, get_settings
 from app.pipeline.cost import Prices
 from app.ports.llm import LLMClient
-from app.web import chat, health, texts
+from app.web import chat, feedback, health, texts
 from app.web.request_log import RequestLog, answer_prices, small_prices
 
 CONTENT_FILE = ROOT / "content" / "texts.yaml"
@@ -114,10 +115,14 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     app.state.llm = llm
     # Nothing is written until the first chat request ends.
     app.state.request_log = RequestLog(_from_root(settings.request_log_path))
+    # The only server-side data (AD-10), also in demo mode. The file, `data/` and the
+    # table are created on the first `POST /api/feedback`, not at startup.
+    app.state.feedback = SqliteFeedbackStore(_from_root(settings.database_path))
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.include_router(health.router)
     app.include_router(texts.router)
     app.include_router(chat.router)
+    app.include_router(feedback.router)
     # Mounted last so every /api/* route is matched before the static files.
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

@@ -10,8 +10,9 @@
 # the adviser before release (NFR8).
 #
 # `done_phrases`: Thai and English thank-you/OK replies the mock classifies as
-# `done` (feedback question, Story 2.3). Matched after trimming, collapsing
-# whitespace and ignoring case.
+# `done`, which gets the feedback question (Story 2.3). Matched after trimming,
+# collapsing whitespace and ignoring case, and with punctuation, symbols and
+# emoji around the phrase ignored (`Thanks!`, `ok.`, `ขอบคุณค่ะ 🙏`).
 
 answers:
   tourist-visa-documents:
@@ -141,6 +142,11 @@ done_phrases:
   - ขอบคุณมาก
   - ขอบคุณมากค่ะ
   - ขอบคุณมากครับ
+  - ขอบคุณนะคะ
+  - ขอบคุณนะครับ
+  - ขอบคุณมากๆ
+  - ขอบคุณมากๆ ค่ะ
+  - ขอบคุณมากๆ ครับ
   - ขอบใจ
   - โอเค
   - โอเคค่ะ
@@ -151,6 +157,7 @@ done_phrases:
   - เข้าใจแล้วค่ะ
   - เข้าใจแล้วครับ
   - thank you
+  - thank you very much
   - thanks
   - thx
   - ok

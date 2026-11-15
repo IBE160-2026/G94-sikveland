@@ -36,11 +36,13 @@ MAX_ANSWER_CHARS = 10000
 MAX_HISTORY_ITEMS = 10
 MEDIA_TYPE = "application/jsonl"
 ERROR_EVENT: dict[str, Any] = {"type": "error", "key": "error"}
-# Categories answered with a fixed text instead of an answer call (AD-6). 2.3 adds `done`.
+# Categories answered with a fixed text instead of an answer call (AD-6). A `done` reply
+# is the feedback question; the page shows the Yes/No buttons under it (AD-10).
 FIXED_REPLY_KEYS: Mapping[Category, str] = {
     "individual_assessment": "reply-embassy-decides",
     "out_of_scope": "reply-out-of-scope",
     "reach_person": "reply-reach-person",
+    "done": "feedback-question",
 }
 
 logger = logging.getLogger(__name__)

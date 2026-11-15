@@ -15,7 +15,7 @@ def test_defaults_without_env_file(settings: Settings) -> None:
     assert settings.effort_answer == "medium"
     assert settings.effort_small == "low"
     assert settings.mock_llm is False
-    assert settings.database_path == "data/feedback.sqlite3"
+    assert Settings(_env_file=None).database_path == "data/feedback.sqlite3"
     assert Settings(_env_file=None).request_log_path == "data/requests.jsonl"
     assert settings.llm_provider == "anthropic"
     assert settings.ollama_base_url == "http://localhost:11434"

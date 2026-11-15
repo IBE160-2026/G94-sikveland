@@ -60,6 +60,11 @@ def test_saved_chat_texts_are_served_in_thai(settings: Settings) -> None:
         assert any("\u0e00" <= ch <= "\u0e7f" for ch in texts[key]), key
     # The privacy notice says the chats are also saved on this device until deleted.
     assert "บันทึกไว้ในเครื่องนี้ด้วยจนกว่าคุณจะลบ" in texts["privacy-notice"]
+    # And that the server keeps only the Yes/No feedback answer with an anonymous number
+    # and the time, never the chat text (Story 2.3).
+    assert "เก็บเฉพาะคำตอบ ใช่ หรือ ไม่" in texts["privacy-notice"]
+    assert "หมายเลขที่ไม่ระบุตัวตนและเวลา" in texts["privacy-notice"]
+    assert "ไม่เก็บข้อความในแชท" in texts["privacy-notice"]
 
 
 @pytest.mark.parametrize("key", ["reply-out-of-scope", "reply-reach-person"])
@@ -69,7 +74,7 @@ def test_out_of_scope_and_reach_person_texts_are_thai_with_the_adviser_contact(
     custom = settings.model_copy(update={"adviser_contact": "adviser@example.org"})
     text = _get_texts(custom)["texts"][key]
 
-    assert any("฀" <= ch <= "๿" for ch in text)
+    assert any("\u0e00" <= ch <= "\u0e7f" for ch in text)
     assert "adviser@example.org" in text
 
 
@@ -87,3 +92,26 @@ def test_embassy_decides_text_is_served_in_thai_without_contact_or_claims(settin
     assert "สถานทูต" in text  # the embassy
     # No fees, deadlines or other figures in a fixed reply.
     assert not any(ch.isdigit() for ch in text)
+
+
+@pytest.mark.parametrize(
+    "key", ["feedback-question", "feedback-follow-up", "feedback-thanks", "feedback-yes", "feedback-no"]
+)
+def test_feedback_texts_are_served_in_thai(settings: Settings, key: str) -> None:
+    text = _get_texts(settings)["texts"][key]
+
+    assert any("\u0e00" <= ch <= "\u0e7f" for ch in text), key
+    # No adviser contact, figures or claims about requirements in the feedback texts.
+    assert not any(ch.isdigit() for ch in text), key
+    assert "@" not in text, key
+
+
+def test_feedback_texts_have_their_english_meaning(settings: Settings) -> None:
+    from app.adapters.file_content import load_content
+    from app.main import CONTENT_FILE
+
+    texts = load_content(CONTENT_FILE, settings.adviser_contact).texts()
+
+    assert texts["feedback-question"].en == "Have you received all the information you need?"
+    assert texts["feedback-follow-up"].en.startswith("What would you still like to know?")
+    assert (texts["feedback-yes"].en, texts["feedback-no"].en) == ("Yes", "No")

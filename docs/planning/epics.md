@@ -471,6 +471,8 @@ So that I can measure whether the chatbot helps (SM-1).
 **When** the story is done
 **Then** the adviser has reviewed them (NFR8).
 
+**Note (changed 2026-11-15, `spec-2-3-feedback-question-at-the-end.md`):** with saved chats, "Yes" keeps the chat on screen and in the saved chats instead of clearing it: the page shows `feedback-thanks`, drops the `conversation_id`, and the next question opens an empty new chat. "New chat" and reopening a saved chat also drop the `conversation_id`. The Yes and No button labels are the texts `feedback-yes` and `feedback-no`.
+
 ## Epic 3: Document checklist with saved ticks
 
 An applicant chooses a visit purpose, gets the checklist with source links (including the sponsor's forms), ticks off documents and finds the ticks still there days later. The checklist opens from a permanent button and from answers about documents.

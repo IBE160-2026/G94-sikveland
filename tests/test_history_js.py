@@ -2,11 +2,13 @@
 
 There is no browser test runner (Playwright is deferred), so the storage logic is kept
 as pure functions in history.js and checked here. Each test is one row of the I/O matrix
-in docs/implementation/spec-chat-history-and-new-chat.md.
+in docs/implementation/spec-chat-history-and-new-chat.md, or, for the feedback
+conversation_id and the Yes/No flow, of spec-2-3-feedback-question-at-the-end.md.
 """
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -523,3 +525,215 @@ def test_start_open_reopens_the_tabs_chat_or_gives_an_empty_one() -> None:
     """)
 
     assert result == ["a", {"id": None, "exchanges": []}]
+
+
+# --- Feedback (Story 2.3): conversation_id lifecycle and what follows Yes/No -------------
+
+UUID4 = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+
+def test_uuid4_matches_the_server_pattern_with_and_without_random_uuid() -> None:
+    result = run("""
+        const webcrypto = require("crypto").webcrypto;
+        const noRandomUUID = { getRandomValues: function (a) { return webcrypto.getRandomValues(a); } };
+        const throwing = {
+            randomUUID: function () { throw new Error("SecurityError"); },
+            getRandomValues: noRandomUUID.getRandomValues,
+        };
+        const upper = { randomUUID: function () { return "1B4E28BA-2FA1-41D2-883F-0016D3CCA427"; } };
+        const ids = [];
+        for (let i = 0; i < 50; i += 1) {
+            ids.push(H.uuid4(webcrypto), H.uuid4(noRandomUUID), H.uuid4(throwing), H.uuid4(null));
+        }
+        return { ids: ids, upper: H.uuid4(upper) };
+    """)
+
+    ids = result["ids"]
+    assert all(UUID4.match(i) for i in ids), [i for i in ids if not UUID4.match(i)]
+    assert len(set(ids)) == len(ids)
+    assert result["upper"] == "1b4e28ba-2fa1-41d2-883f-0016d3cca427"
+
+
+def test_uuid4_pattern_is_the_one_the_server_accepts() -> None:
+    from app.web.feedback import UUID4_PATTERN
+
+    sample = run("return H.uuid4(require('crypto').webcrypto);")
+    assert re.fullmatch(UUID4_PATTERN, str(sample))
+    assert "const UUID4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;" in (
+        HISTORY_JS.read_text(encoding="utf-8")
+    )
+
+
+def test_first_question_creates_the_id_in_session_storage_and_later_ones_keep_it() -> None:
+    result = run("""
+        const session = memory();
+        const memo = { id: null };
+        let made = 0;
+        const make = function () { made += 1; return "1b4e28ba-2fa1-41d2-883f-00000000000" + made; };
+        const first = H.conversationId(session, memo, make);
+        const second = H.conversationId(session, memo, make);
+        // A reload: a new page with an empty memory reads it back from sessionStorage.
+        const reloaded = H.conversationId(session, { id: null }, make);
+        return { first: first, second: second, reloaded: reloaded, made: made,
+                 stored: session.getItem(H.CONVERSATION_ID_KEY), keys: Object.keys(session.data) };
+    """)
+
+    assert result["first"] == result["second"] == result["reloaded"] == result["stored"]
+    assert result["made"] == 1
+    assert result["keys"] == ["conversation-id"]
+
+
+def test_blocked_session_storage_keeps_the_id_in_memory() -> None:
+    result = run("""
+        const memo = { id: null };
+        let made = 0;
+        const make = function () { made += 1; return "1b4e28ba-2fa1-41d2-883f-00000000000" + made; };
+        const first = H.conversationId(blocked(), memo, make);
+        const second = H.conversationId(blocked(), memo, make);
+        H.dropConversationId(blocked(), memo);
+        const third = H.conversationId(blocked(), memo, make);
+        return [first, second, third, made];
+    """)
+
+    assert result == [
+        "1b4e28ba-2fa1-41d2-883f-000000000001",
+        "1b4e28ba-2fa1-41d2-883f-000000000001",
+        "1b4e28ba-2fa1-41d2-883f-000000000002",
+        2,
+    ]
+
+
+def test_dropping_the_id_makes_the_next_question_start_a_new_one() -> None:
+    result = run("""
+        const session = memory();
+        const memo = { id: null };
+        let made = 0;
+        const make = function () { made += 1; return "1b4e28ba-2fa1-41d2-883f-00000000000" + made; };
+        const first = H.conversationId(session, memo, make);
+        H.dropConversationId(session, memo);
+        const dropped = session.getItem(H.CONVERSATION_ID_KEY);
+        const next = H.conversationId(session, memo, make);
+        return { first: first, dropped: dropped, next: next };
+    """)
+
+    assert result["dropped"] is None
+    assert result["first"] != result["next"]
+    assert result["next"].endswith("2")
+
+
+def test_a_malformed_stored_id_is_replaced() -> None:
+    result = run("""
+        const session = memory({ "conversation-id": "not-a-uuid" });
+        const id = H.conversationId(session, { id: null }, function () {
+            return "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
+        });
+        return [id, session.getItem(H.CONVERSATION_ID_KEY)];
+    """)
+
+    assert result == ["1b4e28ba-2fa1-41d2-883f-0016d3cca427"] * 2
+
+
+def test_the_id_is_never_stored_in_the_saved_chats() -> None:
+    result = run("""
+        const local = memory();
+        const session = memory();
+        const memo = { id: null };
+        const id = H.conversationId(session, memo, function () {
+            return "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
+        });
+        H.appendExchange(local, session, { id: null, exchanges: [] }, ex(1), 1, "list-id");
+        return { id: id, local: JSON.stringify(local.data), list: ids(local) };
+    """)
+
+    assert result["id"] not in result["local"]
+    assert result["list"] == ["list-id"]
+
+
+@pytest.mark.parametrize(
+    ("category", "answered", "shown"),
+    [
+        ("done", True, True),
+        ("done", False, False),  # error turn
+        ("general", True, False),
+        ("individual_assessment", True, False),
+        (None, True, False),
+    ],
+)
+def test_buttons_only_under_a_finished_done_reply(category: str | None, answered: bool, shown: bool) -> None:
+    assert run(f"return H.showsFeedback({json.dumps(category)}, {json.dumps(answered)});") is shown
+
+
+def test_feedback_body_holds_only_the_id_and_the_answer() -> None:
+    result = run("""
+        const id = "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
+        const bad = [];
+        for (const args of [[id, "maybe"], [id, "Yes"], ["not-a-uuid", "yes"], [null, "no"]]) {
+            try { H.feedbackBody(args[0], args[1]); bad.push("accepted"); }
+            catch (e) { bad.push("rejected"); }
+        }
+        return { yes: H.feedbackBody(id, "yes"), no: H.feedbackBody(id, "no"), bad: bad };
+    """)
+
+    assert result["yes"] == {"conversation_id": "1b4e28ba-2fa1-41d2-883f-0016d3cca427", "answer": "yes"}
+    assert result["no"]["answer"] == "no"
+    assert result["bad"] == ["rejected"] * 4
+
+
+def test_no_continues_the_chat_and_yes_ends_it() -> None:
+    result = run('return [H.afterFeedback("no"), H.afterFeedback("yes")];')
+
+    assert result == [
+        {"textKey": "feedback-follow-up", "ends": False},
+        {"textKey": "feedback-thanks", "ends": True},
+    ]
+
+
+def test_reload_with_the_open_chat_gone_drops_the_conversation_id() -> None:
+    result = run("""
+        const ID = "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
+        const local = memory();
+        const session = memory({ "open-conversation": "deleted", "conversation-id": ID });
+        const chat = H.startOpen(local, session, "x", 1);
+        // A tab with no open chat but a leftover id (its chat was never saved) gets none either.
+        const unsaved = memory({ "conversation-id": ID });
+        H.startOpen(local, unsaved, "y", 1);
+        return [chat, session.getItem(H.CONVERSATION_ID_KEY), unsaved.getItem(H.CONVERSATION_ID_KEY)];
+    """)
+
+    assert result == [{"id": None, "exchanges": []}, None, None]
+
+
+def test_reload_with_the_open_chat_kept_keeps_the_conversation_id() -> None:
+    result = run("""
+        const local = memory();
+        const ID = "1b4e28ba-2fa1-41d2-883f-0016d3cca427";
+        H.saveConversation(local, { id: "a", exchanges: [ex(1)] }, 1);
+        const session = memory({ "open-conversation": "a", "conversation-id": ID });
+        H.startOpen(local, session, "x", 2);
+        return session.getItem(H.CONVERSATION_ID_KEY);
+    """)
+
+    assert result == "1b4e28ba-2fa1-41d2-883f-0016d3cca427"
+
+
+def test_follow_up_to_a_chat_deleted_elsewhere_drops_the_conversation_id() -> None:
+    result = run("""
+        const local = memory();
+        const session = memory();
+        const memo = { id: null };
+        let made = 0;
+        const make = function () { made += 1; return "1b4e28ba-2fa1-41d2-883f-0016d3cca42" + made; };
+        const old = H.conversationId(session, memo, make);
+        let chat = H.appendExchange(local, session, { id: null, exchanges: [] }, ex(1), 1, "a", memo);
+        const kept = session.getItem(H.CONVERSATION_ID_KEY);
+        H.deleteConversation(local, "a"); // in another tab
+        chat = H.appendExchange(local, session, chat, ex(2), 2, "b", memo);
+        const dropped = [session.getItem(H.CONVERSATION_ID_KEY), memo.id];
+        const next = H.conversationId(session, memo, make);
+        return { old: old, kept: kept, chat: chat.id, dropped: dropped, next: next };
+    """)
+
+    assert result["kept"] == result["old"]
+    assert result["chat"] == "b"
+    assert result["dropped"] == [None, None]
+    assert result["next"] != result["old"]

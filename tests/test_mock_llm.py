@@ -10,7 +10,7 @@ import pytest
 from app.adapters.file_content import load_content
 from app.adapters.file_demo_answers import DemoAnswer, DemoAnswers, load_demo_answers
 from app.adapters.file_knowledge_base import load_knowledge_base
-from app.adapters.mock_llm import MockLLM, normalise
+from app.adapters.mock_llm import MockLLM, done_key, normalise
 from app.main import CONTENT_FILE, DEMO_ANSWERS_FILE, KNOWLEDGE_BASE_DIR
 from app.ports.content import ExampleQuestion, FixedText
 from app.ports.llm import AnswerChunk, LLMClient, Usage
@@ -141,14 +141,77 @@ def test_history_does_not_change_the_answer(mock: MockLLM) -> None:
     assert list(mock.answer(example.th, history)) == _run(mock, example.th)
 
 
-@pytest.mark.parametrize("phrase", ["ขอบคุณค่ะ", " ขอบคุณค่ะ ", "Thank  you", "OK"])
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "ขอบคุณค่ะ",
+        " ขอบคุณค่ะ ",
+        "Thank  you",
+        "OK",
+        "Thanks!",
+        "ok.",
+        "ขอบคุณค่ะ 🙏",
+        "ขอบคุณค่ะ🙏🏽",  # skin tone modifier
+        "👍 ok",
+        "ok 👍️",  # with a variation selector
+        "«thank you»",
+        "ขอบคุณครับ!!! 😊😊",
+        "...okay...",
+        "ได้ค่ะ",
+        "ขอบคุณมากๆ ค่ะ",
+    ],
+)
 def test_done_phrase_classifies_as_done(mock: MockLLM, phrase: str) -> None:
     assert mock.classify(phrase, []) == ("done", ZERO)
 
 
-def test_other_classifications(mock: MockLLM) -> None:
+@pytest.mark.parametrize(
+    "question",
+    ["ขอบคุณค่ะ แล้ววีซ่าทำงานล่ะ", "thanks, and the fee?", "ok?? how much is the fee", "🙏", "!!!", "ok ok"],
+)
+def test_not_only_a_done_phrase_is_not_done(mock: MockLLM, question: str) -> None:
+    assert mock.classify(question, []) == ("general", ZERO)
+
+
+def test_example_question_gets_its_stored_category(mock: MockLLM) -> None:
     assert mock.classify(EXAMPLES[0].th, []) == (DEMO.answers[EXAMPLES[0].id].category, ZERO)
-    assert mock.classify("ขอบคุณค่ะ แล้ววีซ่าทำงานล่ะ", []) == ("general", ZERO)
+
+
+def test_stored_category_other_than_general_is_returned() -> None:
+    example = ExampleQuestion(id="q", th="จะได้วีซ่าไหม", en="Will I get the visa?")
+    demo = DemoAnswers(
+        answers=MappingProxyType(
+            {"q": DemoAnswer("q", "individual_assessment", "ตอบ", "answer", ("udi-fees",))}
+        ),
+        done_phrases=("ok",),
+    )
+    mock = MockLLM(demo, (example,), {"reply-demo-only": FixedText("เฉพาะ", "only")})
+
+    assert mock.classify("จะได้วีซ่าไหม", []) == ("individual_assessment", ZERO)
+    assert mock.classify("will i get the visa?", []) == ("individual_assessment", ZERO)
+
+
+def test_emoji_only_done_phrase_does_not_make_every_emoji_only_message_done() -> None:
+    # "🙏" alone has an empty done key; it must not match "👍", "!!!" or an empty key.
+    demo = DemoAnswers(
+        answers=MappingProxyType({"q": DemoAnswer("q", "general", "ตอบ", "answer", ("udi-fees",))}),
+        done_phrases=("🙏", "ok"),
+    )
+    example = ExampleQuestion(id="q", th="ถาม", en="ask")
+    mock = MockLLM(demo, (example,), {"reply-demo-only": FixedText("เฉพาะ", "only")})
+
+    for message in ("🙏", "👍", "!!!", "🙏🙏"):
+        assert mock.classify(message, []) == ("general", ZERO), message
+    assert mock.classify("ok 🙏", []) == ("done", ZERO)
+
+
+def test_done_key_trims_only_the_ends() -> None:
+    assert done_key("  Thanks!  ") == "thanks"
+    assert done_key("ขอบคุณค่ะ 🙏") == "ขอบคุณค่ะ"
+    assert done_key("thanks, and the fee?") == "thanks, and the fee"
+    # A Thai tone mark at the end is part of the word, not punctuation.
+    assert done_key("ได้!") == "ได้"
+    assert done_key("🙏👍") == ""
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda q: q.id)

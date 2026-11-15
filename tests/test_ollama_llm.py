@@ -580,6 +580,7 @@ def test_classify_request_has_schema_no_thinking_num_ctx_and_no_stream() -> None
         "individual_assessment",
         "out_of_scope",
         "reach_person",
+        "done",
     ]
 
 
@@ -600,7 +601,9 @@ def test_classify_posts_the_request_with_the_settings(ollama_settings: Settings)
     assert "<document" not in json.dumps(server.json())
 
 
-@pytest.mark.parametrize("category", ["general", "individual_assessment", "out_of_scope", "reach_person"])
+@pytest.mark.parametrize(
+    "category", ["general", "individual_assessment", "out_of_scope", "reach_person", "done"]
+)
 def test_classify_returns_the_category_and_usage_at_no_cost(ollama_settings: Settings, category: str) -> None:
     server = Server(_classified(json.dumps({"category": category})))
 
@@ -623,7 +626,7 @@ def test_classify_missing_counts_are_zero(ollama_settings: Settings) -> None:
 @pytest.mark.parametrize(
     "content",
     [
-        '{"category": "done"}',
+        '{"category": "thanks"}',
         '{"category": "weather"}',
         '{"kategori": "general"}',
         '["general"]',

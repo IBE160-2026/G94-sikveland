@@ -375,10 +375,26 @@ def test_classifier_sees_only_the_cleaned_question() -> None:
     )
 
 
-@pytest.mark.parametrize("category", ["done"])
-def test_categories_not_built_yet_are_answered_as_general(category: str) -> None:
-    llm = ScriptedLLM([AnswerChunk("A", ("s1",))], category=category)
+def test_done_gets_the_feedback_question_and_no_answer_call() -> None:
+    llm = ScriptedLLM([AnswerChunk("A", ("s1",))], category="done")
+    replies = {**FIXED_REPLIES, "done": "did you get everything?"}
 
+    events = list(answer_question("ขอบคุณค่ะ 🙏", (), llm, KB, NO_ANSWER, fixed_replies=replies))
+
+    assert events == [
+        CLASSIFIED,
+        Meta(category="done", personal_info_removed=False, clean_question="ขอบคุณค่ะ 🙏"),
+        TextDelta("did you get everything?"),
+        Sources(()),
+        Done(),
+    ]
+    assert llm.calls == []
+
+
+def test_category_without_a_fixed_reply_is_answered_as_general() -> None:
+    llm = ScriptedLLM([AnswerChunk("A", ("s1",))], category="done")
+
+    # `FIXED_REPLIES` here has no `done`; the app's map has one (tests/test_chat_api.py).
     events = _run(llm)
 
     assert events == [

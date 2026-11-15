@@ -110,19 +110,36 @@ def test_loader_rejects_non_utf8(tmp_path: Path) -> None:
         load_prompt(path)
 
 
-def test_classifier_prompt_loads_with_version_2() -> None:
+def test_classifier_prompt_loads_with_version_3() -> None:
     prompt = load_prompt(CLASSIFIER_PROMPT)
 
-    assert prompt.version == "2"
+    assert prompt.version == "3"
     assert not prompt.text.startswith("version:")
 
 
-def test_classifier_prompt_names_the_four_categories_of_stories_2_1_and_2_2() -> None:
+def test_classifier_prompt_names_all_five_categories() -> None:
     text = load_prompt(CLASSIFIER_PROMPT).text
 
     for category in ("general", "individual_assessment", "out_of_scope", "reach_person"):
-        assert category in text
-    assert '"done"' not in text and "done:" not in text  # Story 2.3
+        assert f"- {category}:" in text, category
+    assert "- done:" in text  # Story 2.3
+    assert "one of general, individual_assessment, out_of_scope, reach_person or done." in text
+
+
+def test_classifier_prompt_has_the_story_2_3_done_rules_and_examples() -> None:
+    text = load_prompt(CLASSIFIER_PROMPT).text
+
+    # Thanks and okay close the conversation, also with punctuation or emoji around them.
+    assert "Thanks, okay and similar replies that only close the conversation are done" in text
+    assert "Punctuation, emoji and polite particles around them do not change this" in text
+    examples = text.split("Examples of done:")[1].split("Examples of general:")[0]
+    for phrase in ("ขอบคุณค่ะ", "ขอบคุณมากครับ 🙏", "โอเคค่ะ", "Thanks!", "ok."):
+        assert f"- {phrase}\n" in examples, phrase
+    # A done signal that also asks something is sorted by what it asks.
+    assert "says thanks or okay and also asks something is not done" in text
+    general = text.split("Examples of general:")[1]
+    assert "- thanks, and the fee?" in general
+    assert "- ขอบคุณค่ะ แล้วค่าธรรมเนียมเท่าไร" in general
 
 
 def test_classifier_prompt_has_the_story_2_2_rules_and_examples() -> None:
@@ -136,10 +153,10 @@ def test_classifier_prompt_has_the_story_2_2_rules_and_examples() -> None:
     assert "out of scope and also asks something about short-stay" in text
     assert "Visiting family, a partner or friends in Norway for a short stay is in scope" in text
     # Norway with other Schengen countries is in scope; own chances for something out of
-    # scope are out of scope; greetings and thanks stay general until Story 2.3.
+    # scope are out of scope; greetings stay general (thanks are `done` since Story 2.3).
     assert "A trip to Norway together with other Schengen countries is in scope" in text
     assert "own chances for anything out of scope" in text
-    assert "Greetings, thanks and questions about how to use this chat are general." in text
+    assert "Greetings and questions about how to use this chat are general." in text
 
 
 def test_classifier_prompt_has_thai_and_english_examples_and_the_rules() -> None:

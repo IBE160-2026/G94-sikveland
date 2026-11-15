@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # base alone is about 24,600 tokens, and Ollama's own default (4096) silently cuts it.
     ollama_num_ctx: Annotated[int, Field(ge=32768)] = 32768
     adviser_contact: Contact = "ngan.visaa@gmail.com"
+    # The feedback answers (SQLite); a relative path is resolved against the project root.
     database_path: str = "data/feedback.sqlite3"
     # One JSON line per chat request; a relative path is resolved against the project root.
     request_log_path: str = "data/requests.jsonl"

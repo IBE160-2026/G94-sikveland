@@ -15,6 +15,13 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         # Category `out_of_scope` (FR14) and `reach_person` (FR13): the adviser contact.
         "reply-out-of-scope",
         "reply-reach-person",
+        # Category `done` (FR5): the feedback question with Yes/No buttons, the page's
+        # text after "No" and after "Yes", and the two button labels (AD-10).
+        "feedback-question",
+        "feedback-follow-up",
+        "feedback-thanks",
+        "feedback-yes",
+        "feedback-no",
         # Demo mode (MOCK_LLM=true): the reply to anything but an example question.
         "reply-demo-only",
         "error",
