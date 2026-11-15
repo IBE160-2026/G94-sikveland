@@ -201,7 +201,7 @@ texts:
     en: Change visit purpose
 
   checklist-not-applicable:
-    th: ไม่เกี่ยวกับฉัน
+    th: ไม่ต้องใช้สำหรับฉัน
     en: Doesn't apply to me
 
   # `{done}` and `{total}` are filled in by the page: the ticked items and the items

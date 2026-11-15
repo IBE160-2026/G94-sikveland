@@ -204,7 +204,7 @@ Mode: demo, 360 px and then 320 px; then a real phone if one is at hand (MT-09 s
 
 1. Tap an example question, and while the answer is still arriving tap the Checklist button (รายการเอกสาร) in the top bar.
 2. Choose visiting family (เยี่ยมครอบครัว).
-3. Tick three items. On one item that starts with a condition (e.g. the one for employees, ถ้าเป็นลูกจ้าง), tap "doesn't apply to me" (ไม่เกี่ยวกับฉัน). Then tap it again, and once more. Then tap that item's big tick box.
+3. Tick three items. On one item that starts with a condition (e.g. the one for employees, ถ้าเป็นลูกจ้าง), tap "doesn't apply to me" (ไม่ต้องใช้สำหรับฉัน). Then tap it again, and once more. Then tap that item's big tick box.
 4. With F12 open on the Network tab, tick and untick an item.
 5. Tap change purpose (เปลี่ยนวัตถุประสงค์การเดินทาง), choose tourism, then go back to family.
 6. Tap back (กลับไปที่แชท); open the checklist again and press Escape.
