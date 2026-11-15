@@ -17,13 +17,13 @@
 - [x] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Story 1.4: adviser reviews the changed Thai privacy notice (names and addresses are not removed) (resolved 2026-11-14: adviser approved the new notice and reminder; committed in 4da7990)
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: response-time limit for NFR1 and a cost target for NFR6
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Answer Bård's two reflection questions in tilbakemelding-prd.md §7
-- [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Ask Bård whether technology.md (Pytagoras Forlag's website) belongs in this repository
+- [x] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — Ask Bård whether technology.md (Pytagoras Forlag's website) belongs in this repository (resolved 2026-11-15: deleted in 0a5aa83; see [remove-technology-md](984-2026-11-15-09-39-46-remove-technology-md.md))
 - [ ] 2026-11-12 [prd-feedback-update](994-2026-11-12-23-28-18-prd-feedback-update.md) — PRD §9: deadline for the finished app (only part 1, 2026-11-15, is known)
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Working core flow by 2026-11-15 (part 1 = the app, 70 %): knowledge base, Claude connection, streamed answer with sources, privacy filter, demo mode
 - [x] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Rewrite README for the examiner before 2026-11-15 (what it is, install, run, .env, demo mode, tests, folders, links to process docs) (resolved 2026-11-15: see [readme-for-examiner](985-2026-11-15-09-34-23-readme-for-examiner.md))
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Add a linter/formatter (e.g. ruff) to the project and CI
 - [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Write a short manual test plan (real phone, Facebook's in-app browser)
-- [ ] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Decide what to do with technology.md, which describes another app (grading-guide warning sign)
+- [x] 2026-11-12 [grading-guide](993-2026-11-12-23-54-53-grading-guide.md) — Decide what to do with technology.md, which describes another app (grading-guide warning sign) (resolved 2026-11-15: deleted in 0a5aa83; see [remove-technology-md](984-2026-11-15-09-39-46-remove-technology-md.md))
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Adviser: settle photo age (embassy FAQ says both 3 and 6 months, checklist says 6); both are in the knowledge base
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Adviser: confirm the embassy checklist .docx (path contains xx-old-unused) is current
 - [ ] 2026-11-13 [story-1-3-knowledge-base](992-2026-11-13-21-56-09-story-1-3-knowledge-base.md) — Add a VFS Global source so the "book at VFS" step can link to VFS (FR12; deferred-work.md)
