@@ -83,6 +83,8 @@ context:
 - At 320 px the three top-bar buttons wrap onto two rows (no sideways scroll).
 - Verified in headless Edge over CDP (demo mode, 320 px): open mid-stream, fetch failure + retry, ticks and "doesn't apply" stored with no network request, purposes kept apart, Escape back to the unchanged chat with the answer finishing, browser closed and reopened with the same ticks, content change, corrupt storage, all done.
 
+- The user approved the 13 Thai checklist labels on 2026-11-15 (NFR8), choosing ไม่ต้องใช้สำหรับฉัน for "doesn't apply to me" (`e14bc88`).
+
 ## Spec Change Log
 
 ## Review Triage Log

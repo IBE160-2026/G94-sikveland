@@ -167,7 +167,7 @@ texts:
     en: Delete all chats on this device?
 
   # Document checklist view (Story 3.2, FR6). The ticks stay on this device only.
-  # DRAFT Thai, awaiting the user's review (NFR8).
+  # Thai approved by the user on 2026-11-15 (NFR8).
   checklist-button:
     th: รายการเอกสาร
     en: Checklist
