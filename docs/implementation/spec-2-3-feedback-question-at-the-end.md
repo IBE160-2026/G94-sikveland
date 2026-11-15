@@ -92,6 +92,8 @@ context:
   - The README SM-1 count has a `uv run python -c` form, and both forms are tested on a database with No then Yes in one conversation and Yes in another.
   - MT-14 gained part B for the real classifiers.
 
+- The user approved all Thai texts of this story on 2026-11-15 (the five feedback keys, with the buttons kept as ใช่ / ไม่, and the privacy-notice sentence) (NFR8).
+
 ## Spec Change Log
 
 ## Review Triage Log

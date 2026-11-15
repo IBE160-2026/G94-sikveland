@@ -5,8 +5,8 @@
 # REQUIRED_TEXT_KEYS in app/ports/content.py.
 
 texts:
-  # The last sentence (feedback stored on the server, Story 2.3) is a DRAFT for the
-  # user's review (NFR8); the rest was approved earlier.
+  # Thai approved by the user (NFR8); the last sentence (feedback stored on the server,
+  # Story 2.3) on 2026-11-15.
   privacy-notice:
     th: >-
       โปรดอย่าใส่เลขหนังสือเดินทาง เลขบัตรประชาชน เบอร์โทรศัพท์ ชื่อ ที่อยู่ หรืออีเมลในคำถาม
@@ -79,7 +79,7 @@ texts:
   # Category done (FR5): the reply is the feedback question; the page shows the
   # Yes/No buttons under it. After "No" the page shows feedback-follow-up and the
   # chat goes on; after "Yes" it shows feedback-thanks and the next question starts
-  # a new chat. Thai drafted on 2026-11-15, to be reviewed by the user (NFR8).
+  # a new chat. Thai approved by the user on 2026-11-15 (NFR8).
   feedback-question:
     th: คุณได้รับข้อมูลที่ต้องการครบถ้วนแล้วหรือไม่
     en: Have you received all the information you need?

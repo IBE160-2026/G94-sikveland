@@ -14,6 +14,7 @@ Build Story 2.3: a done signal ("thank you", "ok", Thai variants) gets the feedb
 - Review: 31 findings; 18 patched (notably blocking new questions and chat changes while a Yes is being sent, `conversation_id` reset in edge cases, privacy-notice sentence about the stored answer), 2 deferred (browser tests for the Yes/No flow), 2 false, the rest rejected with reasons in the spec.
 - `uv run pytest`: 977 passed; ruff clean. Live Ollama check of classifier v3: 12/12 (thanks with emoji/punctuation → `done`; "thanks, and the fee?" and greetings → `general`; the other categories unchanged).
 
+- The user approved all Thai texts of the story, keeping the buttons as ใช่ / ไม่; the DRAFT notes in `content/texts.yaml` are replaced by the approval.
+
 ### Open items
-- Approve the draft Thai texts: `feedback-question`, `feedback-follow-up`, `feedback-thanks`, `feedback-yes`, `feedback-no` and the new privacy-notice sentence (NFR8); the reviewer suggested less curt button labels than ใช่ / ไม่.
 - Run MT-14 (demo, real key, Ollama).
