@@ -8,6 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 ANTHROPIC_ADAPTER = APP / "adapters" / "anthropic_llm.py"
+OLLAMA_ADAPTER = APP / "adapters" / "ollama_llm.py"
 
 
 def _imports(path: Path) -> set[str]:
@@ -49,9 +50,14 @@ def test_only_the_anthropic_adapter_imports_the_sdk() -> None:
     assert importers == [ANTHROPIC_ADAPTER]
 
 
+def test_only_the_ollama_adapter_imports_httpx() -> None:
+    importers = [p for p in _python_files(APP) if {"httpx", "httpx2"} & _top_level_imports(p)]
+    assert importers == [OLLAMA_ADAPTER]
+
+
 @pytest.mark.parametrize("layer", ["pipeline", "ports"])
 def test_pipeline_and_ports_import_no_web_framework_or_sdk(layer: str) -> None:
-    forbidden = {"fastapi", "starlette", "anthropic"}
+    forbidden = {"fastapi", "starlette", "anthropic", "httpx", "httpx2"}
     files = _python_files(APP / layer)
     assert files, f"no Python files in app/{layer}"
     offenders = {str(p.relative_to(ROOT)): sorted(_top_level_imports(p) & forbidden) for p in files}

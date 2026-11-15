@@ -10,6 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ROOT = Path(__file__).resolve().parent.parent
 
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
+# Which model service answers when demo mode is off.
+LLMProvider = Literal["anthropic", "ollama"]
 # USD per million tokens.
 Price = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 # Shown to applicants in fixed texts, so it can never be blank.
@@ -34,6 +36,13 @@ class Settings(BaseSettings):
     effort_answer: Effort = "medium"
     effort_small: Effort = "low"
     mock_llm: bool = False
+    # Demo mode (`mock_llm`) wins over the provider.
+    llm_provider: LLMProvider = "anthropic"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3.5:9b"
+    # Context window sent with every Ollama request, at least 32768: the knowledge
+    # base alone is about 24,600 tokens, and Ollama's own default (4096) silently cuts it.
+    ollama_num_ctx: Annotated[int, Field(ge=32768)] = 32768
     adviser_contact: Contact = "ngan.visaa@gmail.com"
     database_path: str = "data/feedback.sqlite3"
     # One JSON line per chat request; a relative path is resolved against the project root.

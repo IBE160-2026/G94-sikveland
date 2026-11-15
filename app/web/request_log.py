@@ -62,23 +62,30 @@ def request_line(
     *,
     outcome: Outcome,
     category: Category | None,
-    answer_prompt_version: str,
+    prompt_versions: Mapping[str, str],
     model: str,
     usage: Usage | None,
     prices: Prices,
+    unknown_source_ids: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """The log line for one request. Token fields and `cost_usd` are `None` without `usage`."""
+    """The log line for one request. Token fields and `cost_usd` are `None` without `usage`.
+
+    `prompt_versions` holds `answer` and, with Ollama, `citing`. `unknown_source_ids`
+    is how many cited ids were dropped as unknown (0 when none), `None` if the stream
+    ended before the sources were known.
+    """
     moment = (now if now is not None else datetime.now(UTC)).astimezone(UTC)
     return {
         "timestamp": moment.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "outcome": outcome,
         "category": category,
-        "prompt_versions": {"answer": answer_prompt_version},
+        "prompt_versions": dict(prompt_versions),
         "model": model,
         "input_tokens": usage.input_tokens if usage else None,
         "output_tokens": usage.output_tokens if usage else None,
         "cache_read_tokens": usage.cache_read_tokens if usage else None,
         "cache_write_tokens": usage.cache_write_tokens if usage else None,
         "cost_usd": cost_usd(usage, prices) if usage else None,
+        "unknown_source_ids": unknown_source_ids,
     }

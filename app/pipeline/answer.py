@@ -43,9 +43,14 @@ class SourceRef:
 
 @dataclass(frozen=True)
 class Sources:
-    """Exactly the cited sources, in order of first citation, each once."""
+    """Exactly the cited sources, in order of first citation, each once.
+
+    `unknown_source_ids` counts the distinct cited ids that are not in the knowledge
+    base: they were dropped. For the request log only, never shown to the applicant.
+    """
 
     items: tuple[SourceRef, ...]
+    unknown_source_ids: int = 0
 
 
 @dataclass(frozen=True)
@@ -83,7 +88,9 @@ def answer_question(
     called (AD-4); `Meta.personal_info_removed` describes the new question only.
     Answer text is held back until the first cited chunk, then released (AD-7).
     With no citation at the end, the held text is dropped and `no_answer_text`
-    is sent instead. Text already sent is never taken back.
+    is sent instead. Text already sent is never taken back. A cited id that is not
+    in the knowledge base is dropped (it does not count as a citation) and counted
+    in `Sources.unknown_source_ids`; the answer goes on.
     """
     clean = remove_personal_info(question)
     clean_history = tuple(
@@ -99,19 +106,21 @@ def answer_question(
     held: list[str] = []
     usage: Usage | None = None
     cited: dict[str, SourceRef] = {}  # insertion order = order of first citation
+    unknown: set[str] = set()
     try:
         for item in llm.answer(clean.text, clean_history):
             if isinstance(item, Usage):
                 usage = item
                 break  # the last item of an answer
             for source_id in item.source_ids:
-                if source_id not in cited:
-                    try:
-                        source = knowledge_base.source(source_id)
-                    except KeyError:
-                        yield Failed(reason="unknown source id")
-                        return
-                    cited[source_id] = SourceRef(source.id, source.title, source.url)
+                if source_id in cited or source_id in unknown:
+                    continue
+                try:
+                    source = knowledge_base.source(source_id)
+                except KeyError:
+                    unknown.add(source_id)  # no link for it; the rest of the answer is shown
+                    continue
+                cited[source_id] = SourceRef(source.id, source.title, source.url)
             if not cited:
                 held.append(item.text)
                 continue
@@ -128,5 +137,5 @@ def answer_question(
     # Before `Sources`: a client that leaves at that event still gets its cost logged.
     if usage is not None:
         yield Spent(usage)
-    yield Sources(tuple(cited.values()))
+    yield Sources(tuple(cited.values()), unknown_source_ids=len(unknown))
     yield Done()

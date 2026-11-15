@@ -30,3 +30,21 @@
 - source_spec: `docs/implementation/spec-4-2-demo-mode-without-an-api-key.md`
   summary: In Story 2.3, make done-phrase matching ignore surrounding punctuation and emoji (`Thanks!`, `ok.`, `ขอบคุณค่ะ 🙏`), in the mock and in the real classifier's tests, and test a stored demo category other than `general`.
   evidence: Review of Story 4.2 (#17, #22): the mock matches done phrases exactly after trimming and casefolding; nothing consumes `classify` yet.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Document the Ollama provider: README (how to run with `LLM_PROVIDER=ollama`, Ollama setup and `num_ctx`), a manual test case for Ollama in `manual-test-plan.md`, and the architecture/PRD decision change from Claude-only to a provider setting (`ARCHITECTURE-SPINE.md` AD-2, AD-7, AD-14, Config, Stack; PRD `addendum.md` language-model line).
+  evidence: Split from the Ollama spec at the user's choice on 2026-11-15 because the spec was ~2,000 tokens, above the 1,600 guideline; the code and tests are built first, the docs follow before the branch is merged to main.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Check the Ollama context budget in a long conversation (system ~24,700 tokens + up to 10 history turns + thinking + answer within `OLLAMA_NUM_CTX` 32768), and detect a full context at runtime (e.g. `prompt_eval_count` reaching `num_ctx`) instead of letting Ollama truncate silently.
+  evidence: Review of the Ollama build (#3), medium, unverified: 32768 − ~24,700 leaves ~8k tokens; the probe's documents question used ~2,700 thinking tokens; never run with 10 long turns. Settle with a 10-turn manual run against Ollama.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Cap an Ollama answer (`num_predict` and/or an overall deadline), so a model stuck thinking cannot hold a request open; the read timeout restarts on every thinking line.
+  evidence: Review of the Ollama build (#5), medium, unverified: no cap is sent and thinking lines are not shown, so the applicant would see only typing dots. Settle by forcing a long thinking run.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: On slow or CPU-only machines, the first (uncached) ~24,700-token prompt may take longer than the 300 s read timeout before Ollama sends anything; make the timeout a setting or separate the first-byte wait.
+  evidence: Review of the Ollama build (#6), medium, unverified: 7 s on the user's GPU; no measurement on CPU. Settle by timing a cold request on a CPU-only machine.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Check that Ollama follow-up questions still cite: earlier answers go back as history without `[[id]]` markers, which may teach a small model to stop citing (then every follow-up becomes `reply-no-answer`).
+  evidence: Review of the Ollama build (#8), medium, unverified: the manual run was single-turn only. Settle with a follow-up question against Ollama; if it fails, re-insert markers in history or add a reminder after it.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Add to the Ollama docs work: the README request-log table (`unknown_source_ids`, `prompt_versions` with `citing`) and its cache check, the cache check in `manual-test-plan.md` (cache tokens are always 0 with Ollama), the log-field contract in `spec-1-8-cost-and-request-log.md`, the no-longer-emitted `Failed("unknown source id")` in `spec-1-6-streamed-answer-with-sources.md`, and a browser check of an example question with `LLM_PROVIDER=ollama` (AC 4).
+  evidence: Review of the Ollama build (#11): each named place still describes the behaviour before this change; AC 4 was checked through the app by script, not tapped in a browser.

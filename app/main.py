@@ -14,6 +14,7 @@ from app.adapters.file_knowledge_base import load_knowledge_base
 from app.adapters.file_prompts import load_prompt
 from app.adapters.mock_llm import DEMO_ONLY_KEY, NO_USAGE, MockLLM
 from app.adapters.mock_llm import MODEL_NAME as MOCK_MODEL_NAME
+from app.adapters.ollama_llm import OllamaLLM
 from app.config import ROOT, Settings, get_settings
 from app.pipeline.cost import Prices
 from app.ports.llm import LLMClient
@@ -24,6 +25,8 @@ CONTENT_FILE = ROOT / "content" / "texts.yaml"
 DEMO_ANSWERS_FILE = ROOT / "content" / "demo-answers.yaml"
 KNOWLEDGE_BASE_DIR = ROOT / "knowledge-base"
 ANSWER_PROMPT_FILE = ROOT / "prompts" / "answer-system.md"
+# Read only with `LLM_PROVIDER=ollama`: how the model marks its sources as `[[id]]`.
+CITING_PROMPT_FILE = ROOT / "prompts" / "answer-citing-markers.md"
 STATIC_DIR = ROOT / "app" / "static"
 # Wait between the chunks of a demo answer, so the page shows it arriving bit by bit.
 DEMO_CHUNK_PAUSE_SECONDS = 0.05
@@ -41,14 +44,17 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
 
     Without `llm`, answers go to the Anthropic API. Building that adapter needs no
     key: without `ANTHROPIC_API_KEY` every answer fails and the page shows the
-    fixed error text.
+    fixed error text. With `LLM_PROVIDER=ollama` they go to a local Ollama server
+    instead (`OLLAMA_MODEL`, no cost); `prompts/answer-citing-markers.md` is then
+    read too (`PromptError` stops startup) and logged as prompt version `citing`.
+    If Ollama is not running, every answer fails with the fixed error text.
 
     In demo mode (`MOCK_LLM=true`) `content/demo-answers.yaml` is read and checked
     (`DemoContentError` stops startup) and, without `llm`, answers come from the
     `mock_llm` adapter. Questions it has no answer for get `reply-demo-only`, and
     the request log records model `mock_llm` at no cost, with zero tokens also
-    when no usage arrived. In real mode the demo
-    answers file is never read.
+    when no usage arrived. Demo mode wins over `LLM_PROVIDER`. In real mode the
+    demo answers file is never read.
     """
     settings = settings if settings is not None else get_settings()
     app = FastAPI(title="Norway Visa Guide For Thai")
@@ -67,6 +73,20 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         app.state.answer_prices = NO_PRICES
         # Also a request that ends without a usage report (client gone, error) cost nothing.
         app.state.fallback_usage = NO_USAGE
+        app.state.prompt_versions = {"answer": app.state.answer_prompt.version}
+    elif settings.llm_provider == "ollama":
+        # Loaded even with a given `llm`, like the answer prompt, and logged with it.
+        citing_prompt = load_prompt(CITING_PROMPT_FILE)
+        if llm is None:
+            llm = OllamaLLM(settings, app.state.knowledge_base, app.state.answer_prompt, citing_prompt)
+        app.state.no_answer_key = "reply-no-answer"
+        app.state.answer_model = settings.ollama_model
+        app.state.answer_prices = NO_PRICES
+        app.state.fallback_usage = None
+        app.state.prompt_versions = {
+            "answer": app.state.answer_prompt.version,
+            "citing": citing_prompt.version,
+        }
     else:
         if llm is None:
             llm = AnthropicLLM(settings, app.state.knowledge_base, app.state.answer_prompt)
@@ -74,6 +94,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         app.state.answer_model = settings.model_answer
         app.state.answer_prices = answer_prices(settings)
         app.state.fallback_usage = None
+        app.state.prompt_versions = {"answer": app.state.answer_prompt.version}
     app.state.llm = llm
     # Nothing is written until the first chat request ends.
     app.state.request_log = RequestLog(_from_root(settings.request_log_path))
