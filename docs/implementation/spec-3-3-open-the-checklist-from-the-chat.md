@@ -73,6 +73,8 @@ context:
 - No real source is linked only to tourism items, so the one-purpose row is tested with a custom map. `embassy-necessary-documents` maps to `family` only.
 - New key `checklist-open` (Thai DRAFT). Docs: README, AD-3 (saved-exchange format) and AD-11, MT-16, a deferred browser-test entry. A one-off headless Edge run in demo mode at 320 px passed 18 checks. The implementer did not edit the spec; boxes and these notes were filled from the diff.
 
+- The user approved the Thai button text `checklist-open` (เปิดรายการเอกสาร, with ": <purpose>" for one purpose) on 2026-11-15 (NFR8).
+
 ## Spec Change Log
 
 ## Review Triage Log

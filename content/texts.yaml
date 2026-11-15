@@ -229,7 +229,7 @@ texts:
     en: Try again
 
   # The button under an answer that cites a source linked to a checklist item (Story 3.3).
-  # DRAFT Thai, awaiting the user's review (NFR8).
+  # Thai approved by the user on 2026-11-15 (NFR8).
   checklist-open:
     th: เปิดรายการเอกสาร
     en: Open checklist
