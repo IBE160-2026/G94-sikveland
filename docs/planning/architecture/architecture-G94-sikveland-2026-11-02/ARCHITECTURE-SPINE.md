@@ -7,7 +7,7 @@ paradigm: 'request pipeline (pipes-and-filters) with ports and adapters for exte
 scope: 'The whole MVP prototype: chat page, server pipeline, knowledge base, checklists, feedback, demo mode, tests and evaluation'
 status: final
 created: '2026-11-02'
-updated: '2026-11-03'
+updated: '2026-11-15'
 binds: [FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR10, FR11, FR12, FR13, FR14, NFR1, NFR2, NFR3, NFR4, NFR5, NFR6, NFR7, NFR8]
 sources:
   - docs/planning/prds/prd-G94-sikveland-2026-10-19/prd.md
@@ -67,8 +67,8 @@ flowchart TD
 ### AD-2 — One LLM port; the adapters hide the SDK [ADOPTED]
 
 - **Binds:** FR10, NFR2, NFR3; `app/ports/`, `app/adapters/`
-- **Prevents:** tests or demo mode calling the real API; code outside the adapter depending on the Anthropic SDK.
-- **Rule:** only `app/adapters/anthropic_llm.py` imports `anthropic`. `MOCK_LLM=true` wires `mock_llm` at startup. Both adapters implement the port in AD-14 exactly. pytest always uses a fake (AD-13).
+- **Prevents:** tests or demo mode calling the real API; code outside the adapter depending on the Anthropic SDK; the app depending on one AI service.
+- **Rule:** only `app/adapters/anthropic_llm.py` imports `anthropic`. `MOCK_LLM=true` wires `mock_llm` at startup. Otherwise `LLM_PROVIDER` picks the answering adapter: `anthropic` (default, Claude) or `ollama` (`app/adapters/ollama_llm.py`, a local Ollama server over HTTP with `httpx`; no `httpx` type leaves the adapter). Demo mode wins over `LLM_PROVIDER`. All adapters implement the port in AD-14 exactly. pytest always uses a fake (AD-13). *(Amended 2026-11-15: Ollama added as an option; see `docs/implementation/spec-ollama-provider.md`.)*
 
 ### AD-3 — Stateless server; the conversation lives in the browser [ADOPTED]
 
@@ -98,7 +98,7 @@ flowchart TD
 
 - **Binds:** FR2, FR4, FR11, FR12, NFR6
 - **Prevents:** uncited text reaching the applicant; cache misses from changing request shape.
-- **Rule:** the answer call sends, in this fixed order: the system prompt, then every knowledge-base document as a document block (sorted by source `id`, Citations on for all, cache breakpoint after the last document), then history, then the question. Effort and thinking settings are fixed per call type (AD-14). The pipeline holds back answer text until the first citation arrives, then streams the held text and the rest. If the answer ends with zero citations, the held text is discarded and `reply-no-answer` is sent instead. A reply that has started streaming is never replaced. Sources shown are exactly the sources cited.
+- **Rule:** the answer call sends, in this fixed order: the system prompt, then every knowledge-base document as a document block (sorted by source `id`, Citations on for all, cache breakpoint after the last document), then history, then the question. Effort and thinking settings are fixed per call type (AD-14). The pipeline holds back answer text until the first citation arrives, then streams the held text and the rest. If the answer ends with zero citations, the held text is discarded and `reply-no-answer` is sent instead. A reply that has started streaming is never replaced. Sources shown are exactly the known sources cited: a cited id that is not in `sources.yaml` is dropped (no link), the rest of the answer is shown and the request log counts it in `unknown_source_ids`; if no known id is cited, the answer counts as having zero citations. With Ollama, which has no Citations, the system message holds the answer prompt, then `prompts/answer-citing-markers.md`, then one `<document id="..." title="...">` block per document (sorted by `id`, so Ollama can reuse its cached prompt); the model writes `[[id]]` markers, which the adapter turns into source IDs and strips from the text, never showing part of a marker. *(Amended 2026-11-15.)*
 
 ### AD-8 — Chat stream contract [ADOPTED]
 
@@ -128,7 +128,7 @@ flowchart TD
 
 - **Binds:** NFR4, NFR7
 - **Prevents:** prompt text drifting inside code; evaluation results that cannot be tied to a prompt version.
-- **Rule:** system, classifier and translation prompts live in `prompts/`, each with a `version:` line at the top. Request logs and evaluation reports record the prompt versions used.
+- **Rule:** system, classifier and translation prompts live in `prompts/`, each with a `version:` line at the top. Request logs and evaluation reports record the prompt versions used. The Ollama-only addition `answer-citing-markers.md` (citing markers, Thai script only) is logged as `citing`.
 
 ### AD-13 — Two test layers [ADOPTED]
 
@@ -140,7 +140,7 @@ flowchart TD
 
 - **Binds:** FR1, FR2, FR3, FR7, FR10, NFR6; `app/ports/`, both adapters, `tests/fakes/`
 - **Prevents:** the real adapter, the mock and the test fake returning different shapes; SDK types leaking into the pipeline.
-- **Rule:** `LLMClient` has three methods. `classify(question, recent_history) -> (Category, Usage)`; `answer(question, history) -> stream of {text, source_ids}` chunks followed by `Usage`; `translate(text) -> (str, Usage)`. `Usage` carries input, output (including thinking), cache-read and cache-write tokens. Adapters turn citations into source IDs and return no SDK types. `answer` uses `MODEL_ANSWER` (Claude Opus 5.5); `classify` and `translate` use `MODEL_SMALL` (Claude Haiku 5.5). The Anthropic adapter uses adaptive thinking with effort fixed per method in config, and treats `stop_reason: "refusal"` as an error.
+- **Rule:** `LLMClient` has three methods. `classify(question, recent_history) -> (Category, Usage)`; `answer(question, history) -> stream of {text, source_ids}` chunks followed by `Usage`; `translate(text) -> (str, Usage)`. `Usage` carries input, output (including thinking), cache-read and cache-write tokens. Adapters turn citations into source IDs and return no SDK types. `answer` uses `MODEL_ANSWER` (Claude Opus 5.5); `classify` and `translate` use `MODEL_SMALL` (Claude Haiku 5.5). The Anthropic adapter uses adaptive thinking with effort fixed per method in config, and treats `stop_reason: "refusal"` as an error. The Ollama adapter answers with `OLLAMA_MODEL`, always sends `num_ctx` (`OLLAMA_NUM_CTX`) and thinking on, never passes thinking text on, treats any `done_reason` other than `stop` as an error, and reports cache tokens as 0 (cost 0); its `classify` and `translate` are not built yet.
 
 ### AD-15 — Demo mode contract [ADOPTED]
 
@@ -158,8 +158,8 @@ flowchart TD
 | Dates | ISO 8601 (`2026-11-02`; timestamps in UTC) |
 | Errors | non-streaming endpoints return `{"error": {"code", "message"}}`; streaming uses the `error` event; the applicant always sees the fixed `error` text |
 | Startup checks | the app refuses to start if a content key is missing or a checklist refers to an unknown source `id`; in demo mode also if a demo answer refers to an unknown source `id` or an example question has no demo answer |
-| Logging | one JSON line per request, written by `app/web`: category, prompt versions, `Usage` from the adapter, cost. Never question or answer text |
-| Config | all settings from `.env` through `app/config.py` (pydantic-settings): `ANTHROPIC_API_KEY`, `MODEL_ANSWER`, `MODEL_SMALL`, `EFFORT_ANSWER`, `EFFORT_SMALL`, `MOCK_LLM`, `ADVISER_CONTACT`, `DATABASE_PATH`, and prices in USD per million tokens for each model: `PRICE_ANSWER_INPUT`, `PRICE_ANSWER_OUTPUT`, `PRICE_ANSWER_CACHE_READ`, `PRICE_ANSWER_CACHE_WRITE` and the same four `PRICE_SMALL_*`. `.env.example` lists them all, with prices taken from Anthropic's pricing page |
+| Logging | one JSON line per request, written by `app/web`: category, prompt versions, `Usage` from the adapter, cost, number of unknown source ids dropped. Never question or answer text |
+| Config | all settings from `.env` through `app/config.py` (pydantic-settings): `ANTHROPIC_API_KEY`, `MODEL_ANSWER`, `MODEL_SMALL`, `EFFORT_ANSWER`, `EFFORT_SMALL`, `MOCK_LLM`, `LLM_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `ADVISER_CONTACT`, `DATABASE_PATH`, and prices in USD per million tokens for each model: `PRICE_ANSWER_INPUT`, `PRICE_ANSWER_OUTPUT`, `PRICE_ANSWER_CACHE_READ`, `PRICE_ANSWER_CACHE_WRITE` and the same four `PRICE_SMALL_*`. `.env.example` lists them all, with prices taken from Anthropic's pricing page |
 | Language | user-facing text in Thai (with stored English); code, identifiers, logs and docs in English |
 
 ## Stack
@@ -173,13 +173,14 @@ flowchart TD
 | anthropic (Python SDK) | 2.4.0 |
 | pydantic-settings | 2.16 |
 | PyYAML | 6.0 |
-| httpx (ingest) | 0.28 |
+| httpx (ingest, Ollama adapter) | 0.28 |
 | markdownify (ingest, HTML → Markdown) | 1.2 |
 | pypdf (ingest, PDF → text) | 6.21 |
 | pytest | 9.2 |
 | SQLite | bundled with Python |
 | Claude model, answers | `claude-opus-5-5` (`MODEL_ANSWER`) |
 | Claude model, classify and translate | `claude-haiku-5-5` (`MODEL_SMALL`) |
+| Ollama (optional local model server, `LLM_PROVIDER=ollama`) | tested with 0.40.16 and `qwen3.5:9b` (`OLLAMA_MODEL`) |
 | Chat page | plain HTML/CSS/JavaScript, no framework |
 
 ## Structural Seed
@@ -215,7 +216,7 @@ app/
   web/          # routes, stream events, logging
   pipeline/     # filter, classify, route, answer, translate
   ports/        # LLMClient, KnowledgeBase, ContentStore, FeedbackStore
-  adapters/     # anthropic_llm, mock_llm, file stores, sqlite feedback
+  adapters/     # anthropic_llm, ollama_llm, mock_llm, file stores, sqlite feedback
   static/       # chat page
   config.py
 content/        # texts.yaml, checklists.yaml, demo-answers.yaml

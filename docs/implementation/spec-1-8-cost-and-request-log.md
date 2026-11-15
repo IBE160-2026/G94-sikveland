@@ -80,6 +80,8 @@ context:
 
 ## Spec Change Log
 
+- 2026-11-15, [spec-ollama-provider.md](spec-ollama-provider.md): the log line has one more field, `unknown_source_ids` (number of cited ids not in `sources.yaml` that were dropped; 0 when none; `null` if the stream ended before the sources). `prompt_versions` may hold more keys than `answer`: with `LLM_PROVIDER=ollama` it also holds `citing` (`prompts/answer-citing-markers.md`). With Ollama, `model` is `OLLAMA_MODEL`, all prices are 0 so `cost_usd` is 0, and both cache fields are 0 because Ollama does not report them, so the cache check in this spec and the README applies to Claude only. The frozen field list above is left as approved.
+
 ## Review Triage Log
 
 Pass 1 (2026-11-14):

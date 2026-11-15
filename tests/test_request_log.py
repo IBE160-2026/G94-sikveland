@@ -25,6 +25,7 @@ FIELDS = {
     "cache_read_tokens",
     "cache_write_tokens",
     "cost_usd",
+    "unknown_source_ids",
 }
 PRICES = Prices(input=4.00, output=20.00, cache_read=0.20, cache_write=5.00)
 USAGE = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
@@ -38,10 +39,11 @@ def test_line_with_usage() -> None:
     line = request_line(
         outcome="answered",
         category="general",
-        answer_prompt_version="3",
+        prompt_versions={"answer": "3"},
         model="claude-opus-5-5",
         usage=USAGE,
         prices=PRICES,
+        unknown_source_ids=0,
         now=datetime(2026, 11, 14, 9, 30, 5, 123456, tzinfo=UTC),
     )
 
@@ -56,14 +58,44 @@ def test_line_with_usage() -> None:
         "cache_read_tokens": 50000,
         "cache_write_tokens": 0,
         "cost_usd": 0.018,
+        "unknown_source_ids": 0,
     }
+
+
+def test_line_records_dropped_unknown_ids_and_every_prompt_version() -> None:
+    line = request_line(
+        outcome="answered",
+        category="general",
+        prompt_versions={"answer": "1", "citing": "2"},
+        model="qwen3.5:9b",
+        usage=Usage(input_tokens=500, output_tokens=80, cache_read_tokens=0, cache_write_tokens=0),
+        prices=Prices(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0),
+        unknown_source_ids=1,
+    )
+
+    assert line["prompt_versions"] == {"answer": "1", "citing": "2"}
+    assert line["unknown_source_ids"] == 1
+    assert line["cost_usd"] == 0.0
+
+
+def test_unknown_ids_are_null_when_the_sources_never_came() -> None:
+    line = request_line(
+        outcome="incomplete",
+        category="general",
+        prompt_versions={"answer": "1"},
+        model="m",
+        usage=None,
+        prices=PRICES,
+    )
+
+    assert line["unknown_source_ids"] is None
 
 
 def test_line_without_usage_has_null_tokens_and_cost() -> None:
     line = request_line(
         outcome="error",
         category="general",
-        answer_prompt_version="1",
+        prompt_versions={"answer": "1"},
         model="m",
         usage=None,
         prices=PRICES,
@@ -78,7 +110,7 @@ def test_timestamp_is_utc_with_z() -> None:
     line = request_line(
         outcome="answered",
         category="general",
-        answer_prompt_version="1",
+        prompt_versions={"answer": "1"},
         model="m",
         usage=None,
         prices=PRICES,
@@ -90,7 +122,12 @@ def test_timestamp_is_utc_with_z() -> None:
 
 def test_timestamp_now_is_iso_utc() -> None:
     line = request_line(
-        outcome="answered", category=None, answer_prompt_version="1", model="m", usage=None, prices=PRICES
+        outcome="answered",
+        category=None,
+        prompt_versions={"answer": "1"},
+        model="m",
+        usage=None,
+        prices=PRICES,
     )
 
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", str(line["timestamp"]))

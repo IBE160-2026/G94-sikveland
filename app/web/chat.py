@@ -85,22 +85,26 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
         no_answer_text=content.texts()[state.no_answer_key].th,
     )
     request_log: RequestLog = state.request_log
-    answer_prompt_version: str = state.answer_prompt.version
+    # `answer`, and with Ollama also `citing` (set in `app/main.py`).
+    prompt_versions: dict[str, str] = state.prompt_versions
     # `mock_llm` at no cost in demo mode, the answer model and its prices otherwise.
     model: str = state.answer_model
     prices: Prices = state.answer_prices
     # Zero usage in demo mode, so every demo line records cost 0.0; `None` otherwise.
     fallback_usage: Usage | None = state.fallback_usage
 
-    def log_request(outcome: Outcome, category: Category | None, usage: Usage | None) -> None:
+    def log_request(
+        outcome: Outcome, category: Category | None, usage: Usage | None, unknown_source_ids: int | None
+    ) -> None:
         request_log.write(
             request_line(
                 outcome=outcome,
                 category=category,
-                answer_prompt_version=answer_prompt_version,
+                prompt_versions=prompt_versions,
                 model=model,
                 usage=usage if usage is not None else fallback_usage,
                 prices=prices,
+                unknown_source_ids=unknown_source_ids,
             )
         )
 
@@ -111,18 +115,20 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
     )
 
 
-LogRequest = Callable[[Outcome, Category | None, Usage | None], None]
+LogRequest = Callable[[Outcome, Category | None, Usage | None, int | None], None]
 
 
 def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[str]:
     """One JSON object per line; any failure becomes an `error` event that ends the stream.
 
     `log_request` is called once when the stream ends, also when the server closes
-    it because the client went away (outcome `incomplete`). `Spent` is never sent.
+    it because the client went away (outcome `incomplete`). `Spent` is never sent,
+    and the count of dropped unknown source ids goes to the log only.
     """
     outcome: Outcome = "incomplete"
     category: Category | None = None
     usage: Usage | None = None
+    unknown_source_ids: int | None = None
     answered: Outcome = "no_answer"
     try:
         for event in events:
@@ -139,6 +145,7 @@ def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[s
                     category = event.category
                 case Sources():
                     answered = "answered" if event.items else "no_answer"
+                    unknown_source_ids = event.unknown_source_ids
                 case Done():
                     outcome = answered
             yield _line(_event(event))
@@ -155,7 +162,7 @@ def _lines(events: Iterator[AnswerEvent], log_request: LogRequest) -> Iterator[s
         except Exception as exc:  # noqa: BLE001 - logging below must still run
             logger.error("closing the answer stream failed: %s", type(exc).__name__)
         try:
-            log_request(outcome, category, usage)
+            log_request(outcome, category, usage, unknown_source_ids)
         except Exception as exc:  # noqa: BLE001 - the log must never break an answer
             logger.error("request log failed: %s", type(exc).__name__)
 

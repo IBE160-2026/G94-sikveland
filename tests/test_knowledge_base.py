@@ -273,6 +273,10 @@ def test_committed_folder_has_no_stray_snapshots() -> None:
 
 
 FORBIDDEN_MODULES = ("httpx", "requests", "urllib.request")
+# The Ollama adapter calls the model with `httpx`; it never fetches knowledge-base
+# pages. Only `httpx` is allowed there. `tests/test_layering.py` checks it is the only one.
+MODEL_HTTP_ADAPTER = ROOT / "app" / "adapters" / "ollama_llm.py"
+MODEL_HTTP_ALLOWED = ("httpx",)
 
 
 def _imports(path: Path) -> set[str]:
@@ -287,9 +291,14 @@ def _imports(path: Path) -> set[str]:
 
 
 @pytest.mark.parametrize(
-    "path", sorted((ROOT / "app").rglob("*.py")), ids=lambda p: p.relative_to(ROOT).as_posix()
+    "path",
+    sorted((ROOT / "app").rglob("*.py")),
+    ids=lambda p: p.relative_to(ROOT).as_posix(),
 )
 def test_app_never_fetches_over_the_network(path: Path) -> None:
+    allowed = MODEL_HTTP_ALLOWED if path == MODEL_HTTP_ADAPTER else ()
     for name in _imports(path):
         for module in FORBIDDEN_MODULES:
+            if module in allowed:
+                continue
             assert name != module and not name.startswith(module + "."), f"{path} imports {name}"

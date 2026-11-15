@@ -176,12 +176,55 @@ def test_error_after_text_keeps_the_sent_text() -> None:
     assert _run(llm) == [META, TextDelta("A"), TextDelta("B"), Failed(reason="LLMError")]
 
 
-def test_unknown_cited_id_fails() -> None:
+def test_unknown_cited_id_is_dropped_and_counted() -> None:
     llm = ScriptedLLM([AnswerChunk("A", ("s1",)), AnswerChunk("B", ("not-in-kb",)), AnswerChunk("C")])
 
     events = _run(llm)
 
-    assert events == [META, TextDelta("A"), Failed(reason="unknown source id")]
+    assert events == [
+        META,
+        TextDelta("A"),
+        TextDelta("B"),
+        TextDelta("C"),
+        Spent(DEFAULT_USAGE),
+        Sources((_ref("s1"),), unknown_source_ids=1),
+        Done(),
+    ]
+
+
+def test_unknown_id_before_a_known_one_is_dropped_and_text_is_held_until_the_known_one() -> None:
+    llm = ScriptedLLM([AnswerChunk("A", ("nope", "s2")), AnswerChunk("B", ("s1", "nope", "other"))])
+
+    events = _run(llm)
+
+    assert events == [
+        META,
+        TextDelta("A"),
+        TextDelta("B"),
+        Spent(DEFAULT_USAGE),
+        Sources((_ref("s2"), _ref("s1")), unknown_source_ids=2),
+        Done(),
+    ]
+
+
+def test_only_unknown_ids_give_the_no_answer_text() -> None:
+    llm = ScriptedLLM([AnswerChunk("A", ("nope",)), AnswerChunk("B", ("nope", "other"))])
+
+    events = _run(llm)
+
+    assert events == [
+        META,
+        TextDelta(NO_ANSWER),
+        Spent(DEFAULT_USAGE),
+        Sources((), unknown_source_ids=2),
+        Done(),
+    ]
+
+
+def test_no_unknown_ids_counts_zero() -> None:
+    events = _run(ScriptedLLM([AnswerChunk("A", ("s1",))]))
+
+    assert events[-2] == Sources((_ref("s1"),), unknown_source_ids=0)
 
 
 def test_usage_ends_the_answer() -> None:
@@ -219,7 +262,7 @@ def test_no_spent_on_error() -> None:
 
 
 def test_failed_is_always_last() -> None:
-    llm = ScriptedLLM([AnswerChunk("A", ("nope",))])
+    llm = ScriptedLLM([AnswerChunk("A", ("s1",))], error=LLMError("cut"))
 
     events = _run(llm)
 

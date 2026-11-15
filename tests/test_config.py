@@ -17,6 +17,45 @@ def test_defaults_without_env_file(settings: Settings) -> None:
     assert settings.mock_llm is False
     assert settings.database_path == "data/feedback.sqlite3"
     assert Settings(_env_file=None).request_log_path == "data/requests.jsonl"
+    assert settings.llm_provider == "anthropic"
+    assert settings.ollama_base_url == "http://localhost:11434"
+    assert settings.ollama_model == "qwen3.5:9b"
+    assert settings.ollama_num_ctx == 32768
+
+
+def test_ollama_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://gpu-box:11434")
+    monkeypatch.setenv("OLLAMA_MODEL", "qwen3.5:27b")
+    monkeypatch.setenv("OLLAMA_NUM_CTX", "65536")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_provider == "ollama"
+    assert settings.ollama_base_url == "http://gpu-box:11434"
+    assert settings.ollama_model == "qwen3.5:27b"
+    assert settings.ollama_num_ctx == 65536
+
+
+def test_smallest_num_ctx_is_32768(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_NUM_CTX", "32768")
+
+    assert Settings(_env_file=None).ollama_num_ctx == 32768
+
+
+def test_unknown_provider_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+    with pytest.raises(ValidationError, match="llm_provider"):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("value", ["32767", "4096", "0", "-1", "lots"])
+def test_too_small_or_invalid_num_ctx_fails(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("OLLAMA_NUM_CTX", value)
+
+    with pytest.raises(ValidationError, match="ollama_num_ctx"):
+        Settings(_env_file=None)
 
 
 def test_env_var_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:

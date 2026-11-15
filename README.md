@@ -21,6 +21,7 @@ Ferdig og testet:
 - Oppfølgingsspørsmål i samme samtale (Story 1.7)
 - Logg over kostnad, tokens og cache per spørsmål (Story 1.8)
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
+- Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 
 Ikke laget ennå: «embassy decides»-svar for spørsmål om egen sak og andre visumtyper (Epic 2), sjekklister for dokumenter (Epic 3) og knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
@@ -77,6 +78,20 @@ Vil du teste på en mobil på samme nettverk, start med `--host 0.0.0.0` og åpn
 
 Uten nøkkel starter appen likevel, men hvert spørsmål gir en fast feiltekst. `.env` er git-ignorert og skal aldri committes.
 
+### Kjør med Ollama (lokal modell, uten nøkkel)
+
+Svarene kan også komme fra en modell som kjører på din egen maskin. Det koster ingenting og trenger ingen nøkkel, men krever et grafikkort med nok minne (testet med `qwen3.5:9b` på et kort med 16 GB) og gir svakere svar enn Claude.
+
+1. Installer [Ollama](https://ollama.com) og hent modellen: `ollama pull qwen3.5:9b`. Modellen må støtte tenking (thinking), for appen slår den alltid på.
+2. Sett `LLM_PROVIDER=ollama` i `.env` (og la `MOCK_LLM=false` stå). `OLLAMA_BASE_URL`, `OLLAMA_MODEL` og `OLLAMA_NUM_CTX` har standardverdier som passer for en vanlig Ollama-installasjon.
+3. Start Ollama, og så appen med `uv run uvicorn app.main:app`.
+
+Appen sender med `num_ctx` (standard 32768 tokens) i hver forespørsel. Kunnskapsbasen er rundt 24 600 tokens, og Ollamas egen standard på 4096 ville kuttet den uten å si fra. Det første svaret etter at Ollama har startet tar ekstra tid, fordi modellen må lese hele kunnskapsbasen (rundt 7 sekunder på et grafikkort med 16 GB, mye lenger uten grafikkort); deretter gjenbruker Ollama den. Fordi modellen tenker før den svarer, tok et svar i testene fra 6 sekunder til over ett minutt.
+
+Uten Claudes innebygde kildehenvisninger skriver modellen kildene som `[[kilde-id]]` i teksten. Appen gjør dem om til kildelenker og fjerner dem fra teksten, så søkeren ser det samme som med Claude. Reglene for dette, og en regel om å bare skrive thai skrift, står i [`prompts/answer-citing-markers.md`](prompts/answer-citing-markers.md), som bare brukes med Ollama. En liten modell blander av og til inn ord eller tegn fra andre skriftsystemer, mest kinesisk. I en test med 36 svar før og 36 svar etter regelen gjaldt det 5 og 2 svar: færre, men ikke null, og for få svar til å bevise at regelen virker. Ollama-svar bør derfor leses av en som kan thai før de brukes overfor søkere.
+
+Kjører ikke Ollama, eller er modellen ikke hentet, starter appen likevel, men hvert spørsmål gir den faste feilteksten. Demomodus (`MOCK_LLM=true`) går foran `LLM_PROVIDER`.
+
 ### Innstillinger
 
 Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et feilstavet navn i `.env` stopper oppstarten, slik at det ikke blir ignorert i det stille.
@@ -85,6 +100,9 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 |---|---|---|
 | `ANTHROPIC_API_KEY` | tom | Nøkkel til Claude API; ikke nødvendig i demomodus |
 | `MOCK_LLM` | `false` | `true` = demomodus med lagrede svar |
+| `LLM_PROVIDER` | `anthropic` | Hvem som svarer utenom demomodus: `anthropic` (Claude) eller `ollama` (lokal modell) |
+| `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3.5:9b` | Ollama-serveren og modellen; brukes bare med `LLM_PROVIDER=ollama` |
+| `OLLAMA_NUM_CTX` | `32768` | Kontekstvindu i tokens som sendes til Ollama; minst 32768 |
 | `MODEL_ANSWER`, `EFFORT_ANSWER` | `claude-opus-5-5`, `medium` | Modellen som skriver svarene |
 | `MODEL_SMALL`, `EFFORT_SMALL` | `claude-haiku-5-5`, `low` | Liten modell til enkle oppgaver |
 | `ADVISER_CONTACT` | rådgiverens e-post | Vises når chatboten ikke kan hjelpe |
@@ -97,7 +115,7 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 uv run pytest
 ```
 
-Testene bruker en falsk KI-klient og kaller aldri Claude API, så de trenger ingen nøkkel og koster ingenting.
+Testene bruker en falsk KI-klient og kaller aldri Claude API eller Ollama, så de trenger ingen nøkkel og koster ingenting.
 
 Koden sjekkes med [ruff](https://docs.astral.sh/ruff/) (linter og formatterer, oppsett i `pyproject.toml`):
 
@@ -118,7 +136,8 @@ Nettleser (app/static)  →  POST /api/chat  →  personvernfilter  →  Claude 
 ```
 
 - Hele kunnskapsbasen (`knowledge-base/*.md`) sendes med i systemprompten og caches hos Anthropic, så gjentatte spørsmål blir billigere. Appen henter ingenting fra nettet mens den kjører.
-- Svaret må oppgi hvilke kilder det bygger på. Kildelenkene hentes fra [`knowledge-base/sources.yaml`](knowledge-base/sources.yaml); viser svaret til en kilde som ikke står der, stoppes det med feiltekst.
+- Med `LLM_PROVIDER=ollama` går spørsmålet til en lokal Ollama-server i stedet for Claude (se over); resten av flyten er den samme.
+- Svaret må oppgi hvilke kilder det bygger på. Kildelenkene hentes fra [`knowledge-base/sources.yaml`](knowledge-base/sources.yaml). Viser svaret til en kilde som ikke står der, får den kilden ingen lenke, resten av svaret vises, og antallet telles i forespørselsloggen. Viser svaret ikke til noen kjent kilde, får søkeren den faste «vi har ikke svar»-teksten.
 - Koden er delt i lag (porter og adaptere): `pipeline` kjenner ikke til FastAPI eller Anthropic, og `tests/test_layering.py` sjekker at det holder.
 
 Mer i [arkitekturoversikten](docs/planning/architecture/architecture-overview.md), skrevet for sensor, og i de bindende reglene i [ARCHITECTURE-SPINE.md](docs/planning/architecture/architecture-G94-sikveland-2026-11-02/ARCHITECTURE-SPINE.md).
@@ -135,10 +154,10 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 
 | Mappe | Innhold |
 |---|---|
-| `app/` | Appen: `main.py` (oppstart), `web/` (API-endepunkter), `pipeline/` (filter, svarflyt, kostnad), `ports/` og `adapters/` (Claude, demo, filer), `static/` (chatsiden) |
+| `app/` | Appen: `main.py` (oppstart), `web/` (API-endepunkter), `pipeline/` (filter, svarflyt, kostnad), `ports/` og `adapters/` (Claude, Ollama, demo, filer), `static/` (chatsiden) |
 | `content/` | Faste tekster på thai og engelsk, og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
-| `prompts/` | Systemprompten for svar |
+| `prompts/` | Systemprompten for svar, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
 | `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen |
 | `tests/` | Pytest-tester og en falsk KI-klient (`tests/fakes/`) |
 | `data/` | Lokale kjøredata (forespørselslogg); git-ignorert |
@@ -175,15 +194,16 @@ Appen skriver én JSON-linje per spørsmål til `data/requests.jsonl` (innstilli
 | `timestamp` | Tidspunkt i UTC (ISO 8601, slutter på `Z`) |
 | `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
 | `category` | Spørsmålskategori (foreløpig alltid `general`); `null` hvis forespørselen feilet før den ble kategorisert |
-| `prompt_versions` | Versjonen av prompten som ble brukt, f.eks. `{"answer": "1"}` |
-| `model` | Modellen som svarte (`mock_llm` i demomodus) |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "citing": "2"}` |
+| `model` | Modellen som svarte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama) |
 | `input_tokens`, `output_tokens` | Tokens inn og ut (ut inkluderer tenking) |
-| `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen |
-| `cost_usd` | Kostnad i USD med seks desimaler, regnet med `PRICE_ANSWER_*`-prisene (0 i demomodus) |
+| `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen (alltid 0 med Ollama, som ikke rapporterer det) |
+| `cost_usd` | Kostnad i USD med seks desimaler, regnet med `PRICE_ANSWER_*`-prisene (0 i demomodus og med Ollama) |
+| `unknown_source_ids` | Hvor mange kilde-id-er i svaret som ikke finnes i `sources.yaml` og derfor ble droppet (0 når alle var kjente); `null` hvis svaret stoppet før kildene kom |
 
 Token-feltene og `cost_usd` er `null` når modellen ikke rapporterte forbruk (typisk ved feil).
 
-**Virker cachen?** Still to spørsmål innen fem minutter. Den første linja har `cache_write_tokens` > 0, den andre skal ha `cache_read_tokens` > 0 og lavere `cost_usd`.
+**Virker cachen?** Still to spørsmål innen fem minutter. Den første linja har `cache_write_tokens` > 0, den andre skal ha `cache_read_tokens` > 0 og lavere `cost_usd`. Dette gjelder Claude. Med Ollama er cache-feltene alltid 0, så cachen kan ikke sjekkes i loggen.
 
 **Total kostnad:**
 

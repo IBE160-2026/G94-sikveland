@@ -30,3 +30,18 @@
 - source_spec: `docs/implementation/spec-4-2-demo-mode-without-an-api-key.md`
   summary: In Story 2.3, make done-phrase matching ignore surrounding punctuation and emoji (`Thanks!`, `ok.`, `ขอบคุณค่ะ 🙏`), in the mock and in the real classifier's tests, and test a stored demo category other than `general`.
   evidence: Review of Story 4.2 (#17, #22): the mock matches done phrases exactly after trimming and casefolding; nothing consumes `classify` yet.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Check the Ollama context budget in a long conversation (system ~24,700 tokens + up to 10 history turns + thinking + answer within `OLLAMA_NUM_CTX` 32768), and detect a full context at runtime (e.g. `prompt_eval_count` reaching `num_ctx`) instead of letting Ollama truncate silently.
+  evidence: Review of the Ollama build (#3), medium, unverified: 32768 − ~24,700 leaves ~8k tokens; the probe's documents question used ~2,700 thinking tokens; never run with 10 long turns. Settle with a 10-turn manual run against Ollama.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Cap an Ollama answer (`num_predict` and/or an overall deadline), so a model stuck thinking cannot hold a request open; the read timeout restarts on every thinking line.
+  evidence: Review of the Ollama build (#5), medium, unverified: no cap is sent and thinking lines are not shown, so the applicant would see only typing dots. Settle by forcing a long thinking run.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: On slow or CPU-only machines, the first (uncached) ~24,700-token prompt may take longer than the 300 s read timeout before Ollama sends anything; make the timeout a setting or separate the first-byte wait.
+  evidence: Review of the Ollama build (#6), medium, unverified: 7 s on the user's GPU; no measurement on CPU. Settle by timing a cold request on a CPU-only machine.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Check that Ollama follow-up questions still cite: earlier answers go back as history without `[[id]]` markers, which may teach a small model to stop citing (then every follow-up becomes `reply-no-answer`).
+  evidence: Review of the Ollama build (#8), medium, unverified: the manual run was single-turn only. Settle with a follow-up question against Ollama; if it fails, re-insert markers in history or add a reminder after it.
+- source_spec: `docs/implementation/spec-ollama-provider.md`
+  summary: Browser check of the example questions with `LLM_PROVIDER=ollama` (AC 4): run MT-10 in `manual-test-plan.md` and record the result.
+  evidence: Review of the Ollama build (#11): AC 4 was checked through the app by script, not tapped in a browser. The docs part of this entry (README, manual test plan, spine, PRD addendum, spec-1-6 and spec-1-8 change logs) was done on 2026-11-15.

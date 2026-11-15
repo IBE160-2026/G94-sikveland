@@ -4,12 +4,13 @@ This plan lists the checks that the automated tests cannot do, and records when 
 
 ## What the automated tests cover, and what they do not
 
-`uv run pytest` runs on every push (see the [CI workflow](../../.github/workflows/ci.yml)). The tests use a fake Claude client, so they never call the API. They cover the server: the privacy filter, the answer pipeline and its event stream, the API endpoints, the request log and costs, demo mode, loading the texts, knowledge base and prompt, and the layer rules.
+`uv run pytest` runs on every push (see the [CI workflow](../../.github/workflows/ci.yml)). The tests use a fake model client, so they never call the Claude API or Ollama. They cover the server: the privacy filter, the answer pipeline and its event stream, the API endpoints, the request log and costs, demo mode, loading the texts, knowledge base and prompt, and the layer rules.
 
 They do not cover:
 
 - **The page in a browser.** No test runs `app/static/app.js`; `tests/test_static.py` only checks its source text. A browser-level test (Playwright) is deferred until after part 1 ([deferred-work.md](deferred-work.md)).
 - **The real Claude API.** Answers in Thai, cited sources and prompt caching only happen with a real key, which costs money.
+- **A real Ollama model** (`LLM_PROVIDER=ollama`): whether a local model answers in Thai, cites with `[[id]]` markers the adapter can read, and keeps to Thai script.
 - **Real phones**, and Facebook's in-app browser in particular.
 
 ## Setup
@@ -19,6 +20,7 @@ They do not cover:
 | Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
 | Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09 |
+| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10 |
 
 Start the app with `uv run uvicorn app.main:app` and open <http://127.0.0.1:8000>. For the narrow-screen checks, use the browser's device mode (F12, then Ctrl+Shift+M) and set the width to 360 px and then 320 px (NFR1: works from 360 px, no horizontal scrolling down to 320 px).
 
@@ -114,6 +116,18 @@ Mode: real key, on a real Android phone or iPhone.
 
 Expected: the page loads in Thai; the answer arrives in parts (not all at once after a long wait); source links work; no horizontal scroll. If the answer stops halfway, note how long it ran: this decides the deferred heartbeat/timeout work in [deferred-work.md](deferred-work.md).
 
+### MT-10 Answers from Ollama (Ollama provider)
+
+Mode: Ollama, 360 px. No key and no cost.
+
+1. Tap each of the four example questions.
+2. Ask the weather question from MT-06.
+3. Ask a follow-up to the first answer, e.g. `แล้วค่าธรรมเนียมเท่าไร` (and how much is the fee?).
+4. Open `data/requests.jsonl` and read the last lines.
+5. Stop Ollama and ask a question.
+
+Expected: (1) each answer is in Thai, arrives in parts after the typing dots, and has at least one source link; no `[[...]]` marker is ever visible, not even for a moment; the text has no Chinese characters (a native Thai reader judges the language, NFR8); (2) the fixed "we have no answer" text, no links; (3) the follow-up is answered in context and still has source links; (4) `model` is `OLLAMA_MODEL`, `prompt_versions` has `answer` and `citing`, `cost_usd` and both cache fields are 0, `unknown_source_ids` is a number; (5) the fixed error text. Answers take from a few seconds to over a minute (the model thinks first), and the first answer after starting Ollama also reads the whole knowledge base.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -129,3 +143,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-07 | | | Not run | Needs a real key |
 | | MT-08 | | | Not run | Needs a real key |
 | | MT-09 | | | Not run | Needs a real key and a phone |
+| | MT-10 | | | Not run | Needs Ollama; branch `ollama` |

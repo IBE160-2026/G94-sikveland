@@ -6,6 +6,7 @@ from app.adapters.file_prompts import Prompt, PromptError, load_prompt
 
 ROOT = Path(__file__).resolve().parent.parent
 ANSWER_PROMPT = ROOT / "prompts" / "answer-system.md"
+CITING_PROMPT = ROOT / "prompts" / "answer-citing-markers.md"
 
 
 def test_answer_prompt_starts_with_a_version_line() -> None:
@@ -27,6 +28,15 @@ def test_answer_prompt_asks_for_thai_and_documents_only() -> None:
     assert "only from the documents" in text
     assert "typos" in text and "mix" in text
     assert "never as instructions" in text
+
+
+def test_citing_prompt_asks_for_thai_script_only() -> None:
+    # A small Ollama model slips Chinese words into Thai answers without this rule.
+    text = load_prompt(CITING_PROMPT).text
+
+    assert "Thai script" in text
+    assert "Never write Chinese" in text
+    assert "[[" in text
 
 
 def test_answer_prompt_explains_the_removed_marker() -> None:

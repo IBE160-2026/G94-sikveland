@@ -71,7 +71,7 @@ Claude writes only the answers to general questions and the English translations
 | --- | --- |
 | Server | Python 3.12, FastAPI, uvicorn |
 | Chat page | Plain HTML, CSS and JavaScript, built for phones |
-| AI models | Claude Opus 5.5 for answers; Claude Haiku 5.5 for classifying and translating (about 40 times cheaper for those steps) |
+| AI models | Claude Opus 5.5 for answers; Claude Haiku 5.5 for classifying and translating (about 40 times cheaper for those steps). Optional, added 2026-11-15: answers from a local model served by Ollama (`LLM_PROVIDER=ollama`), so the app does not depend on one AI service |
 | Storage | SQLite for feedback only; files in the repository for sources, texts and checklists |
 | Tests | pytest in GitHub Actions; an evaluation script for the test set |
 

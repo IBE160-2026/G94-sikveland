@@ -7,12 +7,17 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 import app.main
 from app.adapters.anthropic_llm import AnthropicLLM
-from app.adapters.file_prompts import PromptError
+from app.adapters.file_knowledge_base import load_knowledge_base
+from app.adapters.file_prompts import PromptError, load_prompt
+from app.adapters.mock_llm import MODEL_NAME as MOCK_MODEL_NAME
+from app.adapters.mock_llm import MockLLM
+from app.adapters.ollama_llm import OllamaLLM
 from app.config import ROOT, Settings
 from app.main import create_app
 from app.pipeline.filter import REMOVED_MARKER
@@ -179,10 +184,37 @@ def test_error_after_text_keeps_the_sent_text(settings: Settings) -> None:
     ]
 
 
-def test_unknown_cited_id_ends_with_error(settings: Settings) -> None:
-    llm = ScriptedLLM([AnswerChunk("A", ("no-such-source",))])
+def test_unknown_cited_id_is_dropped_and_the_answer_continues(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("A", (S1,)), AnswerChunk("B", ("no-such-source",))])
+    client = _client(settings, llm)
 
-    assert _events(_client(settings, llm), {"question": QUESTION, "history": []}) == [_meta(), ERROR]
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events == [
+        _meta(),
+        {"type": "text", "delta": "A"},
+        {"type": "text", "delta": "B"},
+        _sources(_source(client, S1)),
+        DONE,
+    ]
+    assert "no-such-source" not in json.dumps(events)
+    [line] = _log(settings)
+    assert (line["outcome"], line["unknown_source_ids"]) == ("answered", 1)
+
+
+def test_only_unknown_cited_ids_send_the_no_answer_text(settings: Settings) -> None:
+    llm = ScriptedLLM([AnswerChunk("a guess", ("no-such-source",))])
+
+    events = _events(_client(settings, llm), {"question": QUESTION, "history": []})
+
+    assert events == [
+        _meta(),
+        {"type": "text", "delta": _texts(settings)["reply-no-answer"]},
+        _sources(),
+        DONE,
+    ]
+    [line] = _log(settings)
+    assert (line["outcome"], line["unknown_source_ids"]) == ("no_answer", 1)
 
 
 class _Exploding(ScriptedLLM):
@@ -381,6 +413,7 @@ LOG_FIELDS = {
     "cache_read_tokens",
     "cache_write_tokens",
     "cost_usd",
+    "unknown_source_ids",
 }
 SPEC_USAGE = Usage(input_tokens=1000, output_tokens=200, cache_read_tokens=50000, cache_write_tokens=0)
 
@@ -412,6 +445,7 @@ def test_cited_answer_logs_one_line_with_tokens_and_cost(settings: Settings) -> 
         "cache_write_tokens": 0,
         # (1000x4 + 200x20 + 50000x0.2 + 0x5) / 1e6 with the default prices
         "cost_usd": 0.018,
+        "unknown_source_ids": 0,
     }
 
 
@@ -431,10 +465,9 @@ def test_no_answer_logs_no_answer_with_tokens_and_cost(settings: Settings) -> No
         ScriptedLLM([], error=LLMError("boom")),
         ScriptedLLM([AnswerChunk("A", (S1,))], error=LLMError("cut")),
         ScriptedLLM([], refusal=True),
-        ScriptedLLM([AnswerChunk("A", ("no-such-source",))]),
         _Exploding(),
     ],
-    ids=["error-before-text", "error-after-text", "refusal", "unknown-source", "unexpected"],
+    ids=["error-before-text", "error-after-text", "refusal", "unexpected"],
 )
 def test_error_logs_error_with_null_tokens_and_cost(settings: Settings, llm: ScriptedLLM) -> None:
     events = _events(_client(settings, llm), {"question": QUESTION, "history": []})
@@ -444,7 +477,15 @@ def test_error_logs_error_with_null_tokens_and_cost(settings: Settings, llm: Scr
     assert set(line) == LOG_FIELDS
     assert line["outcome"] == "error"
     assert line["category"] == "general"
-    for field in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd"):
+    for field in (
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "cost_usd",
+        # The stream ended before the sources were known.
+        "unknown_source_ids",
+    ):
         assert line[field] is None, field
 
 
@@ -465,7 +506,7 @@ def test_client_gone_mid_answer_logs_incomplete(settings: Settings) -> None:
     # when the client goes away (Starlette does not close it itself).
     lines.close()
 
-    assert logged == [("incomplete", "general", None)]
+    assert logged == [("incomplete", "general", None, None)]
     assert events.gi_frame is None  # the pipeline (and the model stream) is closed too
 
 
@@ -544,3 +585,181 @@ def test_absolute_log_path_is_kept(settings: Settings) -> None:
     created = create_app(settings, llm=ScriptedLLM())
 
     assert created.state.request_log.path == Path(settings.request_log_path)
+
+
+# --- Provider choice: Ollama ---------------------------------------------------------
+
+
+def _ollama(settings: Settings) -> Settings:
+    return settings.model_copy(update={"llm_provider": "ollama", "ollama_model": "qwen-test:1b"})
+
+
+def _ollama_llm(settings: Settings, body: bytes, requests: list[httpx.Request] | None = None) -> OllamaLLM:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if requests is not None:
+            requests.append(request)
+        return httpx.Response(200, content=body)
+
+    return OllamaLLM(
+        settings,
+        load_knowledge_base(app.main.KNOWLEDGE_BASE_DIR),
+        load_prompt(app.main.ANSWER_PROMPT_FILE),
+        load_prompt(app.main.CITING_PROMPT_FILE),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+
+def _ollama_stream(*pieces: str) -> bytes:
+    lines: list[dict[str, Any]] = [{"message": {"role": "assistant", "thinking": "hmm"}, "done": False}]
+    lines += [{"message": {"role": "assistant", "content": p}, "done": False} for p in pieces]
+    lines.append(
+        {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "stop",
+            "prompt_eval_count": 24600,
+            "eval_count": 900,
+        }
+    )
+    return "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines).encode()
+
+
+def test_default_provider_is_anthropic(settings: Settings) -> None:
+    created = create_app(settings)
+
+    assert settings.llm_provider == "anthropic"
+    assert isinstance(created.state.llm, AnthropicLLM)
+    assert created.state.prompt_versions == {"answer": created.state.answer_prompt.version}
+
+
+def test_ollama_provider_wires_the_ollama_adapter(settings: Settings) -> None:
+    ollama = _ollama(settings)
+
+    created = create_app(ollama)
+
+    assert isinstance(created.state.llm, OllamaLLM)
+    assert created.state.answer_model == "qwen-test:1b"
+    assert created.state.no_answer_key == "reply-no-answer"
+    assert created.state.fallback_usage is None
+    assert created.state.prompt_versions == {
+        "answer": created.state.answer_prompt.version,
+        "citing": load_prompt(app.main.CITING_PROMPT_FILE).version,
+    }
+
+
+def test_wired_ollama_adapter_sends_both_prompts_and_the_documents(settings: Settings) -> None:
+    created = create_app(_ollama(settings))
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, content=_ollama_stream("A [[udi-fees]]."))
+
+    created.state.llm._client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    _events(TestClient(created), {"question": QUESTION, "history": []})
+
+    [request] = requests
+    system = json.loads(request.content)["messages"][0]
+    assert system["role"] == "system"
+    content = system["content"]
+    answer_text = load_prompt(app.main.ANSWER_PROMPT_FILE).text
+    citing_text = load_prompt(app.main.CITING_PROMPT_FILE).text
+    assert answer_text in content
+    assert citing_text in content
+    assert content.index(answer_text) < content.index(citing_text) < content.index("<document id=")
+
+
+def test_demo_mode_wins_over_the_ollama_provider(settings: Settings) -> None:
+    created = create_app(_ollama(settings).model_copy(update={"mock_llm": True}))
+
+    assert isinstance(created.state.llm, MockLLM)
+    assert created.state.answer_model == MOCK_MODEL_NAME
+    assert created.state.prompt_versions == {"answer": created.state.answer_prompt.version}
+
+
+def test_ollama_answer_streams_without_markers_and_logs_no_cost(settings: Settings) -> None:
+    ollama = _ollama(settings)
+    requests: list[httpx.Request] = []
+    answer = "ค่าธรรมเนียม 90 ยูโร [[udi-fees]] ชำระออนไลน์ [["
+    body = _ollama_stream(answer[:20], answer[20:28], answer[28:] + "embassy-online-registration]].")
+    client = _client(ollama, _ollama_llm(ollama, body, requests))
+
+    events = _events(client, {"question": "ค่าวีซ่าเท่าไหร่", "history": []})
+
+    text = "".join(e["delta"] for e in events if e["type"] == "text")
+    assert text == "ค่าธรรมเนียม 90 ยูโร ชำระออนไลน์."
+    assert not any("[" in e["delta"] or "]" in e["delta"] for e in events if e["type"] == "text")
+    assert events[-2] == _sources(_source(client, "udi-fees"), _source(client, S2))
+    assert events[-1] == DONE
+    assert json.loads(requests[0].content)["model"] == "qwen-test:1b"
+
+    [line] = _log(ollama)
+    assert {k: v for k, v in line.items() if k != "timestamp"} == {
+        "outcome": "answered",
+        "category": "general",
+        "prompt_versions": client.app.state.prompt_versions,
+        "model": "qwen-test:1b",
+        "input_tokens": 24600,
+        "output_tokens": 900,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0,
+        "unknown_source_ids": 0,
+    }
+    raw = Path(ollama.request_log_path).read_text(encoding="utf-8")
+    for secret in ("ค่าวีซ่าเท่าไหร่", "ค่าธรรมเนียม", "udi-fees", "hmm"):
+        assert secret not in raw
+
+
+def test_ollama_unknown_marker_is_dropped_and_counted(settings: Settings) -> None:
+    ollama = _ollama(settings)
+    body = _ollama_stream("A [[udi-fees]] B [[made-up-id]].")
+    client = _client(ollama, _ollama_llm(ollama, body))
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert "".join(e["delta"] for e in events if e["type"] == "text") == "A B."
+    assert events[-2] == _sources(_source(client, "udi-fees"))
+    [line] = _log(ollama)
+    assert (line["outcome"], line["unknown_source_ids"]) == ("answered", 1)
+
+
+def test_ollama_answer_without_markers_sends_the_no_answer_text(settings: Settings) -> None:
+    ollama = _ollama(settings)
+    client = _client(ollama, _ollama_llm(ollama, _ollama_stream("ไม่ทราบ")))
+
+    events = _events(client, {"question": QUESTION, "history": []})
+
+    assert events == [_meta(), {"type": "text", "delta": _texts(ollama)["reply-no-answer"]}, _sources(), DONE]
+
+
+def test_ollama_down_shows_the_error_text(settings: Settings) -> None:
+    ollama = _ollama(settings)
+
+    def refused(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    llm = OllamaLLM(
+        ollama,
+        load_knowledge_base(app.main.KNOWLEDGE_BASE_DIR),
+        load_prompt(app.main.ANSWER_PROMPT_FILE),
+        load_prompt(app.main.CITING_PROMPT_FILE),
+        client=httpx.Client(transport=httpx.MockTransport(refused)),
+    )
+
+    events = _events(_client(ollama, llm), {"question": QUESTION, "history": []})
+
+    assert events == [_meta(), ERROR]
+    [line] = _log(ollama)
+    assert (line["outcome"], line["model"], line["cost_usd"]) == ("error", "qwen-test:1b", None)
+
+
+def test_broken_citing_prompt_stops_startup_only_with_ollama(
+    settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(app.main, "CITING_PROMPT_FILE", tmp_path / "missing.md")
+
+    create_app(settings, llm=ScriptedLLM())  # Claude never reads it
+    with pytest.raises(PromptError):
+        create_app(_ollama(settings), llm=ScriptedLLM())
