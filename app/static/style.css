@@ -29,17 +29,49 @@ body {
   display: none !important;
 }
 
-/* Demo mode label: always visible at the top, also while scrolling. */
-.demo-label {
+/* Top: demo label and the bar with history and new chat, visible while scrolling. */
+.top {
   position: sticky;
   top: 0;
   z-index: 1;
+}
+
+.demo-label {
   margin: 0;
   padding: 0.4rem 0.75rem;
   text-align: center;
   font-weight: 700;
   color: #fff;
   background: #6b2fa0;
+}
+
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.25rem 0.75rem;
+  background: #f6f7f9;
+  border-bottom: 1px solid #dde1e8;
+}
+
+.top-button {
+  flex: none;
+  max-width: 100%;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0.25rem 0.9rem;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.top-button:active {
+  background: #e8eefb;
 }
 
 .page {
@@ -124,6 +156,7 @@ button {
 }
 
 .send:disabled,
+.top-button:disabled,
 .example-question:disabled,
 .question-form textarea:disabled {
   opacity: 0.6;
@@ -264,4 +297,126 @@ button {
 :focus-visible {
   outline: 3px solid #4d90fe;
   outline-offset: 2px;
+}
+
+/* Saved chats: a full-screen panel over the chat. */
+body.panel-open {
+  overflow: hidden;
+}
+
+.history-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: #f6f7f9;
+}
+
+.history-panel > * {
+  max-width: 40rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.history-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  background: #f6f7f9;
+  border-bottom: 1px solid #dde1e8;
+}
+
+.history-title {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.history-empty {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.history-open {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.history-open:active {
+  background: #e8eefb;
+}
+
+.history-question {
+  /* Two lines at most; the text is already shortened. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.history-date {
+  font-size: 0.875rem;
+  color: #5a6478;
+}
+
+.history-delete,
+.delete-all {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0.25rem 0.9rem;
+  color: #8a1c1c;
+  background: #fff;
+  border: 1px solid #d9b3b3;
+  border-radius: 0.75rem;
+}
+
+.history-delete {
+  flex: none;
+}
+
+.delete-all {
+  display: block;
+  width: 100%;
+}
+
+.history-delete:active,
+.delete-all:active {
+  background: #fbeaea;
+}
+
+.history-panel button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

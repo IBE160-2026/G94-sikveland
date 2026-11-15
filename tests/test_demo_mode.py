@@ -189,7 +189,10 @@ def test_page_shows_the_demo_label_always_visible() -> None:
     assert 'id="demo-label"' in html and "hidden" in html.split('id="demo-label"')[1].split(">")[0]
     assert 'demoLabel.textContent = data.texts["demo-label"];' in js
     assert "demoLabel.hidden = data.demo_mode !== true;" in js
-    rule = css.split(".demo-label {")[1].split("}")[0]
+    # The label sits in the top header, which stays at the top while scrolling.
+    header = html.split('<header class="top">')[1].split("</header>")[0]
+    assert 'id="demo-label"' in header
+    rule = css.split(".top {")[1].split("}")[0]
     assert "position: sticky;" in rule and "top: 0;" in rule
 
 

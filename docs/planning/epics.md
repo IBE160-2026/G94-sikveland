@@ -52,7 +52,7 @@ From the architecture spine (AD numbers in brackets):
 - Fixed pipeline order: filter personal info → classify → route → answer or fixed reply; nothing reaches the LLM before the filter; the eval script uses the same pipeline entry (AD-1).
 - Only `app/adapters/anthropic_llm.py` imports the SDK; `MOCK_LLM=true` wires the demo adapter (AD-2).
 - LLM port: `classify(question, recent_history) -> (Category, Usage)`, `answer(question, history) -> stream of {text, source_ids} + Usage`, `translate(text) -> (str, Usage)`; Usage includes thinking and cache tokens; adapters return no SDK types; refusal is an error; answers use `MODEL_ANSWER` (Claude Opus 5.5), classify and translate use `MODEL_SMALL` (Claude Haiku 5.5) (AD-14).
-- Stateless server: the conversation lives in the page's `sessionStorage`; requests are `{question, history: [{question, answer}]}`, max 10 exchanges; the page stores an exchange only after `done`, using `clean_question`; history is sent as plain text (AD-3).
+- Stateless server: the conversation lives in the page; past conversations are saved in `localStorage` on the device (latest 20) and the open one's id in `sessionStorage`; requests are `{question, history: [{question, answer}]}`, max 10 exchanges; the page stores an exchange only after `done`, using `clean_question`; history is sent as plain text (AD-3).
 - Personal-information filter runs on the question, all history turns and translate input; `meta.personal_info_removed` refers to the new question only (AD-4).
 - Classifier: separate structured-output call (no forced tool use), closed categories `general`, `individual_assessment`, `out_of_scope`, `reach_person`, `done`; sees the question plus the last 2 exchanges (AD-5).
 - Fixed texts: `content/texts.yaml`, a closed key list with `th` and `en`, category → key mapping, `{ADVISER_CONTACT}` filled at load; `GET /api/texts` returns `{demo_mode, texts, example_questions}`; no hard-coded Thai in the page (AD-6).
@@ -312,7 +312,7 @@ So that I don't have to repeat my situation in every question (FR1).
 
 **Given** a conversation in progress
 **When** a `done` event arrives
-**Then** the page stores the exchange `{question: clean_question, answer: shown text}` in `sessionStorage`, including fixed replies (AD-3)
+**Then** the page stores the exchange `{question: clean_question, answer: shown text}` in the open conversation, saved on the device, including fixed replies (AD-3)
 **And** an exchange that ended with `error` is not stored.
 
 **Given** stored exchanges
@@ -323,7 +323,7 @@ So that I don't have to repeat my situation in every question (FR1).
 
 **Given** the page is reloaded in the same tab
 **When** it opens again
-**Then** the earlier conversation is shown and continues; closing the tab removes it.
+**Then** the earlier conversation is shown and continues; a new tab opens an empty new chat, and the earlier conversation can be reopened from the saved chats (changed 2026-11-15, `spec-chat-history-and-new-chat.md`).
 
 **Given** `meta.personal_info_removed` is `true` for the new question
 **When** the reply is shown
