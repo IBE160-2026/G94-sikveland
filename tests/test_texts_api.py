@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.ports.content import REQUIRED_TEXT_KEYS
+from app.ports.content import REQUIRED_TEXT_KEYS, VISIT_PURPOSES
 from tests.fakes.content import committed_checklists
 
 
@@ -105,6 +105,57 @@ def test_feedback_texts_are_served_in_thai(settings: Settings, key: str) -> None
     # No adviser contact, figures or claims about requirements in the feedback texts.
     assert not any(ch.isdigit() for ch in text), key
     assert "@" not in text, key
+
+
+CHECKLIST_KEYS = (
+    "checklist-button",
+    "checklist-title",
+    "checklist-choose-purpose",
+    "checklist-purpose-tourism",
+    "checklist-purpose-family",
+    "checklist-purpose-friends",
+    "checklist-back",
+    "checklist-change-purpose",
+    "checklist-not-applicable",
+    "checklist-progress",
+    "checklist-all-done",
+    "checklist-loading",
+    "checklist-retry",
+)
+
+
+def test_checklist_texts_are_served_in_thai(settings: Settings) -> None:
+    texts = _get_texts(settings)["texts"]
+
+    assert set(CHECKLIST_KEYS) <= REQUIRED_TEXT_KEYS
+    for key in CHECKLIST_KEYS:
+        assert any("\u0e00" <= ch <= "\u0e7f" for ch in texts[key]), key
+    # One name per visit purpose.
+    for purpose in VISIT_PURPOSES:
+        assert f"checklist-purpose-{purpose}" in texts
+    # The page fills in the counts; nothing else is left in braces.
+    progress = texts["checklist-progress"]
+    assert "{done}" in progress and "{total}" in progress
+    assert "{" not in progress.replace("{done}", "").replace("{total}", "")
+
+
+def test_checklist_texts_have_their_english_meaning(settings: Settings) -> None:
+    from app.adapters.file_content import load_content
+    from app.main import CONTENT_FILE
+
+    texts = load_content(CONTENT_FILE, settings.adviser_contact, committed_checklists()).texts()
+
+    assert texts["checklist-button"].en == "Checklist"
+    assert texts["checklist-not-applicable"].en == "Doesn't apply to me"
+    assert texts["checklist-progress"].en == "{done} of {total} ready"
+    # All done is no promise that the application is complete.
+    assert "The embassy decides" in texts["checklist-all-done"].en
+    assert "สถานทูต" in texts["checklist-all-done"].th
+    assert [texts[f"checklist-purpose-{p}"].en for p in VISIT_PURPOSES] == [
+        "Tourism",
+        "Visiting family",
+        "Visiting friends",
+    ]
 
 
 def test_feedback_texts_have_their_english_meaning(settings: Settings) -> None:

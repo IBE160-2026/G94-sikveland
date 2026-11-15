@@ -13,6 +13,10 @@
 #           give changed content a new id instead.
 #   th, en  the text in Thai (shown) and English (stored)
 #   source  an id from knowledge-base/sources.yaml, shown as the item's link
+#   conditional  optional, true or false (default false). True for an item that only
+#           applies to some applicants: its text starts with the condition ("If ...").
+#           The page then also offers "doesn't apply to me", and the progress line
+#           counts only the items that apply.
 # The app refuses to start if any of this is broken.
 #
 # Items come from the embassy's checklist (embassy-visitor-visa-checklist): the general
@@ -74,6 +78,7 @@ tourism:
     en: Proof of identity
   - &name-change-certificate
     id: name-change-certificate
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: "ถ้าเคยเปลี่ยนชื่อ: สำเนาใบเปลี่ยนชื่อ"
     en: "If you have changed your name: a copy of the name change certificate"
@@ -84,6 +89,7 @@ tourism:
     en: Proof of occupation
   - &employment-proof
     id: employment-proof
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าเป็นลูกจ้าง: หนังสือจดทะเบียนบริษัท และหนังสือรับรองการทำงานที่ระบุจำนวนวันลาที่ได้รับ
@@ -93,16 +99,19 @@ tourism:
       vacation days granted, your position in the company and your monthly salary
   - &self-employment-proof
     id: self-employment-proof
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: "ถ้าเป็นเจ้าของกิจการ: หลักฐานการเป็นเจ้าของกิจการ (หนังสือจดทะเบียนบริษัท)"
     en: "If self-employed: evidence of business ownership (company registration)"
   - &minor-birth-certificate
     id: minor-birth-certificate
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: "ถ้าอายุต่ำกว่า 18 ปีและเดินทางโดยไม่มีผู้ปกครองตามกฎหมาย: สูติบัตร"
     en: "If under 18 and travelling without a legal guardian: birth certificate"
   - &minor-proof-of-custody
     id: minor-proof-of-custody
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าอายุต่ำกว่า 18 ปีและเดินทางโดยไม่มีผู้ปกครองตามกฎหมาย: หลักฐานการมีอำนาจปกครอง
@@ -112,6 +121,7 @@ tourism:
       example a marriage certificate, divorce certificate or registration of residence)
   - &minor-consent-letter
     id: minor-consent-letter
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าอายุต่ำกว่า 18 ปี เดินทางโดยไม่มีผู้ปกครองตามกฎหมาย และผู้ปกครองไม่ได้มาด้วยตอนยื่นคำร้อง:
@@ -128,6 +138,7 @@ tourism:
     th: หลักฐานการจองโรงแรมหรือที่พักอื่นตลอดการเดินทาง
     en: A hotel reservation or other proof of accommodation for the whole stay
   - id: itinerary
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: "ถ้าจะไปหลายประเทศ: แผนการเดินทาง"
     en: "If you visit several countries: an itinerary of the planned trip"
@@ -136,6 +147,7 @@ tourism:
     th: หลักฐานการจองตั๋วเครื่องบินไป-กลับ
     en: Proof of a round-trip flight reservation
   - id: organised-tour-voucher
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าเดินทางกับทัวร์: หนังสือรับรองหรือวอเชอร์ฉบับจริงจากบริษัททัวร์หรือบริษัทนำเที่ยว
@@ -153,6 +165,7 @@ tourism:
       those of the person paying for the trip, or other proof that you have enough
       money for the whole journey and stay
   - id: ties-to-thailand
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าเกี่ยวข้อง: สำเนาโฉนดที่ดินหรือเอกสารสิทธิ์อสังหาริมทรัพย์ ทะเบียนสมรส
@@ -178,6 +191,7 @@ family:
   - *minor-consent-letter
   # Visiting family or friends
   - id: eu-eea-family-member
+    conditional: true
     source: embassy-necessary-documents
     th: >-
       ถ้าสมาชิกครอบครัวที่คุณไปเยี่ยมในนอร์เวย์เป็นพลเมืองของประเทศในกลุ่ม EU/EEA:
@@ -187,6 +201,7 @@ family:
       embassy's separate checklist for family members of EU/EEA nationals applies
   - &sponsorship-form
     id: sponsorship-form
+    conditional: true
     source: udi-sponsorship-form
     th: >-
       ถ้าผู้ที่เชิญคุณออกค่าใช้จ่ายระหว่างที่คุณพำนัก: แบบฟอร์มผู้สนับสนุน (Sponsorship form)
@@ -223,6 +238,7 @@ family:
       of correspondence (boyfriend/girlfriend)
   - &social-and-financial-ties
     id: social-and-financial-ties
+    conditional: true
     source: embassy-visitor-visa-checklist
     th: >-
       ถ้าเกี่ยวข้อง: สำเนาโฉนดที่ดินหรือเอกสารสิทธิ์อสังหาริมทรัพย์ บัญชีธนาคาร ทะเบียนสมรส

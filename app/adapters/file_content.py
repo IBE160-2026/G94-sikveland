@@ -8,7 +8,14 @@ from typing import Any
 
 import yaml
 
-from app.ports.content import REQUIRED_TEXT_KEYS, VISIT_PURPOSES, ChecklistItem, ExampleQuestion, FixedText
+from app.ports.content import (
+    PAGE_PLACEHOLDERS,
+    REQUIRED_TEXT_KEYS,
+    VISIT_PURPOSES,
+    ChecklistItem,
+    ExampleQuestion,
+    FixedText,
+)
 from app.ports.knowledge_base import KnowledgeBase
 
 LANGUAGES = ("th", "en")
@@ -98,9 +105,10 @@ def load_checklists(
     """Read and validate `content/checklists.yaml` (AD-11). Raises `ContentError` on any problem.
 
     The file maps each visit purpose in `VISIT_PURPOSES`, no more and no fewer, to a
-    non-empty list of items `{id, th, en, source}`. Item ids are kebab-case and unique
-    within their checklist (the same id may appear in another checklist), and every
-    `source` must be a source id in the knowledge base.
+    non-empty list of items `{id, th, en, source}`, plus an optional boolean
+    `conditional` (default false). Item ids are kebab-case and unique within their
+    checklist (the same id may appear in another checklist), and every `source` must be
+    a source id in the knowledge base.
     """
     data = _read_yaml(path, "checklists file")
     if not isinstance(data, dict):
@@ -141,7 +149,7 @@ def _load_checklist(
             raise ContentError(f"checklist {purpose!r} has duplicate item id {item_id!r}")
         seen.add(item_id)
         where = f"checklist {purpose!r} item {item_id!r}"
-        _reject_extra_fields(entry, {"id", "source", *LANGUAGES}, where)
+        _reject_extra_fields(entry, {"id", "source", "conditional", *LANGUAGES}, where)
         th, en = (_language(entry, lang, where, adviser_contact) for lang in LANGUAGES)
         source_id = entry.get("source")
         if not isinstance(source_id, str) or not source_id:
@@ -150,7 +158,10 @@ def _load_checklist(
             knowledge_base.source(source_id)
         except KeyError:
             raise ContentError(f"{where} cites unknown source {source_id!r}") from None
-        items.append(ChecklistItem(id=item_id, th=th, en=en, source_id=source_id))
+        conditional = entry.get("conditional", False)
+        if not isinstance(conditional, bool):
+            raise ContentError(f"{where} has a 'conditional' that is not true or false: {conditional!r}")
+        items.append(ChecklistItem(id=item_id, th=th, en=en, source_id=source_id, conditional=conditional))
     return tuple(items)
 
 
@@ -182,7 +193,8 @@ def _load_texts(section: object, adviser_contact: str) -> dict[str, FixedText]:
         if not isinstance(entry, dict):
             raise ContentError(f"{where} must be a mapping with 'th' and 'en'")
         _reject_extra_fields(entry, set(LANGUAGES), where)
-        th, en = (_language(entry, lang, where, adviser_contact) for lang in LANGUAGES)
+        placeholders = PAGE_PLACEHOLDERS.get(key, ())
+        th, en = (_language(entry, lang, where, adviser_contact, placeholders) for lang in LANGUAGES)
         texts[key] = FixedText(th=th, en=en)
     return texts
 
@@ -215,15 +227,29 @@ def _reject_extra_fields(entry: dict[Any, Any], allowed: set[str], where: str) -
         raise ContentError(f"{where} has unknown field(s): {', '.join(extra)}")
 
 
-def _language(entry: dict[Any, Any], lang: str, where: str, adviser_contact: str) -> str:
-    """The text for one language, trimmed, checked and with the contact filled in."""
+def _language(
+    entry: dict[Any, Any],
+    lang: str,
+    where: str,
+    adviser_contact: str,
+    page_placeholders: tuple[str, ...] = (),
+) -> str:
+    """The text for one language, trimmed, checked and with the contact filled in.
+
+    `page_placeholders` (from `PAGE_PLACEHOLDERS`) must each be in the text and stay in
+    it as they are: the page fills them in.
+    """
     value = entry.get(lang)
     if not isinstance(value, str) or not value.strip():
         raise ContentError(f"{where} is missing a non-empty {lang!r} text")
     value = value.strip()
-    # Any brace left once the known placeholder is removed is an unknown or mistyped
-    # placeholder. Checked before filling, so braces in the contact value are allowed.
     rest = value.replace(CONTACT_PLACEHOLDER, "")
+    for placeholder in page_placeholders:
+        if placeholder not in rest:
+            raise ContentError(f"{where} ({lang}) must contain {placeholder}: {value!r}")
+        rest = rest.replace(placeholder, "")
+    # Any brace left once the known placeholders are removed is an unknown or mistyped
+    # placeholder. Checked before filling, so braces in the contact value are allowed.
     if "{" in rest or "}" in rest:
         raise ContentError(f"{where} ({lang}) has an unknown or mistyped placeholder: {value!r}")
     return value.replace(CONTACT_PLACEHOLDER, adviser_contact)

@@ -461,3 +461,220 @@ def test_feedback_buttons_fit_narrow_screens_and_are_large_enough() -> None:
     button = css.split(".feedback-button {")[1].split("}")[0]
     assert "min-height: 48px;" in button and "min-width: 48px;" in button
     assert "max-width: 100%;" in button
+
+
+# --- Document checklist (Story 3.2) ------------------------------------------------------
+
+
+def _checklist_js() -> str:
+    return (Path(STATIC_DIR) / "checklist.js").read_text(encoding="utf-8")
+
+
+def _css() -> str:
+    return (Path(STATIC_DIR) / "style.css").read_text(encoding="utf-8")
+
+
+def _body(js: str, name: str) -> str:
+    return js.split(f"function {name}(")[1].split("\n  }\n")[0]
+
+
+def test_checklist_script_is_served_and_loaded_before_the_page_script(client: TestClient) -> None:
+    html = _html()
+
+    assert client.get("/checklist.js").status_code == 200
+    assert '<script src="/checklist.js" defer></script>' in html
+    assert html.index('src="/checklist.js"') < html.index('src="/app.js"')
+    assert "const Lists = window.Checklist;" in _app_js()
+
+
+def test_page_has_the_checklist_button_and_view() -> None:
+    html = _html()
+
+    top_bar = html.split('id="top-bar"')[1].split("</nav>")[0]
+    assert 'id="checklist-button"' in top_bar and 'aria-controls="checklist-panel"' in top_bar
+    panel = html.split('id="checklist-panel"')[1].split("</section>")[0]
+    assert 'role="dialog" aria-modal="true"' in panel and 'aria-labelledby="checklist-title"' in panel
+    for element_id in (
+        "checklist-title",
+        "checklist-close",
+        "checklist-choose-purpose",
+        "checklist-purposes",
+        "checklist-view",
+        "checklist-purpose-name",
+        "checklist-change-purpose",
+        "checklist-loading",
+        "checklist-progress",
+        "checklist-all-done",
+        "checklist-items",
+        "checklist-failed",
+        "checklist-error",
+        "checklist-retry",
+    ):
+        assert f'id="{element_id}"' in panel, element_id
+    # The progress and all-done text are announced.
+    assert 'id="checklist-status" class="checklist-status" role="status"' in panel
+
+
+def test_checklist_labels_come_from_the_texts_api() -> None:
+    js = _app_js()
+
+    for key in (
+        "checklist-button",
+        "checklist-title",
+        "checklist-back",
+        "checklist-choose-purpose",
+        "checklist-change-purpose",
+        "checklist-not-applicable",
+        "checklist-progress",
+        "checklist-all-done",
+        "checklist-loading",
+        "checklist-retry",
+        "error",
+    ):
+        assert f'texts["{key}"]' in js, key
+    # The retry button holds only a symbol; its name comes from the texts.
+    assert 'checklistRetry.setAttribute("aria-label", data.texts["checklist-retry"]);' in js
+    # The three purpose names: one key per purpose, in the order of checklist.js.
+    assert 'data.texts["checklist-purpose-" + purpose]' in js
+    assert 'texts["checklist-purpose-" + purpose]' in _body(js, "choosePurpose")
+    assert "for (const purpose of Lists.PURPOSES) {" in js
+
+
+def test_checklist_button_stays_usable_while_busy() -> None:
+    js = _app_js()
+
+    assert "checklistButton" not in _body(js, "setControlsDisabled")
+    for name in ("openChecklist", "closeChecklist", "choosePurpose", "changeChecklist", "changePurpose"):
+        assert "busy()" not in _body(js, name), name
+
+
+def test_checklist_view_is_a_full_screen_dialog_like_the_saved_chats() -> None:
+    js = _app_js()
+
+    open_body = _body(js, "openChecklist")
+    close_body = _body(js, "closeChecklist")
+    assert "setBehindPanelInert(true);" in open_body and "checklistPanel.hidden = false;" in open_body
+    assert "checklistClose.focus();" in open_body
+    # Inert is removed before focus goes back to the Checklist button.
+    assert close_body.index("setBehindPanelInert(false);") < close_body.index("checklistButton.focus();")
+    # Opening always starts with the purpose choice.
+    assert "showPurposeChoice();" in open_body
+    assert "checklistChoice.hidden = false;" in _body(js, "showPurposeChoice")
+    assert "showPurposeChoice();" in _body(js, "changePurpose")
+    # Back and Escape close it.
+    assert 'checklistClose.addEventListener("click", closeChecklist);' in js
+    assert 'checklistChangePurpose.addEventListener("click", changePurpose);' in js
+    # Escape on the document, so it also works when focus fell to the page body.
+    escape = js.split('document.addEventListener("keydown", function (event) {')[1].split("});")[0]
+    assert 'event.key === "Escape" && !checklistPanel.hidden' in escape and "closeChecklist();" in escape
+
+
+def test_focus_goes_to_the_heading_when_the_focused_retry_button_is_hidden() -> None:
+    body = _body(_app_js(), "renderChecklist")
+
+    assert "const retryHadFocus = checklistFailed.contains(document.activeElement);" in body
+    assert body.index("retryHadFocus = ") < body.index("checklistFailed.hidden = true;")
+    assert "if (retryHadFocus) {\n      checklistPurposeName.focus();" in body
+
+
+def test_a_loading_text_shows_until_the_items_or_the_error_appear() -> None:
+    js = _app_js()
+
+    load = _body(js, "loadChecklist")
+    assert load.index("checklistLoading.hidden = false;") < load.index('fetch("/api/checklists/')
+    assert load.index('fetch("/api/checklists/') < load.index("checklistLoading.hidden = true;")
+    assert load.index("checklistLoading.hidden = true;") < load.index("if (failed) {")
+    assert 'id="checklist-loading" class="checklist-loading" hidden' in _html()
+
+
+def test_checklist_never_touches_the_chat() -> None:
+    js = _app_js()
+
+    for name in (
+        "openChecklist",
+        "closeChecklist",
+        "showPurposeChoice",
+        "changePurpose",
+        "choosePurpose",
+        "loadChecklist",
+        "renderChecklist",
+        "changeChecklist",
+        "refreshChecklist",
+    ):
+        body = _body(js, name)
+        for chat in ("messages", "current", "showChat", "showConversation", "Chats.", "answering", "reader"):
+            assert chat not in body, (name, chat)
+
+
+def test_ticks_are_saved_on_the_device_and_never_sent() -> None:
+    js = _app_js()
+
+    change = _body(js, "changeChecklist")
+    assert "Lists.save(local, checklistMemory, checklistPurpose, state);" in change
+    for name in ("changeChecklist", "refreshChecklist", "renderChecklist"):
+        assert "fetch(" not in _body(js, name), name
+    # The only checklist request is the checklist itself.
+    load = _body(js, "loadChecklist")
+    assert 'fetch("/api/checklists/" + purpose, { cache: "no-store" })' in load
+    assert js.count('fetch("/api/checklists/') == 1
+    assert "checklistState = Lists.load(local, checklistMemory, purpose, items);" in load
+    # Storage keys live only in checklist.js.
+    assert "checklist:" not in js and "checklist-na:" not in js
+    checklist = _checklist_js()
+    assert 'const TICK_PREFIX = "checklist:";' in checklist
+    assert 'const NOT_APPLICABLE_PREFIX = "checklist-na:";' in checklist
+
+
+def test_checklist_failure_shows_the_error_text_with_a_retry() -> None:
+    js = _app_js()
+
+    load = _body(js, "loadChecklist")
+    assert "if (!response.ok) {" in load
+    assert 'checklistError.textContent = texts["error"];' in load
+    assert "checklistFailed.hidden = false;" in load
+    # A late response for another purpose, or after closing, is ignored.
+    assert "if (request !== checklistRequest) {" in load
+    assert "checklistRequest += 1;" in _body(js, "closeChecklist")
+    assert 'checklistRetry.addEventListener("click", loadChecklist);' in js
+
+
+def test_checklist_items_have_a_tick_box_a_safe_source_link_and_doesnt_apply() -> None:
+    body = _body(_app_js(), "renderChecklist")
+
+    assert 'tick.type = "checkbox";' in body
+    assert "if (item.conditional) {" in body and 'notApplicable.type = "checkbox";' in body
+    assert "Lists.toggleTick(checklistState, item.id)" in body
+    assert "Lists.toggleNotApplicable(checklistState, item.id)" in body
+    # https only, new tab, no opener; text set as text, never as HTML.
+    assert "const source = safeSources([item.source])[0];" in body
+    assert 'link.target = "_blank";' in body and 'link.rel = "noopener";' in body
+    assert "text.textContent = item.text;" in body
+    assert "innerHTML" not in _app_js()
+    # "Doesn't apply" only dims the item: its tick box stays usable, and ticking clears it.
+    assert "tick.disabled" not in _app_js()
+    dimmed = _css().split('.checklist-item[data-state="not-applicable"] .checklist-tick {')[1].split("}")[0]
+    assert "opacity: 0.5;" in dimmed and "cursor: default;" not in dimmed
+
+
+def test_checklist_progress_and_all_done() -> None:
+    body = _body(_app_js(), "refreshChecklist")
+
+    assert "const counts = Lists.progress(checklistItems, checklistState);" in body
+    assert 'Lists.progressText(texts["checklist-progress"], counts)' in body
+    assert "checklistAllDone.hidden = !counts.allDone;" in body
+
+
+def test_checklist_view_fits_narrow_screens_and_targets_are_large_enough() -> None:
+    css = _css()
+
+    panel = css.split(".checklist-panel,\n.history-panel {")[1].split("}")[0]
+    assert "position: fixed;" in panel and "overflow-x: hidden;" in panel
+    for rule in (".checklist-purpose {", ".checklist-tick,\n.checklist-na {", ".checklist-source {"):
+        assert "min-height: 48px;" in css.split(rule)[1].split("}")[0], rule
+    # Long item texts and source titles wrap instead of widening the row.
+    assert "overflow-wrap: anywhere;" in css.split("body {")[1].split("}")[0]
+    for rule in (".checklist-text {", ".checklist-source {", ".checklist-item {"):
+        assert "min-width: 0;" in css.split(rule)[1].split("}")[0], rule
+    # The tick box is large; the "doesn't apply" box is smaller.
+    assert "width: 28px;" in css.split(".checklist-box {")[1].split("}")[0]
+    assert "width: 20px;" in css.split(".checklist-na-box {")[1].split("}")[0]

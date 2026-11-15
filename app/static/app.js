@@ -23,6 +23,25 @@
   const historyList = document.getElementById("history-list");
   const historyEmpty = document.getElementById("history-empty");
   const deleteAllButton = document.getElementById("delete-all-chats");
+
+  const checklistButton = document.getElementById("checklist-button");
+  const checklistPanel = document.getElementById("checklist-panel");
+  const checklistTitle = document.getElementById("checklist-title");
+  const checklistClose = document.getElementById("checklist-close");
+  const checklistChoice = document.getElementById("checklist-choice");
+  const checklistChoosePurpose = document.getElementById("checklist-choose-purpose");
+  const checklistPurposes = document.getElementById("checklist-purposes");
+  const checklistView = document.getElementById("checklist-view");
+  const checklistPurposeName = document.getElementById("checklist-purpose-name");
+  const checklistChangePurpose = document.getElementById("checklist-change-purpose");
+  const checklistStatus = document.getElementById("checklist-status");
+  const checklistLoading = document.getElementById("checklist-loading");
+  const checklistProgress = document.getElementById("checklist-progress");
+  const checklistAllDone = document.getElementById("checklist-all-done");
+  const checklistList = document.getElementById("checklist-items");
+  const checklistFailed = document.getElementById("checklist-failed");
+  const checklistError = document.getElementById("checklist-error");
+  const checklistRetry = document.getElementById("checklist-retry");
   // Behind the full-screen panel: made inert while it is open, so focus cannot reach them.
   const behindPanel = [document.querySelector("header.top"), document.querySelector("main"), form];
 
@@ -33,6 +52,17 @@
   const session = storage("sessionStorage");
   // Length of a saved chat's first question in the list.
   const TITLE_CHARS = 80;
+  // Checklist ticks live in checklist.js (loaded first): localStorage on this device only.
+  const Lists = window.Checklist;
+  // Checklists whose last save failed (storage blocked or full): ticked for this visit only.
+  const checklistMemory = {};
+  // The checklist on screen: its purpose, served items, state and DOM rows by item id.
+  let checklistPurpose = null;
+  let checklistItems = [];
+  let checklistState = { ticked: [], notApplicable: [] };
+  let checklistRows = {};
+  // Counts checklist loads; a response for an older one (purpose changed, view closed) is ignored.
+  let checklistRequest = 0;
 
   let texts = {};
   let answering = false;
@@ -89,6 +119,26 @@
     historyClose.textContent = data.texts["history-close"];
     historyEmpty.textContent = data.texts["history-empty"];
     deleteAllButton.textContent = data.texts["delete-all-chats"];
+    checklistButton.textContent = data.texts["checklist-button"];
+    checklistTitle.textContent = data.texts["checklist-title"];
+    checklistClose.textContent = data.texts["checklist-back"];
+    checklistChoosePurpose.textContent = data.texts["checklist-choose-purpose"];
+    checklistChangePurpose.textContent = data.texts["checklist-change-purpose"];
+    checklistLoading.textContent = data.texts["checklist-loading"];
+    checklistRetry.setAttribute("aria-label", data.texts["checklist-retry"]);
+
+    checklistPurposes.replaceChildren();
+    for (const purpose of Lists.PURPOSES) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "checklist-purpose";
+      button.dataset.purpose = purpose;
+      button.textContent = data.texts["checklist-purpose-" + purpose];
+      button.addEventListener("click", function () {
+        choosePurpose(purpose);
+      });
+      checklistPurposes.appendChild(button);
+    }
 
     exampleQuestions.replaceChildren();
     for (const example of data.example_questions) {
@@ -651,6 +701,199 @@
     historyClose.focus();
   }
 
+  // --- Document checklist (Story 3.2, FR6) ----------------------------------------------
+  // Opening, ticking and closing never touch the chat, its saved chats or an answer that is
+  // still arriving, so the Checklist button works while busy. Ticks and "doesn't apply"
+  // choices are saved on this device only (checklist.js); the only request is the
+  // checklist itself, GET /api/checklists/{purpose} (NFR5).
+
+  function openChecklist() {
+    showPurposeChoice();
+    setBehindPanelInert(true);
+    checklistPanel.hidden = false;
+    document.body.classList.add("panel-open");
+    checklistClose.focus();
+  }
+
+  function closeChecklist() {
+    checklistRequest += 1; // a load still in flight changes nothing
+    checklistPanel.hidden = true;
+    document.body.classList.remove("panel-open");
+    setBehindPanelInert(false);
+    checklistButton.focus();
+  }
+
+  function showPurposeChoice() {
+    checklistRequest += 1;
+    checklistPurpose = null;
+    checklistItems = [];
+    checklistRows = {};
+    checklistList.replaceChildren();
+    checklistFailed.hidden = true;
+    checklistView.hidden = true;
+    checklistChoice.hidden = false;
+  }
+
+  // "Change purpose": back to the choice, with focus on the purpose that was open.
+  function changePurpose() {
+    const previous = checklistPurpose;
+    showPurposeChoice();
+    const button = checklistPurposes.querySelector('[data-purpose="' + previous + '"]');
+    (button || checklistClose).focus();
+  }
+
+  function choosePurpose(purpose) {
+    if (!Lists.isPurpose(purpose)) {
+      return;
+    }
+    checklistPurpose = purpose;
+    checklistPurposeName.textContent = texts["checklist-purpose-" + purpose];
+    checklistStatus.hidden = true;
+    checklistChoice.hidden = true;
+    checklistView.hidden = false;
+    checklistPurposeName.focus();
+    loadChecklist();
+  }
+
+  // Loads the open purpose's checklist; on failure the fixed error text with a retry.
+  async function loadChecklist() {
+    const purpose = checklistPurpose;
+    if (!Lists.isPurpose(purpose)) {
+      return;
+    }
+    checklistRequest += 1;
+    const request = checklistRequest;
+    checklistRetry.disabled = true;
+    // The loading text stays until the items or the error appear.
+    checklistProgress.hidden = true;
+    checklistAllDone.hidden = true;
+    checklistLoading.hidden = false;
+    checklistStatus.hidden = false;
+    let items = [];
+    let failed = null;
+    try {
+      const response = await fetch("/api/checklists/" + purpose, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("GET /api/checklists failed: " + response.status);
+      }
+      items = Lists.validItems(await response.json());
+      if (!items.length) {
+        throw new Error("GET /api/checklists gave no items");
+      }
+    } catch (error) {
+      failed = error;
+    }
+    if (request !== checklistRequest) {
+      return; // purpose changed or view closed meanwhile
+    }
+    checklistRetry.disabled = false;
+    checklistLoading.hidden = true;
+    if (failed) {
+      console.error(failed);
+      checklistError.textContent = texts["error"];
+      checklistFailed.hidden = false;
+      return;
+    }
+    checklistItems = items;
+    checklistState = Lists.load(local, checklistMemory, purpose, items);
+    renderChecklist();
+  }
+
+  // One row per item: a large tick box with the text, "doesn't apply to me" for a
+  // conditional item, and the source link (https only, new tab).
+  function renderChecklist() {
+    const rows = {};
+    const list = [];
+    checklistItems.forEach(function (item, index) {
+      const row = document.createElement("li");
+      row.className = "checklist-item";
+
+      const tickLabel = document.createElement("label");
+      tickLabel.className = "checklist-tick";
+      const tick = document.createElement("input");
+      tick.type = "checkbox";
+      tick.className = "checklist-box";
+      const text = document.createElement("span");
+      text.className = "checklist-text";
+      text.id = "checklist-item-" + index;
+      text.textContent = item.text;
+      tickLabel.append(tick, text);
+      tick.addEventListener("change", function () {
+        changeChecklist(Lists.toggleTick(checklistState, item.id));
+      });
+      row.appendChild(tickLabel);
+
+      let notApplicable = null;
+      if (item.conditional) {
+        const label = document.createElement("label");
+        label.className = "checklist-na";
+        notApplicable = document.createElement("input");
+        notApplicable.type = "checkbox";
+        notApplicable.className = "checklist-na-box";
+        // Read out with the item it belongs to.
+        notApplicable.setAttribute("aria-describedby", text.id);
+        const naText = document.createElement("span");
+        naText.textContent = texts["checklist-not-applicable"];
+        label.append(notApplicable, naText);
+        notApplicable.addEventListener("change", function () {
+          changeChecklist(Lists.toggleNotApplicable(checklistState, item.id));
+        });
+        row.appendChild(label);
+      }
+
+      const source = safeSources([item.source])[0];
+      if (source) {
+        const link = document.createElement("a");
+        link.className = "checklist-source";
+        link.href = source.url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = source.title;
+        row.appendChild(link);
+      }
+
+      rows[item.id] = { row: row, tick: tick, notApplicable: notApplicable };
+      list.push(row);
+    });
+    checklistRows = rows;
+    checklistList.replaceChildren.apply(checklistList, list);
+    // After a retry the focused retry button is hidden: focus goes to the heading.
+    const retryHadFocus = checklistFailed.contains(document.activeElement);
+    checklistFailed.hidden = true;
+    refreshChecklist();
+    checklistProgress.hidden = false;
+    checklistStatus.hidden = false;
+    if (retryHadFocus) {
+      checklistPurposeName.focus();
+    }
+  }
+
+  // A tick or "doesn't apply" change: saved at once on this device, never sent anywhere.
+  function changeChecklist(state) {
+    checklistState = state;
+    Lists.save(local, checklistMemory, checklistPurpose, state);
+    refreshChecklist();
+  }
+
+  // Shows the state: ticks, "doesn't apply" (its item dimmed; ticking it clears that
+  // choice), progress, all done.
+  function refreshChecklist() {
+    for (const item of checklistItems) {
+      const row = checklistRows[item.id];
+      const ticked = checklistState.ticked.indexOf(item.id) >= 0;
+      const notApplicable = checklistState.notApplicable.indexOf(item.id) >= 0;
+      row.tick.checked = ticked;
+      if (row.notApplicable) {
+        row.notApplicable.checked = notApplicable;
+      }
+      row.row.dataset.state = notApplicable ? "not-applicable" : ticked ? "ticked" : "open";
+    }
+    const counts = Lists.progress(checklistItems, checklistState);
+    checklistProgress.textContent = Lists.progressText(texts["checklist-progress"], counts);
+    checklistAllDone.textContent = texts["checklist-all-done"];
+    checklistAllDone.hidden = !counts.allDone;
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     ask(question.value, true);
@@ -663,6 +906,17 @@
   historyPanel.addEventListener("keydown", function (event) {
     if (event.key === "Escape") {
       closeHistory();
+    }
+  });
+  checklistButton.addEventListener("click", openChecklist);
+  checklistClose.addEventListener("click", closeChecklist);
+  checklistChangePurpose.addEventListener("click", changePurpose);
+  checklistRetry.addEventListener("click", loadChecklist);
+  // On the document, so Escape also works when focus is on the page body (e.g. after a
+  // click on panel text).
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !checklistPanel.hidden) {
+      closeChecklist();
     }
   });
 

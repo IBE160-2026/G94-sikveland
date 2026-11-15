@@ -299,11 +299,12 @@ button {
   outline-offset: 2px;
 }
 
-/* Saved chats: a full-screen panel over the chat. */
+/* Saved chats and the document checklist: full-screen panels over the chat. */
 body.panel-open {
   overflow: hidden;
 }
 
+.checklist-panel,
 .history-panel {
   position: fixed;
   inset: 0;
@@ -314,15 +315,19 @@ body.panel-open {
   background: #f6f7f9;
 }
 
+.checklist-panel > *,
 .history-panel > * {
   max-width: 40rem;
   margin-left: auto;
   margin-right: auto;
 }
 
+.checklist-header,
 .history-header {
   position: sticky;
   top: 0;
+  /* Above rows that make their own stacking context (a dimmed checklist item). */
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -332,6 +337,7 @@ body.panel-open {
   border-bottom: 1px solid #dde1e8;
 }
 
+.checklist-title,
 .history-title {
   min-width: 0;
   margin: 0;
@@ -465,4 +471,147 @@ body.panel-open {
 
 .feedback-error {
   margin-top: 0.75rem;
+}
+
+/* Document checklist (Story 3.2): purpose choice, then one row per item with a large tick
+   box, a smaller "doesn't apply to me" box for conditional items, and the source link. */
+.checklist-choose {
+  margin-top: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.checklist-purposes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checklist-purpose {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.checklist-purpose:active {
+  background: #e8eefb;
+}
+
+.checklist-view-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.checklist-purpose-name {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.checklist-status p {
+  margin: 0.75rem 0 0;
+}
+
+.checklist-progress {
+  font-weight: 700;
+}
+
+.checklist-all-done {
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #1e7a3c;
+  border-radius: 0.5rem;
+  background: #e6f4ea;
+}
+
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist-item {
+  min-width: 0;
+  padding: 0.25rem 0.75rem;
+  background: #fff;
+  border: 1px solid #dde1e8;
+  border-radius: 0.75rem;
+}
+
+.checklist-item[data-state="ticked"] {
+  border-color: #1e7a3c;
+}
+
+.checklist-tick,
+.checklist-na {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+.checklist-box {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  accent-color: #1e7a3c;
+}
+
+.checklist-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Smaller than the tick box, but still a 48 px touch target. */
+.checklist-na {
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #5a6478;
+}
+
+.checklist-na-box {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+/* An item marked "doesn't apply to me" is dimmed; ticking it clears that choice. */
+.checklist-item[data-state="not-applicable"] .checklist-tick {
+  opacity: 0.5;
+}
+
+.checklist-item[data-state="not-applicable"] .checklist-text {
+  text-decoration: line-through;
+}
+
+.checklist-source {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 48px;
+  color: #0b3d91;
+  text-decoration: underline;
+}
+
+.checklist-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
 }

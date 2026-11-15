@@ -166,6 +166,68 @@ texts:
     th: ต้องการลบแชททั้งหมดในเครื่องนี้ใช่ไหม
     en: Delete all chats on this device?
 
+  # Document checklist view (Story 3.2, FR6). The ticks stay on this device only.
+  # DRAFT Thai, awaiting the user's review (NFR8).
+  checklist-button:
+    th: รายการเอกสาร
+    en: Checklist
+
+  checklist-title:
+    th: รายการเอกสารที่ต้องเตรียม
+    en: Document checklist
+
+  checklist-choose-purpose:
+    th: คุณจะเดินทางไปนอร์เวย์เพื่ออะไร
+    en: What is the purpose of your visit to Norway?
+
+  checklist-purpose-tourism:
+    th: ท่องเที่ยว
+    en: Tourism
+
+  checklist-purpose-family:
+    th: เยี่ยมครอบครัว
+    en: Visiting family
+
+  checklist-purpose-friends:
+    th: เยี่ยมเพื่อน
+    en: Visiting friends
+
+  checklist-back:
+    th: กลับไปที่แชท
+    en: Back to chat
+
+  checklist-change-purpose:
+    th: เปลี่ยนวัตถุประสงค์การเดินทาง
+    en: Change visit purpose
+
+  checklist-not-applicable:
+    th: ไม่เกี่ยวกับฉัน
+    en: Doesn't apply to me
+
+  # `{done}` and `{total}` are filled in by the page: the ticked items and the items
+  # that apply (items marked "doesn't apply to me" are not counted).
+  checklist-progress:
+    th: เตรียมแล้ว {done} จาก {total} รายการ
+    en: "{done} of {total} ready"
+
+  # Not a promise that the application is complete: only the embassy decides.
+  checklist-all-done:
+    th: >-
+      คุณทำเครื่องหมายครบทุกรายการที่เกี่ยวข้องกับคุณแล้ว
+      ยื่นเอกสารพร้อมรายการเอกสาร (checklist) ของสถานทูตที่ลงชื่อแล้วที่ VFS
+      สถานทูตเป็นผู้พิจารณาและตัดสินคำร้อง
+    en: >-
+      Every item that applies to you is ticked. Hand in the documents together with
+      the signed embassy checklist at VFS. The embassy decides on the application.
+
+  checklist-loading:
+    th: กำลังโหลดรายการเอกสาร
+    en: Loading the checklist
+
+  checklist-retry:
+    th: ลองอีกครั้ง
+    en: Try again
+
 example-questions:
   - id: tourist-visa-documents
     th: ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง

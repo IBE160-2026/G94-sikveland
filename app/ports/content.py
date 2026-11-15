@@ -39,8 +39,30 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         "delete-all-chats",
         "confirm-delete-chat",
         "confirm-delete-all-chats",
+        # Document checklist view (Story 3.2, FR6): top-bar button, view title, purpose
+        # choice and the three purpose names (`checklist-purpose-` + each `VISIT_PURPOSES`
+        # value), back, change purpose, "doesn't apply to me", the progress line and all done.
+        "checklist-button",
+        "checklist-title",
+        "checklist-choose-purpose",
+        "checklist-purpose-tourism",
+        "checklist-purpose-family",
+        "checklist-purpose-friends",
+        "checklist-back",
+        "checklist-change-purpose",
+        "checklist-not-applicable",
+        # `{done}` and `{total}` stay in the served text; the page fills them in.
+        "checklist-progress",
+        "checklist-all-done",
+        # Shown while a checklist loads, and the name of the retry button (a symbol only).
+        "checklist-loading",
+        "checklist-retry",
     }
 )
+
+# Placeholders the page fills in, allowed (and required) only in these keys. Every other
+# brace in a text is still rejected at startup, except `{ADVISER_CONTACT}`.
+PAGE_PLACEHOLDERS: Mapping[str, tuple[str, ...]] = {"checklist-progress": ("{done}", "{total}")}
 
 
 # The visit purposes that have a checklist (AD-11), in the order the page offers them.
@@ -70,12 +92,15 @@ class ChecklistItem:
 
     `id` is stable: the page keeps ticks by it, so it is never reused for other content.
     `source_id` is the id of the knowledge-base source the item comes from.
+    `conditional` marks an item that only applies to some applicants ("if employed"):
+    the page then also offers "doesn't apply to me" for it.
     """
 
     id: str
     th: str
     en: str
     source_id: str
+    conditional: bool = False
 
 
 class ContentStore(Protocol):

@@ -8,7 +8,7 @@ This plan lists the checks that the automated tests cannot do, and records when 
 
 They do not cover:
 
-- **The page in a browser.** No test runs `app/static/app.js`; `tests/test_static.py` only checks its source text. A browser-level test (Playwright) is deferred until after part 1 ([deferred-work.md](deferred-work.md)).
+- **The page in a browser.** No test runs `app/static/app.js`; `tests/test_static.py` only checks its source text. The storage logic in `history.js` and `checklist.js` does run, in Node. A browser-level test (Playwright) is deferred until after part 1 ([deferred-work.md](deferred-work.md)).
 - **The real Claude API.** Answers in Thai, cited sources and prompt caching only happen with a real key, which costs money.
 - **A real Ollama model** (`LLM_PROVIDER=ollama`): whether a local model answers in Thai, cites with `[[id]]` markers the adapter can read, and keeps to Thai script.
 - **Real phones**, and Facebook's in-app browser in particular.
@@ -17,7 +17,7 @@ They do not cover:
 
 | Mode | How to start | Used for |
 |---|---|---|
-| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14 |
+| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14, MT-15 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
 | Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13, MT-14 (part B) |
 | Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13, MT-14 (part B) |
@@ -198,6 +198,26 @@ Part B, how the real classifier sorts done signals (the riskiest change: classif
 
 Expected: (1, 2, 3) the feedback question with Yes and No buttons, no source links; (4) a cited answer about the fee, not the feedback question; (5) not the feedback question (a greeting is `general`); (6) lines for (1, 2, 3) have `category: "done"` and `outcome: "fixed_reply"`, and `prompt_versions.classifier` is `"3"`.
 
+### MT-15 Document checklist with kept ticks (Story 3.2)
+
+Mode: demo, 360 px and then 320 px; then a real phone if one is at hand (MT-09 setup).
+
+1. Tap an example question, and while the answer is still arriving tap the Checklist button (รายการเอกสาร) in the top bar.
+2. Choose visiting family (เยี่ยมครอบครัว).
+3. Tick three items. On one item that starts with a condition (e.g. the one for employees, ถ้าเป็นลูกจ้าง), tap "doesn't apply to me" (ไม่เกี่ยวกับฉัน). Then tap it again, and once more. Then tap that item's big tick box.
+4. With F12 open on the Network tab, tick and untick an item.
+5. Tap change purpose (เปลี่ยนวัตถุประสงค์การเดินทาง), choose tourism, then go back to family.
+6. Tap back (กลับไปที่แชท); open the checklist again and press Escape.
+7. Close the browser completely, open it again, open the page and the family checklist.
+8. In F12, Application, Local storage, set `checklist:family` to `["old-id","passport"]` and reload; open the family checklist.
+9. Set `checklist:family` to `{bad` and reload; open the family checklist.
+10. Tick every item that applies.
+11. Stop the server and choose a purpose; start it again and tap the retry button.
+12. Keyboard only (desktop, no mouse): Tab to the Checklist button, Enter, Tab through the purposes, choose one with Enter, Tab through the tick boxes, "doesn't apply" boxes and links, toggle with Space, then press Escape. Repeat with the server stopped: choose a purpose, start the server, Tab to the retry button, Enter, then press Escape.
+13. In F12, Network, set throttling to "Slow 3G" and choose a purpose.
+
+Expected: (1) the button can be tapped while the answer arrives; the view covers the chat and offers the three purposes; (2) each item has a large tick box, its text and a source link that opens in a new tab; items with a condition also have the smaller "doesn't apply" choice; the progress line reads e.g. "0 of 18"; (3) the progress goes up with each tick; "doesn't apply" clears the item's tick, dims it and lowers the total by one; tapping it again makes the item count again; ticking a dimmed item clears "doesn't apply" and ticks it; (4) no request is made for a tick; (5) tourism has no ticks; family still has them; (6) the chat is exactly as before, and the answer from step 1 has finished with its source links; focus is on the Checklist button; (7) the same ticks and "doesn't apply" choices; (8) only `passport` is ticked, nothing breaks; (9) nothing is ticked, nothing breaks; (10) the all-done text is shown: every item that applies is ticked, hand in the documents with the signed embassy checklist at VFS, the embassy decides; (11) the fixed error text with a retry button; retry loads the list; (12) every control can be reached and used with the keyboard, focus is always visible, Escape closes the view and focus returns to the Checklist button, also after the failed load and retry (focus moves to the purpose heading when the list appears); a screen reader names the retry button (ลองอีกครั้ง); (13) the loading text (กำลังโหลดรายการเอกสาร) shows until the list appears. At 320 px nothing scrolls sideways, also with the longest items (the minor consent letter, the invitation letter).
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -218,3 +238,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-12 | | | Not run | Needs a real key, and Ollama |
 | | MT-13 | | | Not run | Needs a real key, and Ollama |
 | | MT-14 | | | Not run | Part B needs a real key, and Ollama. A one-off headless Edge run (demo mode, 320 px) of steps 1 to 5, the failure in step 7 and the rows in step 8 passed on 2026-11-15; not a manual-test result |
+| | MT-15 | | | Not run | A one-off headless Edge run (demo mode, 320 px) of steps 1 to 11 (before steps 12 and 13 were added), with the browser closed and reopened for step 7 and a simulated failure for step 11, passed on 2026-11-15; not a manual-test result |

@@ -6,7 +6,7 @@ import yaml
 
 from app.adapters.file_content import ContentError, load_content
 from app.main import CONTENT_FILE
-from app.ports.content import REQUIRED_TEXT_KEYS
+from app.ports.content import PAGE_PLACEHOLDERS, REQUIRED_TEXT_KEYS
 from tests.fakes.content import committed_checklists
 
 CONTACT = "adviser@example.com"
@@ -15,6 +15,7 @@ CONTACT = "adviser@example.com"
 def _valid() -> dict:
     texts = {key: {"th": f"th {key}", "en": f"en {key}"} for key in sorted(REQUIRED_TEXT_KEYS)}
     texts["reply-no-answer"] = {"th": "ติดต่อ {ADVISER_CONTACT}", "en": "Contact {ADVISER_CONTACT}."}
+    texts["checklist-progress"] = {"th": "แล้ว {done} จาก {total}", "en": "{done} of {total} ready"}
     return {
         "texts": texts,
         "example-questions": [
@@ -53,8 +54,15 @@ def test_committed_content_file_loads() -> None:
     assert CONTACT in store.texts()["reply-no-answer"].en
     thai = re.compile("[\u0e00-\u0e7f]")
     for key, text in store.texts().items():
+        if key in PAGE_PLACEHOLDERS:
+            continue
         assert "{" not in text.th and "{" not in text.en, key
         assert thai.search(text.th), key
+    # The page fills in `{done}` and `{total}`; they stay in the served text.
+    progress = store.texts()["checklist-progress"]
+    for text in (progress.th, progress.en):
+        assert "{done}" in text and "{total}" in text
+    assert thai.search(progress.th)
     for question in store.example_questions():
         assert thai.search(question.th), question.id
 
@@ -161,6 +169,35 @@ def test_mistyped_placeholder_in_example_question_names_id(tmp_path: Path) -> No
     data["example-questions"][0]["th"] = "ติดต่อ {ADVISER_CONTACT"
 
     with pytest.raises(ContentError, match=r"'visa-fee' \(th\)"):
+        _load(tmp_path, data)
+
+
+def test_progress_placeholders_stay_for_the_page(tmp_path: Path) -> None:
+    store = _load(tmp_path, _valid())
+
+    assert store.texts()["checklist-progress"].en == "{done} of {total} ready"
+    assert PAGE_PLACEHOLDERS == {"checklist-progress": ("{done}", "{total}")}
+
+
+@pytest.mark.parametrize("placeholder", ["{done}", "{total}"])
+@pytest.mark.parametrize("key", ["error", "checklist-all-done", "checklist-button"])
+def test_progress_placeholders_are_rejected_in_other_keys(tmp_path: Path, key: str, placeholder: str) -> None:
+    data = _valid()
+    data["texts"][key]["en"] = f"Ready {placeholder}"
+
+    with pytest.raises(ContentError, match=rf"'{key}' \(en\).*placeholder"):
+        _load(tmp_path, data)
+
+
+@pytest.mark.parametrize("lang", ["th", "en"])
+@pytest.mark.parametrize(
+    "text", ["{done} ready", "of {total}", "ready", "{done} of {total} {other}", "{Done} of {total}"]
+)
+def test_progress_text_needs_both_placeholders_and_no_other(tmp_path: Path, lang: str, text: str) -> None:
+    data = _valid()
+    data["texts"]["checklist-progress"][lang] = text
+
+    with pytest.raises(ContentError, match=rf"'checklist-progress' \({lang}\)"):
         _load(tmp_path, data)
 
 

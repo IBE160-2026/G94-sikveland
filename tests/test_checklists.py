@@ -134,6 +134,27 @@ def test_extra_purpose_is_rejected(tmp_path: Path) -> None:
         _load(tmp_path, data)
 
 
+def test_conditional_defaults_to_false_and_is_kept(tmp_path: Path) -> None:
+    data = _valid()
+    data["family"][1]["conditional"] = True
+    data["tourism"][1]["conditional"] = False
+
+    checklists = _load(tmp_path, data)
+
+    assert checklists["family"][1].conditional is True
+    assert checklists["family"][0].conditional is False  # not given
+    assert checklists["tourism"][1].conditional is False
+
+
+@pytest.mark.parametrize("value", ["true", "yes", 1, 0, None, [], "false"])
+def test_non_boolean_conditional_is_rejected(tmp_path: Path, value: object) -> None:
+    data = _valid()
+    data["tourism"][0]["conditional"] = value
+
+    with pytest.raises(ContentError, match=r"'tourism' item 'passport' has a 'conditional'"):
+        _load(tmp_path, data)
+
+
 def test_extra_field_is_rejected(tmp_path: Path) -> None:
     data = _valid()
     data["tourism"][1]["sources"] = ["udi-fees"]
@@ -285,6 +306,41 @@ def test_only_family_points_to_the_eu_eea_checklist(committed: dict[str, Any]) -
         assert "eu-eea-family-member" not in {item.id for item in committed[purpose]}
 
 
+# The items that only apply to some applicants (user decision, Story 3.2).
+CONDITIONAL_ITEMS = {
+    "name-change-certificate",
+    "employment-proof",
+    "self-employment-proof",
+    "minor-birth-certificate",
+    "minor-proof-of-custody",
+    "minor-consent-letter",
+    "itinerary",
+    "organised-tour-voucher",
+    "ties-to-thailand",
+    "eu-eea-family-member",
+    "sponsorship-form",
+    "social-and-financial-ties",
+}
+
+
+def test_items_with_a_condition_are_conditional(committed: dict[str, Any]) -> None:
+    # The file's own rule: a conditional item's text starts with its condition ("If ..."),
+    # and only those items are conditional.
+    for purpose, items in committed.items():
+        for item in items:
+            assert item.conditional is item.en.startswith("If "), (purpose, item.id)
+            assert item.conditional is (item.id in CONDITIONAL_ITEMS), (purpose, item.id)
+    # The general requirements and the sponsor's invitation letter always apply.
+    for purpose in VISIT_PURPOSES:
+        items = {item.id: item for item in committed[purpose]}
+        for item_id in (*GENERAL_ITEMS, "signed-embassy-checklist", "proof-of-occupation"):
+            assert items[item_id].conditional is False, (purpose, item_id)
+    for purpose in ("family", "friends"):
+        items = {item.id: item for item in committed[purpose]}
+        assert items["invitation-letter"].conditional is False
+        assert items["sponsorship-form"].conditional is True
+
+
 def test_an_id_shared_by_checklists_has_the_same_content(committed: dict[str, Any]) -> None:
     # The file's own rule: an id never stands for different content, also across checklists.
     seen: dict[str, Any] = {}
@@ -334,8 +390,9 @@ def test_endpoint_serves_thai_items_with_resolved_sources(
     assert body["purpose"] == purpose
     assert [item["id"] for item in body["items"]] == [item.id for item in committed[purpose]]
     for served, stored in zip(body["items"], committed[purpose], strict=True):
-        assert set(served) == {"id", "text", "source"}
+        assert set(served) == {"id", "text", "conditional", "source"}
         assert served["text"] == stored.th
+        assert served["conditional"] is stored.conditional
         source = KNOWLEDGE_BASE.source(stored.source_id)
         assert served["source"] == {"title": source.title, "url": source.url}
         assert served["source"]["url"].startswith("https://")
@@ -349,6 +406,9 @@ def test_family_endpoint_has_the_sponsor_items(client: TestClient) -> None:
         KNOWLEDGE_BASE.source("udi-invitation-for-visitor-visa").url
     )
     assert items["sponsorship-form"]["text"].strip() and items["invitation-letter"]["text"].strip()
+    # Only the sponsorship form depends on who pays; the invitation letter always applies.
+    assert items["sponsorship-form"]["conditional"] is True
+    assert items["invitation-letter"]["conditional"] is False
 
 
 @pytest.mark.parametrize(

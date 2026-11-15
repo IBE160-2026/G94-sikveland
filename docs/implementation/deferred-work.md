@@ -78,3 +78,12 @@
 - source_spec: `docs/implementation/spec-3-1-checklists-per-visit-purpose.md`
   summary: Story 4.1 ("Show English"): checklist items store `en` but `GET /api/checklists/{purpose}` serves only Thai; decide how the English reaches the page (serve `en`, or let `/api/translate` look up stored checklist English).
   evidence: Review of Story 3.1 (blind #10): nothing in the spec, README or epic context says how 4.1 reaches checklist English.
+- source_spec: `docs/implementation/spec-3-2-tick-off-documents-and-the-ticks-are-kept.md`
+  summary: Extend the deferred browser-level page tests to the checklist view: refresh after a change (progress, all-done, dimmed rows, `data-state`), the stale-response guard after change purpose or close, retry and focus, and the purpose buttons from `/api/texts`. The pure logic in `checklist.js` is tested in Node; the DOM wiring in `app.js` only by source text.
+  evidence: Review of Story 3.2 (verification gap #1): removing `refreshChecklist()` from `changeChecklist` keeps ticks saved but never updates the progress line, and every test stays green. A one-off headless run passed on 2026-11-15; MT-15 covers it by hand. The Story 3.1 entry on conditional items is settled by this story (`conditional` + "doesn't apply to me").
+- source_spec: `docs/implementation/spec-3-2-tick-off-documents-and-the-ticks-are-kept.md`
+  summary: `eu-eea-family-member` is a pointer ("the embassy's separate checklist applies"), not a document, yet it is a tickable item that counts towards "ready"; decide whether checklists get non-tickable notes (shown as a banner, outside the progress count).
+  evidence: Review of Story 3.2 (blind #13): if it applies, most of the family list is the wrong list, but the applicant can still reach all-done on it.
+- source_spec: `docs/implementation/spec-3-2-tick-off-documents-and-the-ticks-are-kept.md`
+  summary: Let the applicant clear a checklist's ticks (a new application, or another traveller on the same phone), and decide whether "delete all chats" should also clear `checklist:*` and `checklist-na:*`.
+  evidence: Review of Story 3.2 (blind #8): no reset exists; on a shared phone the ticks stay after "delete all chats". Ticks hold only item ids, no personal text.

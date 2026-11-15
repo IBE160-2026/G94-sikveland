@@ -6,8 +6,10 @@
   <!-- All visible Thai text comes from /api/texts (AD-6); this file holds none. -->
   <title>Norway Visa Guide</title>
   <link rel="stylesheet" href="/style.css">
-  <!-- history.js (saved chats on this device) must run before app.js. -->
+  <!-- history.js (saved chats) and checklist.js (checklist ticks), both on this device,
+       must run before app.js. -->
   <script src="/history.js" defer></script>
+  <script src="/checklist.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -18,6 +20,7 @@
     <nav id="top-bar" class="top-bar" hidden>
       <button type="button" id="history-button" class="top-button" aria-controls="history-panel"></button>
       <button type="button" id="new-chat-button" class="top-button"></button>
+      <button type="button" id="checklist-button" class="top-button" aria-controls="checklist-panel"></button>
     </nav>
   </header>
 
@@ -48,6 +51,36 @@
     <p id="history-empty" class="history-empty"></p>
     <ul id="history-list" class="history-list"></ul>
     <button type="button" id="delete-all-chats" class="delete-all"></button>
+  </section>
+
+  <!-- Document checklist (FR6): purpose choice, then that checklist; full screen over the
+       chat. Ticks stay on this device only. -->
+  <section id="checklist-panel" class="checklist-panel" role="dialog" aria-modal="true"
+           aria-labelledby="checklist-title" hidden>
+    <div class="checklist-header">
+      <h2 id="checklist-title" class="checklist-title"></h2>
+      <button type="button" id="checklist-close" class="top-button"></button>
+    </div>
+    <div id="checklist-choice" class="checklist-choice">
+      <p id="checklist-choose-purpose" class="checklist-choose"></p>
+      <div id="checklist-purposes" class="checklist-purposes"></div>
+    </div>
+    <div id="checklist-view" class="checklist-view" hidden>
+      <div class="checklist-view-header">
+        <h3 id="checklist-purpose-name" class="checklist-purpose-name" tabindex="-1"></h3>
+        <button type="button" id="checklist-change-purpose" class="top-button"></button>
+      </div>
+      <div id="checklist-status" class="checklist-status" role="status">
+        <p id="checklist-loading" class="checklist-loading" hidden></p>
+        <p id="checklist-progress" class="checklist-progress"></p>
+        <p id="checklist-all-done" class="checklist-all-done" hidden></p>
+      </div>
+      <ul id="checklist-items" class="checklist-items"></ul>
+      <div id="checklist-failed" class="checklist-failed" hidden>
+        <p id="checklist-error" class="error-text" role="alert"></p>
+        <button type="button" id="checklist-retry" class="retry">&#x21BB;</button>
+      </div>
+    </div>
   </section>
 </body>
 </html>
