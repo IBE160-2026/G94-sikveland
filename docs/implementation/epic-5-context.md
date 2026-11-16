@@ -4,7 +4,7 @@
 
 ## Goal
 
-The adviser and the course examiner need evidence that the chatbot meets its quality targets, not just that it runs. This epic adds a fixed Thai test set with expected answers, an evaluation script that runs it against the real models through the same pipeline as the chat page and writes a report (SM-2, the during-course success metric), and a statistics script that reports the share of conversations whose first feedback answer was "Yes" (SM-1, the after-launch metric). It covers no new applicant-facing feature. 5.1 and 5.2 are "next" priority, and 5.3 is "if time allows". 5.1 is in progress; 5.2 and 5.3 are in the backlog. `eval/testset.yaml` holds the test set (5.1).
+The adviser and the course examiner need evidence that the chatbot meets its quality targets, not just that it runs. This epic adds a fixed Thai test set with expected answers, an evaluation script that runs it against the real models through the same pipeline as the chat page and writes a report (SM-2, the during-course success metric), and a statistics script that reports the share of conversations whose first feedback answer was "Yes" (SM-1, the after-launch metric). It covers no new applicant-facing feature. 5.1 and 5.2 are "next" priority, and 5.3 is "if time allows". 5.1, 5.2 and 5.3 are built and in review. `eval/testset.yaml` holds the test set (5.1).
 
 ## Stories
 

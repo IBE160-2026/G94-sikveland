@@ -170,16 +170,20 @@ Takker søkeren eller skriver «ok» (f.eks. «ขอบคุณค่ะ 🙏�
 
 Et trykk sender `POST /api/feedback` med `{conversation_id, answer}`, der `answer` er `yes` eller `no`. Serveren lagrer bare `conversation_id`, svaret og tidspunktet (UTC) i tabellen `feedback` i `data/feedback.sqlite3`, aldri spørsmål eller svartekst. Fila, mappa og tabellen lages ved første svar; demomodus lagrer også. `conversation_id` er en tilfeldig UUID som siden lager ved første spørsmål i en samtale og holder i fanens `sessionStorage`. Den sendes bare med tilbakemeldingen og lagres ikke sammen med de lagrede samtalene. «Ny samtale», å åpne en lagret samtale og «Ja» gir en ny ved neste spørsmål.
 
-Hovedmålet (SM-1) er andelen samtaler der det første svaret er «Ja» (mål: minst 80 %). Til skriptet `feedback_stats.py` er laget (Epic 5), kan det telles med Python fra prosjektmappa (virker i både PowerShell og Bash, uten flere programmer):
+Hovedmålet (SM-1) er andelen samtaler der det første svaret er «Ja» (mål: minst 80 %). Skriptet `feedback_stats.py` regner det ut fra prosjektmappa:
 
 ```sh
-uv run python -c "import sqlite3; q='SELECT ROUND(100.0 * SUM(answer = ?) / COUNT(*), 1), COUNT(*) FROM (SELECT f.answer FROM feedback f WHERE f.rowid = (SELECT MIN(rowid) FROM feedback WHERE conversation_id = f.conversation_id))'; print(sqlite3.connect('data/feedback.sqlite3').execute(q, ('yes',)).fetchone())"
+uv run python scripts/feedback_stats.py
+uv run python scripts/feedback_stats.py --from 2026-11-01 --to 2026-11-30
 ```
 
-Det skriver `(prosent Ja, antall samtaler)`, f.eks. `(85.0, 20)`. Uten svar i tabellen finnes det ingen andel: da står det `(None, 0)`, og før det første svaret er lagret, finnes ikke tabellen (`no such table: feedback`). Har du kommandolinjeverktøyet `sqlite3` (det følger sjelden med Windows), gir dette det samme:
+Det skriver antall samtaler med tilbakemelding, hvor mange og hvor stor andel som svarte «Ja» først, og om målet på 80 % er nådd. Bare det første svaret i hver samtale (`conversation_id`) teller, så «Nei» og så «Ja» teller som «Nei». `--from` og `--to` (begge valgfrie, begge dagene tas med) teller samtalene der det første svaret kom i perioden, regnet i UTC slik tidspunktene er lagret. Skriptet leser fila i `DATABASE_PATH` uten å endre den. Finnes ikke fila eller tabellen ennå, eller er det ingen svar i perioden, skriver det at det ikke finnes tilbakemeldinger ennå. En ugyldig dato, `--from` etter `--to` eller en fil som ikke er en SQLite-database, gir en feilmelding (utgangskode 2). Eksempel på utskrift:
 
-```sh
-sqlite3 data/feedback.sqlite3 "SELECT ROUND(100.0 * SUM(answer = 'yes') / COUNT(*), 1) AS prosent_ja, COUNT(*) AS samtaler FROM (SELECT f.answer FROM feedback f WHERE f.rowid = (SELECT MIN(rowid) FROM feedback WHERE conversation_id = f.conversation_id))"
+```text
+Feedback statistics (SM-1), 2026-11-01 to 2026-11-30 (UTC)
+Conversations with feedback: 20
+First answer "yes": 17 (85.0%)
+Target: at least 80% - met
 ```
 
 ### Sjekklister for dokumenter
@@ -285,7 +289,7 @@ uv run python scripts/run_eval.py --score eval/reports/2026-11-16-answer-1-class
 | `content/` | Faste tekster på thai og engelsk, dokumentsjekklistene og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
 | `prompts/` | Systemprompten for svar, prompten som sorterer spørsmålene, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
-| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen, `testset.py`, som leser og sjekker testsettet, og `run_eval.py`, som kjører evalueringen og regner ut totalene (se «Evaluering») |
+| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen, `testset.py`, som leser og sjekker testsettet, `run_eval.py`, som kjører evalueringen og regner ut totalene (se «Evaluering»), og `feedback_stats.py`, som regner ut andelen «Ja» (se «Tilbakemelding») |
 | `tests/` | Pytest-tester og en falsk KI-klient (`tests/fakes/`) |
 | `data/` | Lokale kjøredata (forespørselslogg og tilbakemeldinger i `feedback.sqlite3`); git-ignorert |
 | `eval/` | Testsettet `testset.yaml`: oppdiktede thai spørsmål med forventet kategori, fakta og kilder (se «Testsett»), og evalueringsrapportene i `reports/`, som committes (se «Evaluering») |

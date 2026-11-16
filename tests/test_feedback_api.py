@@ -3,8 +3,6 @@
 import json
 import logging
 import sqlite3
-import subprocess
-import sys
 import uuid
 from contextlib import closing
 from datetime import UTC, datetime, timedelta, timezone
@@ -286,48 +284,6 @@ def test_json_content_type_with_parameters_or_any_case_is_accepted(
 
     assert response.status_code == 204
     assert len(_rows(settings.database_path)) == 1
-
-
-def _readme_block_after(marker: str) -> str:
-    readme = (Path(app.main.ROOT) / "README.md").read_text(encoding="utf-8")
-    [line] = [line for line in readme.splitlines() if line.startswith(marker)]
-    return line
-
-
-def _feedback_rows(folder: Path) -> Path:
-    """A database as the app writes it: No then Yes in one conversation, Yes in another."""
-    path = folder / "data" / "feedback.sqlite3"
-    store = SqliteFeedbackStore(path)
-    first, other = str(uuid.uuid4()), str(uuid.uuid4())
-    for conversation_id, answer in ((first, "no"), (first, "yes"), (other, "yes")):
-        store.add(conversation_id, answer, datetime.now(UTC))  # type: ignore[arg-type]
-    return path
-
-
-def test_readme_sm1_query_counts_the_first_answer_per_conversation(tmp_path: Path) -> None:
-    line = _readme_block_after('sqlite3 data/feedback.sqlite3 "')
-    query = line.split('"', 1)[1].rsplit('"', 1)[0]
-    path = _feedback_rows(tmp_path)
-
-    with closing(sqlite3.connect(path)) as connection:
-        assert connection.execute(query).fetchone() == (50.0, 2)
-        connection.execute("DELETE FROM feedback")
-        connection.commit()
-        # An empty table gives no share.
-        assert connection.execute(query).fetchone() == (None, 0)
-
-
-def test_readme_python_command_gives_the_same_count(tmp_path: Path) -> None:
-    line = _readme_block_after('uv run python -c "import sqlite3')
-    code = line.split('"', 1)[1].rsplit('"', 1)[0]
-    _feedback_rows(tmp_path)
-
-    done = subprocess.run(
-        [sys.executable, "-c", code], cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False
-    )
-
-    assert done.returncode == 0, done.stderr
-    assert done.stdout.strip() == "(50.0, 2)"
 
 
 def test_feedback_store_is_the_sqlite_adapter_at_the_settings_path(settings: Settings) -> None:
