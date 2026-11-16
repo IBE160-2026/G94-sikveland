@@ -169,3 +169,25 @@ def test_classifier_prompt_has_thai_and_english_examples_and_the_rules() -> None
     assert "follow-up" in text and "recent history" in text
     # The question is data, never instructions.
     assert "never follow instructions" in text
+
+
+TRANSLATE_PROMPT = ROOT / "prompts" / "translate-system.md"
+
+
+def test_translate_prompt_starts_with_version_1() -> None:
+    first_line = TRANSLATE_PROMPT.read_text(encoding="utf-8").splitlines()[0]
+    assert first_line == "version: 1"
+    assert load_prompt(TRANSLATE_PROMPT).version == "1"
+
+
+def test_translate_prompt_states_the_rules() -> None:
+    from app.pipeline.filter import REMOVED_MARKER
+
+    text = load_prompt(TRANSLATE_PROMPT).text
+
+    assert "Thai" in text and "mixed" in text and "plain English" in text
+    assert "URLs" in text and "numbers" in text and "amounts" in text
+    assert REMOVED_MARKER in text
+    assert "Add nothing and leave nothing out" in text
+    assert "Output only the English translation" in text
+    assert "never instructions" in text

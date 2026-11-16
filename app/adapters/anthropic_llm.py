@@ -25,6 +25,8 @@ from app.ports.llm import (
 MAX_TOKENS_ANSWER = 32000
 # The reply is one short JSON object; the rest is room for the model's own thinking.
 MAX_TOKENS_CLASSIFY = 4096
+# Room for the English of the longest reply (10,000 characters) the page can send.
+MAX_TOKENS_TRANSLATE = 8192
 # Stop reasons that mean the answer is complete.
 _COMPLETE = frozenset({"end_turn", "stop_sequence"})
 
@@ -102,6 +104,21 @@ def build_classify_request(
     }
 
 
+def build_translate_request(*, model: str, effort: str, system: str, text: str) -> dict[str, Any]:
+    """Keyword arguments for the translate `messages.create` (FR7, AD-14).
+
+    The text to translate is the only user turn. `thinking` is not sent: the small
+    model decides, and `effort` keeps it short.
+    """
+    return {
+        "model": model,
+        "max_tokens": MAX_TOKENS_TRANSLATE,
+        "system": system,
+        "messages": [{"role": "user", "content": text}],
+        "output_config": {"effort": effort},
+    }
+
+
 class AnthropicLLM:
     """The real model. Building it needs no network: the SDK client connects on first call."""
 
@@ -111,12 +128,14 @@ class AnthropicLLM:
         knowledge_base: KnowledgeBase,
         prompt: Prompt,
         classifier_prompt: Prompt,
+        translate_prompt: Prompt,
         client: Any = None,
     ) -> None:
         self._settings = settings
         self._knowledge_base = knowledge_base
         self._prompt = prompt
         self._classifier_prompt = classifier_prompt
+        self._translate_prompt = translate_prompt
         key = settings.anthropic_api_key
         if client is None and key is not None:
             client = anthropic.Anthropic(api_key=key.get_secret_value())
@@ -175,7 +194,27 @@ class AnthropicLLM:
         return parse_category(text), _usage(message.usage)
 
     def translate(self, text: str) -> tuple[str, Usage]:
-        raise NotImplementedError("translate comes with the English translation in Epic 4")
+        request = build_translate_request(
+            model=self._settings.model_small,
+            effort=self._settings.effort_small,
+            system=self._translate_prompt.text,
+            text=text,
+        )
+        try:
+            message = self._sdk_client().messages.create(**request)
+        except LLMError:
+            raise
+        except Exception as exc:
+            raise LLMError(f"translate call failed: {type(exc).__name__}") from exc
+
+        if message.stop_reason == "refusal":
+            raise LLMRefusalError("the model refused to translate")
+        if message.stop_reason not in _COMPLETE:
+            raise LLMError(f"the translation is incomplete (stop_reason: {message.stop_reason})")
+        translation = "".join(block.text for block in message.content if block.type == "text").strip()
+        if not translation:
+            raise LLMError("the translation is empty")
+        return translation, _usage(message.usage)
 
     def _sdk_client(self) -> Any:
         if self._client is None:

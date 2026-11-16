@@ -234,6 +234,13 @@ texts:
     th: เปิดรายการเอกสาร
     en: Open checklist
 
+  # "Show English" under every finished reply and in the checklist view (Story 4.1, FR7).
+  # The Latin word "English" is part of the label, so a reader who does not read Thai
+  # finds it. DRAFT Thai, awaiting the user's review (NFR8).
+  translate-button:
+    th: แปลเป็นภาษาอังกฤษ (English)
+    en: Show English
+
 example-questions:
   - id: tourist-visa-documents
     th: ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง

@@ -60,6 +60,8 @@ REQUIRED_TEXT_KEYS: frozenset[str] = frozenset(
         # The "Open checklist" button under an answer that cites a checklist-linked source
         # (Story 3.3, AD-11).
         "checklist-open",
+        # "Show English" under a finished reply and in the checklist view (Story 4.1, FR7).
+        "translate-button",
     }
 )
 

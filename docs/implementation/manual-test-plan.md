@@ -17,10 +17,10 @@ They do not cover:
 
 | Mode | How to start | Used for |
 |---|---|---|
-| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14, MT-15, MT-16 |
+| Demo | `MOCK_LLM=true`, no key (see the [README](../../README.md#kjør-i-demomodus-uten-api-nøkkel)) | MT-01, MT-02, MT-11, MT-14, MT-15, MT-16, MT-17 |
 | No key | `MOCK_LLM=false`, `ANTHROPIC_API_KEY` empty | MT-03, MT-07 (error turn) |
-| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13, MT-14 (part B) |
-| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13, MT-14 (part B) |
+| Real key | `.env` with `ANTHROPIC_API_KEY`, `MOCK_LLM=false` | MT-04 to MT-09, MT-12, MT-13, MT-14 (part B), MT-17 (part B) |
+| Ollama | `LLM_PROVIDER=ollama`, `MOCK_LLM=false`, Ollama running with `OLLAMA_MODEL` pulled (see the [README](../../README.md#kjør-med-ollama-lokal-modell-uten-nøkkel)) | MT-10, MT-12, MT-13, MT-14 (part B), MT-17 (part B) |
 
 Start the app with `uv run uvicorn app.main:app` and open <http://127.0.0.1:8000>. For the narrow-screen checks, use the browser's device mode (F12, then Ctrl+Shift+M) and set the width to 360 px and then 320 px (NFR1: works from 360 px, no horizontal scrolling down to 320 px).
 
@@ -236,6 +236,23 @@ Mode: demo, 360 px and then 320 px. Part B: real key or Ollama.
 
 Expected: (1) the answer with its source links, and the "Open checklist" button under them; (2) the purpose choice with all three purposes (the answer cites the embassy's checklist, which every checklist links); the tick is saved; back shows the chat unchanged with focus on the button under the answer; (3) the button names the purpose (เปิดรายการเอกสาร: เยี่ยมครอบครัว), and the family checklist opens directly, without the purpose choice, with focus on its heading (the answer cites a source only the family checklist links); Escape returns to the chat; (4) no button under the fee answer; (5) the feedback question without a button; (6, 7) the buttons come back under the same answers only, and the tourism checklist still has the tick from step 2; (8) the checklist opens, and after going back the new answer has kept arriving and finishes normally; (9) focus is visible on the button, Escape returns focus to it; (10) no button on those two exchanges, nothing breaks, the others keep theirs; (11) for each answer, first read the source links shown under it: the button is there exactly when one of them is a checklist-linked source (“Document checklist Schengen visa to Norway”, “Gather the necessary documentation”, “Proof of sponsorship and/or private accommodation” or “Invitation for a visitor visa”), and absent otherwise; it opens the matching purposes (the embassy's checklist: the choice of all three; necessary documents only: the family checklist directly; the sponsorship form or invitation page: the choice of family and friends). At 320 px the button wraps its text and nothing scrolls sideways; it is at least 48 px high.
 
+### MT-17 Show English (Story 4.1, FR7)
+
+Mode: demo, 360 px and then 320 px. Part B: real key, then Ollama.
+
+1. Tap the example question about the visa fee and wait for the answer. Tap "Show English" (แปลเป็นภาษาอังกฤษ (English)) under it.
+2. Send `จะได้วีซ่าไหม` (will I get the visa?) in part B, or in demo mode any other question (e.g. `วีซ่าทำงานต้องใช้เอกสารอะไร`); tap "Show English" under the fixed reply.
+3. Send `ขอบคุณค่ะ` and tap "Show English" under the feedback question, before answering Yes or No.
+4. Reload the page; tap "Show English" under an earlier answer.
+5. Stop the server, tap "Show English" under another reply; start the server and tap it again.
+6. In F12, Network, set throttling to "Slow 3G". Tap "Show English" under a reply, then at once tap "New chat".
+7. Open the Checklist, choose tourism, tap "Show English", tick one item, then tap "Change purpose" and choose family.
+8. Keyboard only: Tab to "Show English" under a reply and press Enter.
+9. Look at `data/requests.jsonl` after steps 1 to 3.
+10. Part B (real key, then Ollama): ask "ค่าธรรมเนียมวีซ่าเท่าไร" (how much is the visa fee?) and tap "Show English"; then ask a question with a made-up passport number, e.g. "พาสปอร์ต AA1234567 ต้องใช้เอกสารอะไร", and tap "Show English" under the answer.
+
+Expected: (1) the button sits under the source links (and "Open checklist"), is disabled while the request runs, and is replaced by the English under the Thai answer; the Thai text, the source links and other buttons are unchanged; in demo mode the English is the stored demo English; (2) the stored English of the fixed reply ("Sorry, we cannot assess whether you will get the visa…" or the demo-only text), with no model call; (3) the English of the feedback question, with the Yes and No buttons still under it, after the English; (4) every saved reply has the button again; no English is shown until it is tapped (the English is never saved); (5) the fixed error text (ขออภัย เกิดข้อผิดพลาด…) under the reply and the button back; the second tap shows the English; (6) the new chat opens and nothing appears in it when the slow translation returns; (7) the English appears under every tourism item, stays after the tick, and the family list opens without English and with the button back; (8) focus is visible on the button, Enter shows the English, and focus moves to the English text; (9) one line with `"endpoint": "translate"` and `"model": "mock_llm"`, `cost_usd` 0, for the demo answer in step 1 and for any other text; no line for the fixed texts or the feedback question; no line holds any text; (10) the English keeps the amount, the URLs and `[removed]` in place of the passport number, and adds nothing of its own; the log has a `translate` line with `MODEL_SMALL` (Claude) or `OLLAMA_MODEL` (Ollama) and its tokens. At 320 px the button and the English wrap and nothing scrolls sideways; the button is at least 48 px high.
+
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -258,3 +275,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-14 | | | Not run | Part B needs a real key, and Ollama. A one-off headless Edge run (demo mode, 320 px) of steps 1 to 5, the failure in step 7 and the rows in step 8 passed on 2026-11-15; not a manual-test result |
 | | MT-15 | | | Not run | A one-off headless Edge run (demo mode, 320 px) of steps 1 to 11 (before steps 12 and 13 were added), with the browser closed and reopened for step 7 and a simulated failure for step 11, passed on 2026-11-15; not a manual-test result |
 | | MT-16 | | | Not run | Part B needs a real key or Ollama. A one-off headless Edge run in demo mode at 320 px passed 18 checks on 2026-11-15; not a manual-test result |
+| | MT-17 | | | Not run | Part B needs a real key, and Ollama |

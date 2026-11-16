@@ -16,6 +16,7 @@ from app.web.request_log import RequestLog, answer_prices, request_line, small_p
 
 FIELDS = {
     "timestamp",
+    "endpoint",
     "outcome",
     "category",
     "prompt_versions",
@@ -42,6 +43,7 @@ def _read(path: Path) -> list[dict[str, object]]:
 
 def test_line_with_usage() -> None:
     line = request_line(
+        endpoint="chat",
         outcome="answered",
         category="general",
         prompt_versions={"answer": "3"},
@@ -56,6 +58,7 @@ def test_line_with_usage() -> None:
 
     assert line == {
         "timestamp": "2026-11-14T09:30:05.123Z",
+        "endpoint": "chat",
         "outcome": "answered",
         "category": "general",
         "prompt_versions": {"answer": "3"},
@@ -73,6 +76,7 @@ def test_line_with_usage() -> None:
 
 def test_line_records_dropped_unknown_ids_and_every_prompt_version() -> None:
     line = request_line(
+        endpoint="chat",
         outcome="answered",
         category="general",
         prompt_versions={"answer": "1", "citing": "2"},
@@ -92,6 +96,7 @@ def test_line_records_dropped_unknown_ids_and_every_prompt_version() -> None:
 
 def test_unknown_ids_are_null_when_the_sources_never_came() -> None:
     line = request_line(
+        endpoint="chat",
         outcome="incomplete",
         category="general",
         prompt_versions={"answer": "1"},
@@ -107,6 +112,7 @@ def test_unknown_ids_are_null_when_the_sources_never_came() -> None:
 
 def test_line_without_usage_has_null_tokens_and_cost() -> None:
     line = request_line(
+        endpoint="chat",
         outcome="error",
         category="general",
         prompt_versions={"answer": "1"},
@@ -124,6 +130,7 @@ def test_line_without_usage_has_null_tokens_and_cost() -> None:
 def test_timestamp_is_utc_with_z() -> None:
     oslo = timezone(timedelta(hours=1))
     line = request_line(
+        endpoint="chat",
         outcome="answered",
         category="general",
         prompt_versions={"answer": "1"},
@@ -140,6 +147,7 @@ def test_timestamp_is_utc_with_z() -> None:
 
 def test_timestamp_now_is_iso_utc() -> None:
     line = request_line(
+        endpoint="chat",
         outcome="answered",
         category=None,
         prompt_versions={"answer": "1"},
@@ -163,6 +171,7 @@ def test_small_prices_come_from_the_small_settings(settings: Settings) -> None:
 
 def _costed(usage: Usage | None, classify_usage: Usage | None) -> dict[str, object]:
     return request_line(
+        endpoint="chat",
         outcome="answered",
         category="general",
         prompt_versions={"answer": "1", "classifier": "1"},
@@ -270,3 +279,39 @@ def test_concurrent_writes_give_whole_lines(tmp_path: Path) -> None:
     lines = _read(path)
     assert len(lines) == 400
     assert {(line["t"], line["n"]) for line in lines} == {(i, n) for i in range(8) for n in range(50)}
+
+
+def test_translate_line_has_the_translate_usage_and_no_category_or_classify_call() -> None:
+    usage = Usage(input_tokens=600, output_tokens=150, cache_read_tokens=0, cache_write_tokens=0)
+
+    line = request_line(
+        endpoint="translate",
+        outcome="translated",
+        category=None,
+        prompt_versions={"translate": "1"},
+        model="claude-haiku-5-5",
+        usage=usage,
+        prices=SMALL_PRICES,
+        classify_usage=None,
+        classify_prices=SMALL_PRICES,
+        unknown_source_ids=None,
+        now=datetime(2026, 11, 15, 12, 0, 0, tzinfo=UTC),
+    )
+
+    assert line == {
+        "timestamp": "2026-11-15T12:00:00.000Z",
+        "endpoint": "translate",
+        "outcome": "translated",
+        "category": None,
+        "prompt_versions": {"translate": "1"},
+        "model": "claude-haiku-5-5",
+        "input_tokens": 600,
+        "output_tokens": 150,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "classify_input_tokens": None,
+        "classify_output_tokens": None,
+        # (600x0.10 + 150x0.50) / 1e6
+        "cost_usd": 0.000135,
+        "unknown_source_ids": None,
+    }

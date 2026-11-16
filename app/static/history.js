@@ -1,7 +1,8 @@
 // Saved chats on this device (AD-3). Pure functions that take the storage objects,
 // so tests/test_history_js.py can run them in Node with an in-memory storage.
 // The list lives in localStorage; the id of the chat open in this tab in sessionStorage (per tab).
-// Also the feedback conversation_id (AD-10) and what follows a Yes/No answer (Story 2.3).
+// Also the feedback conversation_id (AD-10), what follows a Yes/No answer (Story 2.3) and
+// the "Show English" request body and response (Story 4.1).
 // No Thai here (AD-6), and nothing here talks to the server.
 "use strict";
 
@@ -345,6 +346,17 @@
     return { textKey: "feedback-follow-up", ends: false };
   }
 
+  // "Show English" (Story 4.1, FR7). The body of POST /api/translate: the reply text only,
+  // never the reminder or the sources; null when there is no text to translate.
+  function translateBody(text) {
+    return isText(text) ? { text: text } : null;
+  }
+
+  // The English from a POST /api/translate response body, or null when it has none.
+  function translationText(body) {
+    return body && isText(body.translation) ? body.translation : null;
+  }
+
   // At most `max` characters (whole code points), with an ellipsis when cut.
   function shorten(text, max) {
     const chars = Array.from(String(text).replace(/\s+/g, " ").trim());
@@ -378,6 +390,8 @@
     showsFeedback: showsFeedback,
     feedbackBody: feedbackBody,
     afterFeedback: afterFeedback,
+    translateBody: translateBody,
+    translationText: translationText,
   };
 
   if (typeof module !== "undefined" && module.exports) {

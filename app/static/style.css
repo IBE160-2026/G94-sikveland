@@ -492,6 +492,54 @@ body.panel-open {
   background: #e8eefb;
 }
 
+/* "Show English" under a finished reply and in the checklist view (Story 4.1). */
+.translate-button {
+  display: block;
+  max-width: 100%;
+  min-width: 48px;
+  min-height: 48px;
+  margin-top: 0.75rem;
+  padding: 0.25rem 1rem;
+  text-align: left;
+  color: #0b3d91;
+  background: #fff;
+  border: 1px solid #b8c4dc;
+  border-radius: 0.75rem;
+}
+
+.translate-button:active {
+  background: #e8eefb;
+}
+
+.translate-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The English under the Thai reply; it never replaces any shown text. */
+.translation {
+  min-width: 0;
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #b8c4dc;
+  border-radius: 0.5rem;
+  background: #f4f6fa;
+  /* Keeps the line breaks and numbered lists, like the Thai reply. */
+  white-space: pre-wrap;
+}
+
+.translate-error {
+  margin-top: 0.75rem;
+}
+
+/* The stored English of a checklist item, under its tick box and text. */
+.checklist-en {
+  min-width: 0;
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: #3d4657;
+}
+
 /* Document checklist (Story 3.2): purpose choice, then one row per item with a large tick
    box, a smaller "doesn't apply to me" box for conditional items, and the source link. */
 .checklist-choose {

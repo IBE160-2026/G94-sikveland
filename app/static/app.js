@@ -42,6 +42,7 @@
   const checklistFailed = document.getElementById("checklist-failed");
   const checklistError = document.getElementById("checklist-error");
   const checklistRetry = document.getElementById("checklist-retry");
+  const checklistTranslate = document.getElementById("checklist-translate");
   // Behind the full-screen panel: made inert while it is open, so focus cannot reach them.
   const behindPanel = [document.querySelector("header.top"), document.querySelector("main"), form];
 
@@ -65,6 +66,9 @@
   let checklistRequest = 0;
   // The button that opened the checklist (top bar or under an answer); focus goes back to it.
   let checklistOpener = null;
+  // True once "Show English" was tapped in the checklist view; reset when the view closes
+  // or the purpose changes.
+  let checklistEnglish = false;
 
   let texts = {};
   let answering = false;
@@ -128,6 +132,7 @@
     checklistChangePurpose.textContent = data.texts["checklist-change-purpose"];
     checklistLoading.textContent = data.texts["checklist-loading"];
     checklistRetry.setAttribute("aria-label", data.texts["checklist-retry"]);
+    checklistTranslate.textContent = data.texts["translate-button"];
 
     checklistPurposes.replaceChildren();
     for (const purpose of Lists.PURPOSES) {
@@ -183,6 +188,9 @@
       // The "Open checklist" button comes back too; an older exchange without purposes,
       // or with unknown ones only, gets none.
       reply.checklistOpen(Lists.validPurposes(entry.checklistPurposes));
+      // Every saved reply ended with `done`; its English is never stored, so the button
+      // comes back instead.
+      reply.translate(entry.answer);
     }
     keepInView(true);
   }
@@ -329,6 +337,22 @@
         });
         element.appendChild(button);
       },
+      // "Show English" under a finished reply (Story 4.1, FR7): after the sources and the
+      // checklist button, before the feedback buttons. Only the reply text is sent.
+      translate: function (answer) {
+        const body = Chats.translateBody(answer);
+        if (!body) {
+          return;
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "translate-button";
+        button.textContent = texts["translate-button"];
+        button.addEventListener("click", function () {
+          translateReply(element, button, body);
+        });
+        element.appendChild(button);
+      },
       error: function () {
         stopTyping();
         // A failed reply is never saved, so it keeps no "Open checklist" button either.
@@ -458,6 +482,65 @@
     keepInView(follow);
   }
 
+  // POST /api/translate for one reply. The button is disabled while the request is in
+  // flight. On success it is replaced by the English (lang="en") and the Thai, sources and
+  // other buttons stay; on failure the fixed error text is shown and the button comes back.
+  // A result for a reply that left the screen (new chat, another chat opened) is ignored.
+  // The English is kept on the page only, never stored with the chat.
+  async function translateReply(reply, button, body) {
+    if (button.disabled) {
+      return;
+    }
+    button.disabled = true;
+    const failed = reply.querySelector(".translate-error");
+    if (failed) {
+      failed.remove();
+    }
+    let english = null;
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        throw new Error("POST /api/translate failed: " + response.status);
+      }
+      english = Chats.translationText(await response.json());
+      if (english === null) {
+        throw new Error("POST /api/translate gave no translation");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    if (!reply.isConnected || !button.isConnected) {
+      return; // the reply left the screen meanwhile
+    }
+    const follow = nearBottom();
+    if (english === null) {
+      button.disabled = false;
+      const note = document.createElement("p");
+      note.className = "error-text translate-error";
+      note.setAttribute("role", "alert");
+      note.textContent = texts["error"];
+      button.after(note);
+    } else {
+      const hadFocus = document.activeElement === button;
+      const paragraph = document.createElement("p");
+      paragraph.className = "translation";
+      paragraph.lang = "en";
+      paragraph.textContent = english;
+      button.replaceWith(paragraph);
+      if (hadFocus) {
+        // The button is gone: focus stays at the same place in the reply.
+        paragraph.tabIndex = -1;
+        paragraph.focus();
+      }
+    }
+    keepInView(follow);
+  }
+
   function newConversationId() {
     return Chats.uuid4(window.crypto);
   }
@@ -583,6 +666,10 @@
       // Stored only after `done`, never after `error` (AD-3).
       if (answered && record.question.trim() && record.answer.trim()) {
         storeExchange(record);
+      }
+      // Every reply that ended with `done` gets "Show English", before any feedback buttons.
+      if (answered) {
+        reply.translate(record.answer);
       }
       // The feedback question gets Yes/No buttons; a replayed one never does (FR5).
       if (Chats.showsFeedback(info.category, answered)) {
@@ -774,6 +861,8 @@
     checklistPurpose = null;
     checklistItems = [];
     checklistRows = {};
+    checklistEnglish = false;
+    checklistTranslate.hidden = true;
     checklistList.replaceChildren();
     checklistFailed.hidden = true;
     checklistView.hidden = true;
@@ -811,6 +900,7 @@
     const request = checklistRequest;
     checklistRetry.disabled = true;
     // The loading text stays until the items or the error appear.
+    checklistTranslate.hidden = true;
     checklistProgress.hidden = true;
     checklistAllDone.hidden = true;
     checklistLoading.hidden = false;
@@ -868,6 +958,9 @@
         changeChecklist(Lists.toggleTick(checklistState, item.id));
       });
       row.appendChild(tickLabel);
+      if (checklistEnglish) {
+        addChecklistEnglish(row, item);
+      }
 
       let notApplicable = null;
       if (item.conditional) {
@@ -903,6 +996,7 @@
     });
     checklistRows = rows;
     checklistList.replaceChildren.apply(checklistList, list);
+    checklistTranslate.hidden = checklistEnglish;
     // After a retry the focused retry button is hidden: focus goes to the heading.
     const retryHadFocus = checklistFailed.contains(document.activeElement);
     checklistFailed.hidden = true;
@@ -912,6 +1006,35 @@
     if (retryHadFocus) {
       checklistPurposeName.focus();
     }
+  }
+
+  // "Show English" in the checklist view (Story 4.1): the stored English under every item,
+  // served with the checklist, so no request and no model call. It stays until the view
+  // closes or the purpose changes.
+  function showChecklistEnglish() {
+    if (checklistEnglish || !checklistItems.length) {
+      return;
+    }
+    checklistEnglish = true;
+    for (const item of checklistItems) {
+      addChecklistEnglish(checklistRows[item.id].row, item);
+    }
+    checklistTranslate.hidden = true;
+    // The button is gone: focus goes to the heading of the checklist.
+    checklistPurposeName.focus();
+  }
+
+  // The English of one item, right under its tick box and text (not inside the label, so
+  // tapping it ticks nothing).
+  function addChecklistEnglish(row, item) {
+    if (!item.en) {
+      return;
+    }
+    const english = document.createElement("p");
+    english.className = "checklist-en";
+    english.lang = "en";
+    english.textContent = item.en;
+    row.firstElementChild.after(english);
   }
 
   // A tick or "doesn't apply" change: saved at once on this device, never sent anywhere.
@@ -960,6 +1083,7 @@
   checklistClose.addEventListener("click", closeChecklist);
   checklistChangePurpose.addEventListener("click", changePurpose);
   checklistRetry.addEventListener("click", loadChecklist);
+  checklistTranslate.addEventListener("click", showChecklistEnglish);
   // On the document, so Escape also works when focus is on the page body (e.g. after a
   // click on panel text).
   document.addEventListener("keydown", function (event) {

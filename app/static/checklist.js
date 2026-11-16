@@ -50,8 +50,9 @@
   }
 
   // The items of a GET /api/checklists/{purpose} body that the page can show:
-  // [{id, text, conditional, source}]. The source link is checked by the page
-  // (https only) when it is shown. A malformed body gives [].
+  // [{id, text, en, conditional, source}]. `en` is the stored English that "Show English"
+  // shows ("" when missing). The source link is checked by the page (https only) when it
+  // is shown. A malformed body gives [].
   function validItems(body) {
     if (!body || !Array.isArray(body.items)) {
       return [];
@@ -66,6 +67,7 @@
       items.push({
         id: item.id,
         text: item.text,
+        en: isText(item.en) ? item.en : "",
         conditional: item.conditional === true,
         source: item.source || null,
       });

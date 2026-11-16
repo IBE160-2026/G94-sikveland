@@ -352,6 +352,21 @@ def test_valid_items_keeps_well_formed_items_once() -> None:
     ]
 
 
+def test_valid_items_keep_the_stored_english_or_an_empty_string() -> None:
+    # "Show English" in the checklist view (Story 4.1) shows `en`; nothing else is sent anywhere.
+    result = run("""
+        const body = { items: [
+          { id: "a", text: "t", en: "Passport" },
+          { id: "b", text: "t" },
+          { id: "c", text: "t", en: "   " },
+          { id: "d", text: "t", en: 7 },
+        ] };
+        return C.validItems(body).map(function (i) { return [i.id, i.en]; });
+    """)
+
+    assert result == [["a", "Passport"], ["b", ""], ["c", ""], ["d", ""]]
+
+
 def test_valid_items_keeps_ids_named_like_object_properties() -> None:
     result = run("""
         const body = { items: [item("constructor"), item("toString"), item("__proto__"), item("toString")] };

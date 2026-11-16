@@ -1,8 +1,9 @@
 """`GET /api/checklists/{purpose}`: the fixed document checklist for one visit purpose (FR6, AD-11).
 
 Served from `ContentStore` and the knowledge base only, never from the LLM. Each
-item's source is resolved to `{title, url}`; `conditional` is true for an item that only
-applies to some applicants (the page offers "doesn't apply to me" for it). An unknown
+item has its Thai `text` and stored English `en`, and its source is resolved to
+`{title, url}`; `conditional` is true for an item that only applies to some
+applicants (the page offers "doesn't apply to me" for it). An unknown
 purpose gets a 404 in the error envelope; the requested value is never echoed. The
 route takes the whole rest of the path, so `/api/checklists/`, `/api/checklists/tourism/`
 and deeper paths get the same envelope instead of falling through to the static files.
@@ -39,6 +40,8 @@ def checklist(purpose: str, request: Request) -> dict[str, Any] | JSONResponse:
             {
                 "id": item.id,
                 "text": item.th,
+                # The stored English, shown by the page's "Show English" (Story 4.1).
+                "en": item.en,
                 "conditional": item.conditional,
                 "source": _source(knowledge_base, item.source_id),
             }

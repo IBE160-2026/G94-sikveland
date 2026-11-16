@@ -14,9 +14,11 @@ from pydantic import SecretStr
 from app.adapters.anthropic_llm import (
     MAX_TOKENS_ANSWER,
     MAX_TOKENS_CLASSIFY,
+    MAX_TOKENS_TRANSLATE,
     AnthropicLLM,
     build_answer_request,
     build_classify_request,
+    build_translate_request,
 )
 from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message
 from app.adapters.file_prompts import Prompt
@@ -26,6 +28,7 @@ from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusal
 
 PROMPT = Prompt(version="test-1", text="Answer in Thai from the documents.")
 CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
+TRANSLATOR = Prompt(version="t-1", text="Translate to English.")
 
 
 def _source(sid: str) -> Source:
@@ -136,7 +139,7 @@ class StandInClient:
 
 
 def _llm(client: Any, settings: Settings) -> AnthropicLLM:
-    return AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, client=client)
+    return AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR, client=client)
 
 
 # --- request shape ----------------------------------------------------------------
@@ -267,7 +270,7 @@ class UnsortedKnowledgeBase(StandInKnowledgeBase):
 
 def test_adapter_sorts_documents_by_id_for_request_and_citations(settings: Settings) -> None:
     client = StandInClient(events=[_text("x"), _cite(0)])
-    llm = AnthropicLLM(settings, UnsortedKnowledgeBase(), PROMPT, CLASSIFIER, client=client)
+    llm = AnthropicLLM(settings, UnsortedKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR, client=client)
 
     result = list(llm.answer("q", []))
 
@@ -356,13 +359,13 @@ def test_error_mid_stream_becomes_llm_error(settings: Settings, error: Exception
 
 
 def test_construction_needs_no_key_and_no_network(settings: Settings) -> None:
-    llm: LLMClient = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
+    llm: LLMClient = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR)
     assert llm is not None
 
 
 def test_sdk_client_is_built_once_from_the_key(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = settings.model_copy(update={"anthropic_api_key": SecretStr("sk-test")})
-    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR)
 
     client = llm._sdk_client()
     assert isinstance(client, anthropic.Anthropic)
@@ -383,15 +386,10 @@ def test_sdk_client_is_built_once_from_the_key(settings: Settings, monkeypatch: 
 
 
 def test_answer_without_key_raises_llm_error(settings: Settings) -> None:
-    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR)
 
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
         list(llm.answer("q", []))
-
-
-def test_translate_is_not_implemented_yet(settings: Settings) -> None:
-    with pytest.raises(NotImplementedError):
-        AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER).translate("t")
 
 
 # --- classify (Story 2.1) ---------------------------------------------------------------
@@ -515,10 +513,87 @@ def test_classify_sdk_error_becomes_llm_error(settings: Settings, error: Excepti
 
 
 def test_classify_without_key_raises_llm_error(settings: Settings) -> None:
-    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER)
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR)
 
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
         llm.classify("q", [])
+
+
+# --- translate (Story 4.1) ------------------------------------------------------------
+
+
+def test_translate_request_has_no_thinking_tools_or_format() -> None:
+    request = build_translate_request(
+        model="claude-haiku-5-5", effort="low", system=TRANSLATOR.text, text="สวัสดี"
+    )
+
+    assert request == {
+        "model": "claude-haiku-5-5",
+        "max_tokens": MAX_TOKENS_TRANSLATE,
+        "system": TRANSLATOR.text,
+        "messages": [{"role": "user", "content": "สวัสดี"}],
+        "output_config": {"effort": "low"},
+    }
+    assert MAX_TOKENS_TRANSLATE == 8192
+    assert not {"tools", "tool_choice", "thinking", "temperature", "top_p", "top_k", "betas"} & set(request)
+
+
+def test_translate_sends_the_small_model_effort_and_prompt(settings: Settings) -> None:
+    client = StandInCreateClient(_reply("Hello"))
+    settings = settings.model_copy(update={"model_small": "small-x", "effort_small": "medium"})
+
+    _llm(client, settings).translate("สวัสดี")
+
+    assert client.requests == [
+        build_translate_request(model="small-x", effort="medium", system=TRANSLATOR.text, text="สวัสดี")
+    ]
+
+
+@pytest.mark.parametrize("stop_reason", ["end_turn", "stop_sequence"])
+def test_translate_returns_the_stripped_text_and_usage(settings: Settings, stop_reason: str) -> None:
+    reply = _reply("ignored", stop_reason=stop_reason)
+    reply.content = [
+        SimpleNamespace(type="thinking", thinking="hidden"),
+        SimpleNamespace(type="text", text="\n  You need a passport"),
+        SimpleNamespace(type="text", text=" and a photo.  \n"),
+    ]
+
+    assert _llm(StandInCreateClient(reply), settings).translate("t") == (
+        "You need a passport and a photo.",
+        Usage(input_tokens=420, output_tokens=15, cache_read_tokens=0, cache_write_tokens=0),
+    )
+
+
+def test_translate_refusal_raises_refusal_error(settings: Settings) -> None:
+    with pytest.raises(LLMRefusalError):
+        _llm(StandInCreateClient(_reply("", stop_reason="refusal")), settings).translate("t")
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "pause_turn", "model_context_window_exceeded"])
+def test_translate_cut_off_raises(settings: Settings, stop_reason: str) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(StandInCreateClient(_reply("Half a", stop_reason=stop_reason)), settings).translate("t")
+    assert not isinstance(raised.value, LLMRefusalError)
+
+
+@pytest.mark.parametrize("text", ["", "   \n "])
+def test_translate_empty_text_raises(settings: Settings, text: str) -> None:
+    with pytest.raises(LLMError, match="empty"):
+        _llm(StandInCreateClient(_reply(text)), settings).translate("t")
+
+
+@pytest.mark.parametrize("error", SDK_ERRORS, ids=lambda e: type(e).__name__)
+def test_translate_sdk_error_becomes_llm_error(settings: Settings, error: Exception) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(StandInCreateClient(error=error), settings).translate("t")
+    assert raised.value.__cause__ is error
+
+
+def test_translate_without_key_raises_llm_error(settings: Settings) -> None:
+    llm = AnthropicLLM(settings, StandInKnowledgeBase(), PROMPT, CLASSIFIER, TRANSLATOR)
+
+    with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
+        llm.translate("t")
 
 
 # --- the real SDK over a stand-in transport ------------------------------------------

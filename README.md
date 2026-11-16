@@ -26,9 +26,10 @@ Ferdig og testet:
 - Når søkeren takker eller sier «ok», spør chatboten om søkeren har fått all informasjonen de trenger, med knappene Ja og Nei; svaret lagres som eneste data på serveren (Story 2.3)
 - Dokumentsjekkliste per besøksformål (turisme, besøke familie, besøke venner) bak knappen «Sjekkliste» øverst. Søkeren krysser av dokumentene hen har, kan merke punkter som «gjelder ikke meg», og finner avkrysningene igjen senere på samme enhet; de sendes aldri til serveren (Story 3.1, 3.2). Under svar som viser til en kilde som en sjekkliste bygger på, kommer knappen «Åpne sjekkliste», også når samtalen åpnes igjen senere (Story 3.3)
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
+- Knappen «Show English» under hvert ferdig svar og i sjekklisten, så sensor som ikke leser thai, kan følge med (Story 4.1)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 
-Ikke laget ennå: knappen «Show English» (Story 4.1). Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
+Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
 ## Kom i gang
 
@@ -109,7 +110,7 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3.5:9b` | Ollama-serveren og modellen; brukes bare med `LLM_PROVIDER=ollama` |
 | `OLLAMA_NUM_CTX` | `32768` | Kontekstvindu i tokens som sendes til Ollama; minst 32768 |
 | `MODEL_ANSWER`, `EFFORT_ANSWER` | `claude-opus-5-5`, `medium` | Modellen som skriver svarene |
-| `MODEL_SMALL`, `EFFORT_SMALL` | `claude-haiku-5-5`, `low` | Liten modell til enkle oppgaver, som å sortere spørsmålene (se under) |
+| `MODEL_SMALL`, `EFFORT_SMALL` | `claude-haiku-5-5`, `low` | Liten modell til enkle oppgaver: sortere spørsmålene og oversette svar til engelsk (se under) |
 | `ADVISER_CONTACT` | rådgiverens e-post | Vises når chatboten ikke kan hjelpe |
 | `REQUEST_LOG_PATH` | `data/requests.jsonl` | Forespørselsloggen (se under) |
 | `DATABASE_PATH` | `data/feedback.sqlite3` | SQLite-fila med tilbakemeldingene (se under); en relativ sti regnes fra prosjektmappa |
@@ -185,11 +186,19 @@ sqlite3 data/feedback.sqlite3 "SELECT ROUND(100.0 * SUM(answer = 'yes') / COUNT(
 
 Hvert besøksformål har én fast dokumentsjekkliste i [`content/checklists.yaml`](content/checklists.yaml): `tourism` (turisme), `family` (besøke familie) og `friends` (besøke venner). Listene er skrevet på forhånd ut fra ambassadens sjekkliste og UDIs sider, og lages aldri av KI-en. Hvert punkt har en fast `id`, tekst på thai og engelsk, og en kilde fra `knowledge-base/sources.yaml`. Punkter som bare gjelder noen søkere (teksten begynner med vilkåret, «Hvis du er ansatt: …»), har `conditional: true`. Familie- og vennelista har med sponsorskjemaet og invitasjonsbrevet, som personen i Norge fyller ut eller skriver, med lenke til UDI, og familielista sier at ambassaden har en egen sjekkliste når familiemedlemmet er borger av et EU/EØS-land. Det er UDIs krav som gjelder (FR6). For søkere i Thailand kommer de som ambassadens offisielle sjekkliste, som søkeren skriver ut, krysser av, signerer og leverer hos VFS. Appens sjekkliste leder søkeren dit gjennom et eget punkt (`signed-embassy-checklist`) med lenke til den. De thai tekstene er godkjent av brukeren (NFR8).
 
-`GET /api/checklists/{purpose}` gir `{purpose, items: [{id, text, conditional, source: {title, url}}]}` med thai tekst, i samme rekkefølge som i fila, uten noe KI-kall (også i demomodus). Ukjent formål gir 404 med `{"error": {"code": "unknown_purpose", ...}}`. Appen starter ikke hvis fila mangler et formål, har et ukjent formål eller felt, et punkt uten thai eller engelsk tekst, en `id` som ikke er kebab-case eller som står to ganger i samme liste, en `conditional` som ikke er `true` eller `false`, eller en kilde som ikke finnes. En `id` brukes aldri om igjen til annet innhold, fordi avkrysningene på søkerens telefon lagres per `id`.
+`GET /api/checklists/{purpose}` gir `{purpose, items: [{id, text, en, conditional, source: {title, url}}]}` med thai tekst (`text`) og den lagrede engelske teksten (`en`, som «Show English» viser), i samme rekkefølge som i fila, uten noe KI-kall (også i demomodus). Ukjent formål gir 404 med `{"error": {"code": "unknown_purpose", ...}}`. Appen starter ikke hvis fila mangler et formål, har et ukjent formål eller felt, et punkt uten thai eller engelsk tekst, en `id` som ikke er kebab-case eller som står to ganger i samme liste, en `conditional` som ikke er `true` eller `false`, eller en kilde som ikke finnes. En `id` brukes aldri om igjen til annet innhold, fordi avkrysningene på søkerens telefon lagres per `id`.
 
 På siden er knappen «Sjekkliste» (`checklist-button`) alltid synlig øverst, også mens et svar strømmer. Den åpner sjekklisten i fullskjerm over chatten: først valg av besøksformål, så lista med en stor avkrysningsboks og kildelenke (ny fane) per punkt. Punkter med `conditional: true` har i tillegg et mindre valg, «gjelder ikke meg». En linje viser hvor mange av punktene som gjelder søkeren, som er krysset av («3 av 17 klare»), og en egen tekst vises når alt er klart. «Tilbake» eller Escape lukker sjekklisten, og chatten er uendret, også et svar som var på vei. Alle tekstene kommer fra `/api/texts` (nøklene `checklist-*`); de thai tekstene er godkjent av brukeren (NFR8).
 
 Viser et svar til en kilde som minst ett punkt i en sjekkliste bygger på, får `sources`-hendelsen `checklist: true` og `checklist_purposes` med besøksformålene til disse sjekklistene, i rekkefølgen `tourism`, `family`, `friends` og hvert bare én gang. Serveren regner dette ut fra `content/checklists.yaml`, aldri med KI-en, og likt for Claude, Ollama og demomodus; faste svar, «vi har ikke svar»-teksten og feil gir aldri noen. Siden viser da knappen «Åpne sjekkliste» (`checklist-open`) under svaret. Med ett formål viser knappen formålet og åpner den sjekklisten direkte, med flere først valget av formål; ellers virker den som knappen øverst (fokus, «Tilbake», Escape), også mens et svar strømmer, og fokus går tilbake til knappen under svaret. Formålene lagres sammen med utvekslingen i de lagrede samtalene (`checklistPurposes`), så knappen kommer tilbake når siden lastes på nytt eller samtalen åpnes igjen. Bare kjente formål brukes; samtaler lagret før dette får ingen knapp. Formålene sendes aldri til serveren.
+
+### Vis på engelsk («Show English»)
+
+Sensor leser ikke thai (FR7). Hvert svar som endte med `done` (modellsvar, faste svar og tilbakemeldingsspørsmålet, både nye og i samtaler som åpnes igjen) får derfor knappen `translate-button` («แปลเป็นภาษาอังกฤษ (English)»; ordet «English» står med, så den finnes uten å kunne thai). Den står etter kildene og «Åpne sjekkliste» og før Ja/Nei-knappene. Svar som endte med feil, får ingen. Et trykk sender bare svarteksten, ikke påminnelsen eller kildene, til `POST /api/translate` med `{text}` (1–10 000 tegn) og får `{translation}`. Knappen er avslått mens forespørselen pågår. Går det bra, byttes knappen ut med den engelske teksten (`lang="en"`) under svaret; den thai teksten, kildene og de andre knappene står urørt. Feiler det, vises den faste feilteksten (`error`), og knappen kommer tilbake. Den engelske teksten holdes bare på siden og lagres aldri sammen med samtalen. Kommer svaret etter at samtalen er byttet, ignoreres det. Den thai knappeteksten er et UTKAST som venter på brukerens godkjenning (NFR8).
+
+Serveren kjører personvernfilteret først. Er den filtrerte teksten (etter Unicode NFC, sammenslåtte mellomrom og trimming) lik den thai teksten i en fast tekst eller et eksempelspørsmål, får siden den lagrede engelske teksten uten noe KI-kall og uten logglinje. Ellers oversetter KI-en teksten med prompten [`prompts/translate-system.md`](prompts/translate-system.md): med Claude `MODEL_SMALL` (`thinking` sendes ikke, så den lille modellen bestemmer selv, og `EFFORT_SMALL` holder det kort, som ved sorteringen), med Ollama `OLLAMA_MODEL` (uten tenking), og i demomodus de lagrede engelske demosvarene (andre tekster får den engelske `reply-demo-only`). Hver slik oversettelse gir én linje i forespørselsloggen (`endpoint: "translate"`, se under). Feil gir 502 med `{"error": {"code": "translation_failed", ...}}`, en ugyldig body 422 og en body som ikke er `application/json`, 415. Teksten logges aldri. `/api/chat` er uendret.
+
+I sjekklisten viser den samme knappen den lagrede engelske teksten under hvert punkt, uten noen forespørsel. Den står til sjekklisten lukkes eller formålet byttes.
 
 Avkrysningene lagres bare i nettleseren på søkerens enhet (`localStorage`) og sendes aldri til serveren: avkryssede punkt-id-er under `checklist:{purpose}` og «gjelder ikke meg» under `checklist-na:{purpose}`, begge som JSON-lister. Et punkt er aldri begge deler. Når lista lastes, beholdes bare id-er som fortsatt finnes: fjernede punkter ignoreres, og nye punkter starter uavkrysset. Uleselige data regnes som tomme, og er lagringen blokkert eller full, virker avkrysningen mens siden er åpen, men huskes ikke. Logikken står i [`app/static/checklist.js`](app/static/checklist.js) og testes i Node (`tests/test_checklist_js.py`).
 
@@ -238,20 +247,21 @@ Vurderingskriteriene for del 1 står i [sensorveiledningen](docs/planning/sensor
 
 ## Forespørselslogg (kostnad og cache)
 
-Appen skriver én JSON-linje per spørsmål til `data/requests.jsonl` (innstillingen `REQUEST_LOG_PATH`; en relativ sti regnes fra prosjektroten). Linja skrives når svaret er ferdig strømmet, også ved feil eller når brukeren lukker siden. Ugyldige forespørsler (422) logges ikke. Loggen inneholder aldri spørsmålet, svaret, samtalehistorikken eller kildene, bare tall og etiketter:
+Appen skriver én JSON-linje per spørsmål og per oversettelse fra KI-en («Show English») til `data/requests.jsonl` (innstillingen `REQUEST_LOG_PATH`; en relativ sti regnes fra prosjektroten). Linja for et spørsmål skrives når svaret er ferdig strømmet, også ved feil eller når brukeren lukker siden. Ugyldige forespørsler (415, 422) og oversettelser fra lagret engelsk tekst logges ikke. Loggen inneholder aldri spørsmålet, svaret, samtalehistorikken, kildene eller teksten som ble oversatt, bare tall og etiketter:
 
 | Felt | Betydning |
 |------|-----------|
 | `timestamp` | Tidspunkt i UTC (ISO 8601, slutter på `Z`) |
-| `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
-| `category` | Spørsmålskategori: `general`, `individual_assessment`, `out_of_scope` eller `reach_person`; `null` hvis forespørselen feilet før den ble kategorisert |
-| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "2"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "2", "citing": "2"}` |
-| `model` | Modellen som svarte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama) |
-| `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet (ut inkluderer tenking); `null` når svarmodellen ikke ble kalt |
+| `endpoint` | `chat` (et spørsmål, `POST /api/chat`) eller `translate` (en oversettelse, `POST /api/translate`) |
+| `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `translated` (oversatt av KI-en), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
+| `category` | Spørsmålskategori: `general`, `individual_assessment`, `out_of_scope` eller `reach_person`; `null` hvis forespørselen feilet før den ble kategorisert, og alltid `null` for `translate` |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "2"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "2", "citing": "2"}`; for `translate` bare `{"translate": "1"}` |
+| `model` | Modellen som svarte eller oversatte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama, `MODEL_SMALL` for `translate` med Claude) |
+| `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet eller oversettelseskallet (ut inkluderer tenking); `null` når modellen ikke ble kalt eller kallet feilet |
 | `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen i svarkallet (alltid 0 med Ollama, som ikke rapporterer det) |
-| `classify_input_tokens`, `classify_output_tokens` | Tokens inn og ut i sorteringskallet; `null` når sorteringen feilet |
-| `cost_usd` | Kostnad i USD med seks desimaler: svarkallet regnet med `PRICE_ANSWER_*` pluss sorteringskallet regnet med `PRICE_SMALL_*` (0 i demomodus og med Ollama) |
-| `unknown_source_ids` | Hvor mange kilde-id-er i svaret som ikke finnes i `sources.yaml` og derfor ble droppet (0 når alle var kjente); `null` hvis svaret stoppet før kildene kom |
+| `classify_input_tokens`, `classify_output_tokens` | Tokens inn og ut i sorteringskallet; `null` når sorteringen feilet, og alltid `null` for `translate` |
+| `cost_usd` | Kostnad i USD med seks desimaler: svarkallet regnet med `PRICE_ANSWER_*` pluss sorteringskallet regnet med `PRICE_SMALL_*`; for `translate` oversettelseskallet regnet med `PRICE_SMALL_*` (0 i demomodus og med Ollama) |
+| `unknown_source_ids` | Hvor mange kilde-id-er i svaret som ikke finnes i `sources.yaml` og derfor ble droppet (0 når alle var kjente); `null` hvis svaret stoppet før kildene kom, og alltid `null` for `translate` |
 
 Token-feltene er `null` når kallet ikke rapporterte forbruk (typisk ved feil), og `cost_usd` er `null` når ingen av kallene gjorde det.
 
@@ -264,3 +274,11 @@ uv run python -c "import json; print(round(sum(json.loads(l)['cost_usd'] or 0 fo
 ```
 
 Linjer med `cost_usd: null` (feil, avvisninger, svar som ble brutt av, brukere som gikk) telles ikke med, så summen er en nedre grense for hva spørsmålene faktisk kostet.
+
+Summen tar med oversettelsene. Kostnaden for «Show English» alene (bare linjene med `endpoint: "translate"`; eldre linjer uten `endpoint` er spørsmål):
+
+```sh
+uv run python -c "import json; print(round(sum(d['cost_usd'] or 0 for d in map(json.loads, open('data/requests.jsonl', encoding='utf-8')) if d.get('endpoint') == 'translate'), 6))"
+```
+
+En oversettelse koster bare det lille modellkallet (`MODEL_SMALL`, priset med `PRICE_SMALL_*`); faste tekster og eksempelspørsmål oversettes fra lagret tekst og koster ingenting.

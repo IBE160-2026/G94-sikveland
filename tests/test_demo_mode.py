@@ -312,3 +312,62 @@ def test_individual_assessment_in_demo_mode_has_no_answer_tokens(demo_settings: 
     # No answer call was made, so there is nothing to stand in for.
     assert (line["input_tokens"], line["output_tokens"]) == (None, None)
     assert line["cost_usd"] == 0.0
+
+
+# --- "Show English" in demo mode (Story 4.1) -----------------------------------------
+
+
+def _translate(client: TestClient, text: str) -> Any:
+    response = client.post("/api/translate", json={"text": text})
+    assert response.status_code == 200
+    return response.json()["translation"]
+
+
+def test_demo_answer_is_translated_by_the_mock_and_logged_at_no_cost(
+    client: TestClient, demo_settings: Settings
+) -> None:
+    from app.adapters.file_demo_answers import load_demo_answers
+
+    state = client.app.state
+    demo = load_demo_answers(DEMO_ANSWERS_FILE, _examples(client), state.knowledge_base)
+    examples = _examples(client)
+    for example in examples:
+        assert _translate(client, demo.answers[example.id].th) == demo.answers[example.id].en, example.id
+
+    lines = _log(demo_settings)
+    assert len(lines) == len(examples)
+    for line in lines:
+        assert (line["endpoint"], line["outcome"], line["category"]) == ("translate", "translated", None)
+        assert (line["model"], line["cost_usd"]) == ("mock_llm", 0.0)
+        assert (line["input_tokens"], line["output_tokens"]) == (0, 0)
+        assert line["prompt_versions"] == {"translate": state.translate_prompt.version}
+
+
+def test_other_text_gets_the_demo_only_english(client: TestClient, demo_settings: Settings) -> None:
+    english = client.app.state.content.texts()["reply-demo-only"].en
+
+    assert _translate(client, "ข้อความที่ไม่มีคำแปลเก็บไว้") == english
+    [line] = _log(demo_settings)
+    assert (line["outcome"], line["model"], line["cost_usd"]) == ("translated", "mock_llm", 0.0)
+
+
+def test_fixed_texts_and_examples_get_the_stored_english_with_no_log_line(
+    client: TestClient, demo_settings: Settings
+) -> None:
+    texts = client.app.state.content.texts()
+    for key in ("reply-demo-only", "reply-embassy-decides", "feedback-question"):
+        assert _translate(client, texts[key].th) == texts[key].en, key
+    for example in _examples(client):
+        assert _translate(client, example.th) == example.en
+
+    assert not Path(demo_settings.request_log_path).exists()
+
+
+def test_demo_reply_to_a_real_question_can_be_translated(client: TestClient) -> None:
+    example = _examples(client)[2]
+    events = _events(client, example.th)
+    shown = "".join(e["delta"] for e in events if e["type"] == "text")
+
+    english = _translate(client, shown)
+
+    assert english and english != client.app.state.content.texts()["reply-demo-only"].en

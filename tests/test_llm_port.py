@@ -117,6 +117,19 @@ def test_fake_raises_the_scripted_classify_error() -> None:
     assert len(llm.classify_calls) == 1
 
 
-def test_fake_translate_is_not_implemented_yet() -> None:
-    with pytest.raises(NotImplementedError):
-        ScriptedLLM().translate("t")
+def test_fake_translates_with_the_scripted_text_and_usage() -> None:
+    llm = ScriptedLLM(translation="Hello", translate_usage=USAGE)
+
+    assert llm.translate("สวัสดี") == ("Hello", USAGE)
+    assert llm.translate_calls == ["สวัสดี"]
+    assert llm.calls == [] and llm.classify_calls == []
+
+
+def test_fake_raises_the_scripted_translate_error() -> None:
+    error = NotImplementedError("not built")
+    llm = ScriptedLLM(translate_error=error)
+
+    with pytest.raises(NotImplementedError) as raised:
+        llm.translate("t")
+    assert raised.value is error
+    assert llm.translate_calls == ["t"]

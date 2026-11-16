@@ -701,6 +701,26 @@ def test_feedback_body_holds_only_the_id_and_the_answer() -> None:
     assert result["bad"] == ["rejected"] * 4
 
 
+def test_translate_body_holds_only_the_reply_text() -> None:
+    # "Show English" (Story 4.1): only the reply text, never the reminder or sources.
+    result = run("""
+        return [H.translateBody("สวัสดี"), H.translateBody("  x \\n"), H.translateBody(""),
+                H.translateBody("   "), H.translateBody(null), H.translateBody(7)];
+    """)
+
+    assert result == [{"text": "สวัสดี"}, {"text": "  x \n"}, None, None, None, None]
+
+
+def test_translation_text_reads_the_response_or_gives_null() -> None:
+    result = run("""
+        return [H.translationText({ translation: "Hello" }), H.translationText({ translation: " " }),
+                H.translationText({ translation: 1 }), H.translationText({ error: { code: "x" } }),
+                H.translationText(null), H.translationText("Hello")];
+    """)
+
+    assert result == ["Hello", None, None, None, None, None]
+
+
 def test_no_continues_the_chat_and_yes_ends_it() -> None:
     result = run('return [H.afterFeedback("no"), H.afterFeedback("yes")];')
 

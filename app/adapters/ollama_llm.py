@@ -6,7 +6,7 @@ Ollama has no Citations, so the model marks its sources in the text as `[[source
 the text (line breaks stay, so list items never merge); a split marker is never shown.
 Thinking is on, but its text is never passed on. Classifying is a short
 non-streaming call with thinking off and the reply held to the category schema
-(`format`).
+(`format`). Translating is a non-streaming call with thinking off, too.
 
 No `httpx` type or exception leaves this module: failures are `LLMError`. A non-200
 status or an `error` line is logged as a warning (status or a fixed reason, never the
@@ -106,6 +106,24 @@ def build_classify_request(
     }
 
 
+def build_translate_request(*, model: str, num_ctx: int, system: str, text: str) -> dict[str, Any]:
+    """The JSON body for the translate `POST /api/chat`: the translate prompt, then the text.
+
+    Same model and `num_ctx` as the other calls, so Ollama does not reload the model.
+    Not streamed, thinking off.
+    """
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text},
+        ],
+        "stream": False,
+        "think": False,
+        "options": {"num_ctx": num_ctx},
+    }
+
+
 class MarkerParser:
     """Turns streamed text with `[[id]]` markers into `AnswerChunk`s without the markers.
 
@@ -157,6 +175,7 @@ class OllamaLLM:
         prompt: Prompt,
         citing_prompt: Prompt,
         classifier_prompt: Prompt,
+        translate_prompt: Prompt,
         client: httpx.Client | None = None,
     ) -> None:
         self._settings = settings
@@ -164,6 +183,7 @@ class OllamaLLM:
         self._prompt = prompt
         self._citing_prompt = citing_prompt
         self._classifier_prompt = classifier_prompt
+        self._translate_prompt = translate_prompt
         self._client = client if client is not None else httpx.Client(timeout=TIMEOUT)
         self._url = settings.ollama_base_url.rstrip("/") + "/api/chat"
 
@@ -230,35 +250,44 @@ class OllamaLLM:
             question=question,
             recent_history=recent_history,
         )
+        data = self._post(request, "classify")
+        if data.get("done") is not True or data.get("done_reason") != "stop":
+            raise LLMError(f"the classification is incomplete (done_reason: {data.get('done_reason')})")
+        content = _reply_text(data)
+        if content is None:
+            raise LLMError("the classifier reply has no text")
+        return parse_category(content), _reply_usage(data)
+
+    def translate(self, text: str) -> tuple[str, Usage]:
+        request = build_translate_request(
+            model=self._settings.ollama_model,
+            num_ctx=self._settings.ollama_num_ctx,
+            system=self._translate_prompt.text,
+            text=text,
+        )
+        data = self._post(request, "translate")
+        if data.get("done") is not True or data.get("done_reason") != "stop":
+            raise LLMError(f"the translation is incomplete (done_reason: {data.get('done_reason')})")
+        content = _reply_text(data)
+        translation = content.strip() if content is not None else ""
+        if not translation:
+            raise LLMError("the translation is empty")
+        return translation, _reply_usage(data)
+
+    def _post(self, request: dict[str, Any], call: str) -> dict[str, Any]:
+        """One non-streamed `POST /api/chat`: the reply object. Any failure is an `LLMError`."""
         try:
             response = self._client.post(self._url, json=request)
             if response.status_code != 200:
                 # 404 is usually a model that is not pulled; the body is never logged.
                 logger.warning("Ollama answered HTTP %d", response.status_code)
-                raise LLMError(f"classify call failed: HTTP {response.status_code}")
-            data = _parse_line(response.text)
+                raise LLMError(f"{call} call failed: HTTP {response.status_code}")
+            return _parse_line(response.text)
         except LLMError:
             raise
         except Exception as exc:
             # Connection refused, timeouts and other transport errors.
-            raise LLMError(f"classify call failed: {type(exc).__name__}") from exc
-
-        if data.get("done") is not True or data.get("done_reason") != "stop":
-            raise LLMError(f"the classification is incomplete (done_reason: {data.get('done_reason')})")
-        message = data.get("message")
-        content = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(content, str):
-            raise LLMError("the classifier reply has no text")
-        usage = Usage(
-            input_tokens=_count(data.get("prompt_eval_count")),
-            output_tokens=_count(data.get("eval_count")),
-            cache_read_tokens=0,
-            cache_write_tokens=0,
-        )
-        return parse_category(content), usage
-
-    def translate(self, text: str) -> tuple[str, Usage]:
-        raise NotImplementedError("translate comes with the English translation in Epic 4")
+            raise LLMError(f"{call} call failed: {type(exc).__name__}") from exc
 
 
 def _parse_line(line: str) -> dict[str, Any]:
@@ -277,6 +306,23 @@ def _parse_line(line: str) -> dict[str, Any]:
         logger.warning(OLLAMA_ERROR_REASON)
         raise LLMError(OLLAMA_ERROR_REASON)
     return data
+
+
+def _reply_text(data: dict[str, Any]) -> str | None:
+    """The text of a non-streamed reply, or `None` when it has none."""
+    message = data.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return content if isinstance(content, str) else None
+
+
+def _reply_usage(data: dict[str, Any]) -> Usage:
+    """The tokens of a non-streamed reply; Ollama reports no cache use."""
+    return Usage(
+        input_tokens=_count(data.get("prompt_eval_count")),
+        output_tokens=_count(data.get("eval_count")),
+        cache_read_tokens=0,
+        cache_write_tokens=0,
+    )
 
 
 def _count(value: Any) -> int:

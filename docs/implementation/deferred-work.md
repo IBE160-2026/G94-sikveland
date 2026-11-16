@@ -77,7 +77,7 @@
   evidence: Review of Story 3.1 (blind #5): about half the items are conditional and `ChecklistItem` has no marker for it; cheaper to add before ticks exist in real use.
 - source_spec: `docs/implementation/spec-3-1-checklists-per-visit-purpose.md`
   summary: Story 4.1 ("Show English"): checklist items store `en` but `GET /api/checklists/{purpose}` serves only Thai; decide how the English reaches the page (serve `en`, or let `/api/translate` look up stored checklist English).
-  evidence: Review of Story 3.1 (blind #10): nothing in the spec, README or epic context says how 4.1 reaches checklist English.
+  evidence: Review of Story 3.1 (blind #10): nothing in the spec, README or epic context says how 4.1 reaches checklist English. Settled by Story 4.1 (user decision, 2026-11-15): `GET /api/checklists/{purpose}` serves each item's stored `en`, and the checklist view's "Show English" shows it with no request and no model call.
 - source_spec: `docs/implementation/spec-3-2-tick-off-documents-and-the-ticks-are-kept.md`
   summary: Extend the deferred browser-level page tests to the checklist view: refresh after a change (progress, all-done, dimmed rows, `data-state`), the stale-response guard after change purpose or close, retry and focus, and the purpose buttons from `/api/texts`. The pure logic in `checklist.js` is tested in Node; the DOM wiring in `app.js` only by source text.
   evidence: Review of Story 3.2 (verification gap #1): removing `refreshChecklist()` from `changeChecklist` keeps ticks saved but never updates the progress line, and every test stays green. A one-off headless run passed on 2026-11-15; MT-15 covers it by hand. The Story 3.1 entry on conditional items is settled by this story (`conditional` + "doesn't apply to me").
@@ -93,3 +93,15 @@
 - source_spec: `docs/implementation/spec-3-3-open-the-checklist-from-the-chat.md`
   summary: A general answer can open the family checklist directly: "how to start" cites `embassy-necessary-documents`, which only the `eu-eea-family-member` pointer item uses, so `checklist_purposes` is `["family"]` and a tourist lands in the family list. Settle together with the Story 3.2 entry on non-tickable notes (exclude notes from the source → purpose map), or show the purpose choice when the only link comes from a conditional item.
   evidence: Review of Story 3.3 (blind #2): verified in the demo run and in MT-16 step 3; the mapping rule follows the story's AC, the odd result comes from a pointer item citing a general source.
+- source_spec: `docs/implementation/spec-4-1-show-the-english-translation.md`
+  summary: Extend the deferred browser-level page tests to "Show English": the button only under a `done` reply (live and replayed) and before the feedback buttons, disabled while in flight, replaced by the `lang="en"` paragraph on success, the error text and the button back on failure, a late result ignored after a new chat, and the checklist view's English kept across ticks and cleared on a purpose change. The pure parts (`translateBody`, `translationText`, `validItems` with `en`) are tested in Node and the endpoint in pytest; the DOM wiring in `app.js` only by source text.
+  evidence: Story 4.1 build: no browser test runner exists (Playwright deferred); MT-17 covers it by hand.
+- source_spec: `docs/implementation/spec-4-1-show-the-english-translation.md`
+  summary: Check the translate call against the real API and a real Ollama model: that `MAX_TOKENS_TRANSLATE = 8192` covers the English of the longest answers at `EFFORT_SMALL`, that the translation keeps URLs, amounts and `[removed]`, and that it adds nothing.
+  evidence: Story 4.1 build: no real call has been made; settle with MT-17 part B.
+- source_spec: `docs/implementation/spec-4-1-show-the-english-translation.md`
+  summary: Add to the browser-level tests for "Show English": the checklist button becomes visible after the items load (`checklistTranslate.hidden = checklistEnglish` in `renderChecklist`), `closeChecklist` resets the English and hides the button, and an earlier `.translate-error` is removed on retry.
+  evidence: Review of Story 4.1 (verification gap #2, blind #13): deleting `checklistTranslate.hidden = checklistEnglish;` keeps the button hidden forever and every test stays green; the page tests only match source text. MT-17 step 7 covers it by hand.
+- source_spec: `docs/implementation/spec-4-1-show-the-english-translation.md`
+  summary: Check whether a non-streamed Ollama translation of a long answer can pass the 300 s read timeout on a slow machine; if so, stream the translate reply or give it a longer timeout.
+  evidence: Review of Story 4.1 (edge case #5), unverified (would be medium): `_post` uses the shared 300 s timeout with `stream: false`, so nothing arrives until the whole English is written. Settle with MT-17 part B on the user's 16 GB GPU and a long answer.

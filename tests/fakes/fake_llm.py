@@ -7,6 +7,8 @@ from app.ports.llm import AnswerChunk, Category, Exchange, LLMError, LLMRefusalE
 
 DEFAULT_USAGE = Usage(input_tokens=100, output_tokens=20, cache_read_tokens=0, cache_write_tokens=0)
 CLASSIFY_USAGE = Usage(input_tokens=400, output_tokens=20, cache_read_tokens=0, cache_write_tokens=0)
+TRANSLATE_USAGE = Usage(input_tokens=600, output_tokens=150, cache_read_tokens=0, cache_write_tokens=0)
+DEFAULT_TRANSLATION = "The scripted English."
 
 
 @dataclass(frozen=True)
@@ -31,8 +33,10 @@ class ScriptedLLM:
     `error` is raised after the chunks (pass no chunks to fail before any text);
     `refusal=True` raises `LLMRefusalError` the same way. `classify` returns
     `category` (any string, so a test can send one outside the closed set) and
-    `classify_usage`, or raises `classify_error`. Every call is recorded: answer
-    calls in `calls`, classify calls in `classify_calls`.
+    `classify_usage`, or raises `classify_error`. `translate` returns `translation`
+    and `translate_usage`, or raises `translate_error` (any exception, so a test can
+    send `NotImplementedError`). Every call is recorded: answer calls in `calls`,
+    classify calls in `classify_calls`, the texts sent to translate in `translate_calls`.
     """
 
     def __init__(
@@ -44,6 +48,9 @@ class ScriptedLLM:
         category: str = "general",
         classify_usage: Usage = CLASSIFY_USAGE,
         classify_error: LLMError | None = None,
+        translation: str = DEFAULT_TRANSLATION,
+        translate_usage: Usage = TRANSLATE_USAGE,
+        translate_error: Exception | None = None,
     ) -> None:
         self.chunks = tuple(chunks)
         self.usage = usage
@@ -52,8 +59,12 @@ class ScriptedLLM:
         self.category = category
         self.classify_usage = classify_usage
         self.classify_error = classify_error
+        self.translation = translation
+        self.translate_usage = translate_usage
+        self.translate_error = translate_error
         self.calls: list[AnswerCall] = []
         self.classify_calls: list[ClassifyCall] = []
+        self.translate_calls: list[str] = []
 
     def answer(self, question: str, history: Sequence[Exchange]) -> Iterator[AnswerChunk | Usage]:
         # Recorded at call time, not when the caller starts reading the stream.
@@ -75,4 +86,7 @@ class ScriptedLLM:
         return self.category, self.classify_usage  # type: ignore[return-value]
 
     def translate(self, text: str) -> tuple[str, Usage]:
-        raise NotImplementedError("translate comes with the English translation in Epic 4")
+        self.translate_calls.append(text)
+        if self.translate_error is not None:
+            raise self.translate_error
+        return self.translation, self.translate_usage

@@ -784,3 +784,106 @@ def test_open_checklist_button_fits_narrow_screens_and_is_large_enough() -> None
 
     assert "min-height: 48px;" in rule and "min-width: 48px;" in rule
     assert "max-width: 100%;" in rule
+
+
+# --- "Show English" (Story 4.1) ------------------------------------------------------------
+# Rows of the I/O matrix in docs/implementation/spec-4-1-show-the-english-translation.md that
+# the page owns. The request body and response are read in history.js (tested in Node).
+
+
+def _translate_method(js: str) -> str:
+    """The reply's `translate` method: the "Show English" button under a finished reply."""
+    return js.split("translate: function (answer) {")[1].split("\n      },\n")[0]
+
+
+def test_show_english_comes_only_after_done_and_before_the_feedback_buttons() -> None:
+    js = _app_js()
+
+    ask = _body(js, "ask")
+    assert "if (answered) {\n        reply.translate(record.answer);\n      }" in ask
+    assert ask.index("reply.translate(record.answer);") < ask.index("reply.feedback();")
+    # Never under an error reply: the catch only shows the error.
+    assert "translate" not in ask.split("} catch (error) {")[1].split("} finally {")[0]
+    # Only the reply text is sent, never the reminder or the sources.
+    method = _translate_method(js)
+    assert "const body = Chats.translateBody(answer);" in method
+    assert "if (!body) {\n          return;" in method
+    assert 'button.type = "button";' in method and 'button.className = "translate-button";' in method
+    assert 'button.textContent = texts["translate-button"];' in method
+    assert "translateReply(element, button, body);" in method
+
+
+def test_show_english_comes_back_on_a_replayed_chat() -> None:
+    replay = _body(_app_js(), "showConversation")
+
+    assert "reply.translate(entry.answer);" in replay
+    assert replay.index("reply.checklistOpen(") < replay.index("reply.translate(entry.answer);")
+
+
+def test_translation_request_shows_the_english_or_the_error_and_ignores_late_results() -> None:
+    js = _app_js()
+    request = _body(js, "translateReply")
+
+    assert 'fetch("/api/translate", {' in request
+    assert 'method: "POST",' in request and 'headers: { "Content-Type": "application/json" },' in request
+    assert "body: JSON.stringify(body)," in request
+    # Disabled while in flight; a second tap does nothing.
+    assert "if (button.disabled) {\n      return;" in request
+    assert request.index("button.disabled = true;") < request.index("await fetch(")
+    assert "english = Chats.translationText(await response.json());" in request
+    # A reply that left the screen (new chat, another chat opened) ignores the result.
+    assert "if (!reply.isConnected || !button.isConnected) {\n      return;" in request
+    # Failure: the fixed error text, and the button comes back to try again.
+    failure = request.split("if (english === null) {")[2].split("} else {")[0]
+    assert "button.disabled = false;" in failure
+    assert 'note.textContent = texts["error"];' in failure
+    # Success: the button is replaced by an English paragraph; nothing else is touched.
+    success = request.split("} else {")[-1]
+    assert 'paragraph.className = "translation";' in success
+    assert 'paragraph.lang = "en";' in success
+    assert "paragraph.textContent = english;" in success
+    assert "button.replaceWith(paragraph);" in success
+    assert "innerHTML" not in request
+
+
+def test_translation_is_never_stored_with_the_chat() -> None:
+    js = _app_js()
+    history = _history_js()
+
+    assert "translation" not in _body(js, "storeExchange")
+    assert (
+        'const record = { question: "", answer: "", sources: [], reminder: false, checklistPurposes: [] };'
+        in js
+    )
+    assert "localStorage" not in _body(js, "translateReply")
+    assert "sessionStorage" not in _body(js, "translateReply")
+    # The saved-chat shape in history.js has no English field.
+    assert "translation" not in history.split("function translateBody(")[0]
+
+
+def test_checklist_view_shows_the_stored_english_without_a_request() -> None:
+    js = _app_js()
+    html = _html()
+
+    panel = html.split('id="checklist-panel"')[1].split("</section>")[0]
+    assert '<button type="button" id="checklist-translate" class="translate-button" hidden></button>' in panel
+    assert 'checklistTranslate.textContent = data.texts["translate-button"];' in js
+    assert 'checklistTranslate.addEventListener("click", showChecklistEnglish);' in js
+    show = _body(js, "showChecklistEnglish")
+    assert "fetch(" not in show
+    assert "addChecklistEnglish(checklistRows[item.id].row, item);" in show
+    add = _body(js, "addChecklistEnglish")
+    assert 'english.lang = "en";' in add and "english.textContent = item.en;" in add
+    # It stays when the checklist is (re)loaded, e.g. after a retry, and goes when the purpose changes.
+    assert "if (checklistEnglish) {\n        addChecklistEnglish(row, item);" in _body(js, "renderChecklist")
+    assert "checklistEnglish = false;" in _body(js, "showPurposeChoice")
+
+
+def test_show_english_fits_narrow_screens_and_is_large_enough() -> None:
+    css = _css()
+
+    rule = css.split(".translate-button {")[1].split("}")[0]
+    assert "min-height: 48px;" in rule and "min-width: 48px;" in rule
+    assert "max-width: 100%;" in rule
+    for selector in (".translation {", ".checklist-en {"):
+        assert "min-width: 0;" in css.split(selector)[1].split("}")[0], selector

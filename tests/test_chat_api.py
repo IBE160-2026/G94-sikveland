@@ -415,6 +415,7 @@ def test_follow_up_sends_the_history_to_the_model_in_order(settings: Settings) -
 
 LOG_FIELDS = {
     "timestamp",
+    "endpoint",
     "outcome",
     "category",
     "prompt_versions",
@@ -450,6 +451,7 @@ def test_cited_answer_logs_one_line_with_tokens_and_cost(settings: Settings) -> 
     assert set(line) == LOG_FIELDS
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", line["timestamp"])
     assert {k: v for k, v in line.items() if k != "timestamp"} == {
+        "endpoint": "chat",
         "outcome": "answered",
         "category": "general",
         "prompt_versions": {
@@ -544,6 +546,7 @@ def test_client_gone_during_a_fixed_reply_still_logs_the_classify_cost(settings:
     def log(outcome: Any, category: Any, usage: Any, classify_usage: Any, unknown: Any) -> None:
         logged.append(
             request_line(
+                endpoint="chat",
                 outcome=outcome,
                 category=category,
                 prompt_versions={},
@@ -702,6 +705,7 @@ def _ollama_llm(
         load_prompt(app.main.ANSWER_PROMPT_FILE),
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
+        load_prompt(app.main.TRANSLATE_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(_ollama_handler(body, requests, category))),
     )
 
@@ -802,6 +806,7 @@ def test_ollama_answer_streams_without_markers_and_logs_no_cost(settings: Settin
 
     [line] = _log(ollama)
     assert {k: v for k, v in line.items() if k != "timestamp"} == {
+        "endpoint": "chat",
         "outcome": "answered",
         "category": "general",
         "prompt_versions": client.app.state.prompt_versions,
@@ -854,6 +859,7 @@ def test_ollama_down_shows_the_error_text(settings: Settings) -> None:
         load_prompt(app.main.ANSWER_PROMPT_FILE),
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
+        load_prompt(app.main.TRANSLATE_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(refused)),
     )
 
@@ -950,6 +956,7 @@ def test_ollama_classify_failure_is_an_error_event(settings: Settings, reply: ht
         load_prompt(app.main.ANSWER_PROMPT_FILE),
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
+        load_prompt(app.main.TRANSLATE_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 

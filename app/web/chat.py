@@ -149,6 +149,7 @@ def chat(body: ChatRequest, request: Request) -> StreamingResponse:
             usage = fallback_usage
         request_log.write(
             request_line(
+                endpoint="chat",
                 outcome=outcome,
                 category=category,
                 prompt_versions=prompt_versions,

@@ -379,7 +379,7 @@ def client(settings: Settings) -> TestClient:
 
 
 @pytest.mark.parametrize("purpose", VISIT_PURPOSES)
-def test_endpoint_serves_thai_items_with_resolved_sources(
+def test_endpoint_serves_thai_and_english_items_with_resolved_sources(
     client: TestClient, committed: dict[str, Any], purpose: str
 ) -> None:
     response = client.get(f"/api/checklists/{purpose}")
@@ -390,8 +390,10 @@ def test_endpoint_serves_thai_items_with_resolved_sources(
     assert body["purpose"] == purpose
     assert [item["id"] for item in body["items"]] == [item.id for item in committed[purpose]]
     for served, stored in zip(body["items"], committed[purpose], strict=True):
-        assert set(served) == {"id", "text", "conditional", "source"}
+        assert set(served) == {"id", "text", "en", "conditional", "source"}
         assert served["text"] == stored.th
+        # The stored English for "Show English" (Story 4.1).
+        assert served["en"] == stored.en
         assert served["conditional"] is stored.conditional
         source = KNOWLEDGE_BASE.source(stored.source_id)
         assert served["source"] == {"title": source.title, "url": source.url}

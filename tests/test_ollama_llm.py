@@ -19,6 +19,7 @@ from app.adapters.ollama_llm import (
     build_chat_request,
     build_classify_request,
     build_system_prompt,
+    build_translate_request,
 )
 from app.config import Settings
 from app.ports.knowledge_base import Source
@@ -27,6 +28,7 @@ from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusal
 PROMPT = Prompt(version="a-1", text="Answer in Thai from the documents.")
 CITING = Prompt(version="c-1", text="Cite as [[id]].")
 CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
+TRANSLATOR = Prompt(version="t-1", text="Translate to English.")
 BASE_URL = "http://ollama.test:11434"
 
 
@@ -116,7 +118,9 @@ def ollama_settings(settings: Settings) -> Settings:
 
 def _llm(settings: Settings, server: Callable[[httpx.Request], httpx.Response], **kb: Any) -> OllamaLLM:
     client = httpx.Client(transport=httpx.MockTransport(server))
-    return OllamaLLM(settings, StandInKnowledgeBase(**kb), PROMPT, CITING, CLASSIFIER, client=client)
+    return OllamaLLM(
+        settings, StandInKnowledgeBase(**kb), PROMPT, CITING, CLASSIFIER, TRANSLATOR, client=client
+    )
 
 
 def _answer(
@@ -149,7 +153,7 @@ def test_satisfies_the_port(ollama_settings: Settings) -> None:
 
 
 def test_building_needs_no_network(ollama_settings: Settings) -> None:
-    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING, CLASSIFIER)
+    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING, CLASSIFIER, TRANSLATOR)
 
     timeout = llm._client.timeout
     assert timeout.connect is not None and timeout.connect <= 10
@@ -526,13 +530,6 @@ def test_closing_the_stream_early_closes_the_response(ollama_settings: Settings)
     assert closed == [True]
 
 
-def test_translate_is_not_implemented(ollama_settings: Settings) -> None:
-    llm = _llm(ollama_settings, Server())
-
-    with pytest.raises(NotImplementedError):
-        llm.translate("t")
-
-
 # --- classify (Story 2.1) -------------------------------------------------------------
 
 
@@ -702,3 +699,100 @@ def test_classify_reply_without_a_finished_text_is_an_error(
 
     with pytest.raises(LLMError):
         _llm(ollama_settings, server).classify("q", ())
+
+
+# --- translate (Story 4.1) --------------------------------------------------------------
+
+
+def _translated(content: Any = "Hello.", done_reason: str | None = "stop", **extra: Any) -> bytes:
+    reply: dict[str, Any] = {
+        "model": "m",
+        "message": {"role": "assistant", "content": content},
+        "done": True,
+        "done_reason": done_reason,
+        "prompt_eval_count": 500,
+        "eval_count": 40,
+        **extra,
+    }
+    return json.dumps(reply, ensure_ascii=False).encode()
+
+
+def test_translate_request_has_no_thinking_no_format_num_ctx_and_no_stream() -> None:
+    request = build_translate_request(model="qwen-test", num_ctx=40000, system=TRANSLATOR.text, text="สวัสดี")
+
+    assert request == {
+        "model": "qwen-test",
+        "messages": [
+            {"role": "system", "content": TRANSLATOR.text},
+            {"role": "user", "content": "สวัสดี"},
+        ],
+        "stream": False,
+        "think": False,
+        "options": {"num_ctx": 40000},
+    }
+
+
+def test_translate_posts_the_request_with_the_settings(ollama_settings: Settings) -> None:
+    server = Server(_translated())
+    settings = ollama_settings.model_copy(update={"ollama_model": "qwen-test", "ollama_num_ctx": 40000})
+
+    _llm(settings, server).translate("สวัสดี")
+
+    [request] = server.requests
+    assert request.method == "POST"
+    assert str(request.url) == BASE_URL + "/api/chat"
+    assert server.json() == build_translate_request(
+        model="qwen-test", num_ctx=40000, system=TRANSLATOR.text, text="สวัสดี"
+    )
+
+
+def test_translate_returns_the_stripped_text_and_usage(ollama_settings: Settings) -> None:
+    server = Server(_translated("\n You need a passport.\n1. Photo  \n"))
+
+    assert _llm(ollama_settings, server).translate("t") == (
+        "You need a passport.\n1. Photo",
+        Usage(input_tokens=500, output_tokens=40, cache_read_tokens=0, cache_write_tokens=0),
+    )
+
+
+@pytest.mark.parametrize("done_reason", ["length", "load", None])
+def test_translate_not_stopped_is_incomplete(ollama_settings: Settings, done_reason: str | None) -> None:
+    with pytest.raises(LLMError, match="incomplete"):
+        _llm(ollama_settings, Server(_translated(done_reason=done_reason))).translate("t")
+
+
+@pytest.mark.parametrize("content", ["", "  \n ", None, {"text": "Hello"}])
+def test_translate_empty_reply_is_an_error(ollama_settings: Settings, content: Any) -> None:
+    with pytest.raises(LLMError, match="empty"):
+        _llm(ollama_settings, Server(_translated(content))).translate("t")
+
+
+def test_translate_error_field_is_an_error_logged_without_its_text(
+    ollama_settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    body = json.dumps({"error": "secret text echoed"}).encode()
+
+    with caplog.at_level(logging.WARNING, logger="app.adapters.ollama_llm"):
+        with pytest.raises(LLMError) as raised:
+            _llm(ollama_settings, Server(body)).translate("t")
+
+    assert "secret text echoed" not in str(raised.value)
+    assert "secret text echoed" not in caplog.text
+
+
+@pytest.mark.parametrize("status", [404, 500])
+def test_translate_http_status_other_than_200_is_an_error(ollama_settings: Settings, status: int) -> None:
+    with pytest.raises(LLMError, match=f"translate call failed: HTTP {status}"):
+        _llm(ollama_settings, Server(b"{}", status=status)).translate("t")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [httpx.ConnectError("connection refused"), httpx.ReadTimeout("slow")],
+)
+def test_translate_transport_errors_become_llm_errors(ollama_settings: Settings, error: Exception) -> None:
+    with pytest.raises(LLMError) as raised:
+        _llm(ollama_settings, Server(error=error)).translate("t")
+
+    assert type(raised.value) is LLMError
+    assert raised.value.__cause__ is error
