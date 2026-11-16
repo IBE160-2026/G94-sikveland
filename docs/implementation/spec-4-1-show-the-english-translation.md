@@ -98,6 +98,8 @@ context:
 - `translate_prompt_versions` is kept apart from `prompt_versions`, so chat lines never gain a `translate` key.
 - Not verified by hand in a browser (no browser tool in this run): the button layout at 320 px and the live page flow. MT-17 in the manual test plan covers them; the endpoint was smoke-tested in demo mode with `TestClient`.
 
+- The user approved the Thai button text `translate-button` (แปลเป็นภาษาอังกฤษ (English)) on 2026-11-16 (NFR8).
+
 ## Spec Change Log
 
 ## Review Triage Log

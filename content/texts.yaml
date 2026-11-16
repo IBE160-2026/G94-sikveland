@@ -236,7 +236,7 @@ texts:
 
   # "Show English" under every finished reply and in the checklist view (Story 4.1, FR7).
   # The Latin word "English" is part of the label, so a reader who does not read Thai
-  # finds it. DRAFT Thai, awaiting the user's review (NFR8).
+  # finds it. Thai approved by the user on 2026-11-16 (NFR8).
   translate-button:
     th: แปลเป็นภาษาอังกฤษ (English)
     en: Show English
