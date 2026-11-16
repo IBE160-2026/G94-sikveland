@@ -2,9 +2,9 @@
 # Read through `scripts/testset.py` (`load_testset`); `scripts/run_eval.py` (Story 5.2) runs every
 # case through the same pipeline as the chat page. `tests/test_testset.py` checks the rules below.
 #
-# DRAFT: the Thai questions, the Thai history turns and the expected facts are awaiting the
-# user's review as adviser (NFR8). Until then this file is not approved; after approval, any change
-# to a Thai text or an expected fact makes it a DRAFT again until it is reviewed.
+# The Thai questions, the Thai history turns and the expected facts were approved by the user as
+# adviser review on 2026-11-16 (NFR8). Any later change to a Thai text or an expected fact makes it a
+# DRAFT again until it is reviewed.
 #
 # Everything here is made up: no real enquiry and no real person. Thai ID numbers have a wrong
 # check digit, passport numbers look like `AA1234567`, phone numbers like `081-234-5678`.

@@ -83,7 +83,7 @@ def test_committed_file_covers_every_kind_of_personal_information() -> None:
     assert kinds == set(get_args(testset.PersonalInfo)) == {"thai_id", "passport", "phone"}
 
 
-def test_committed_file_records_that_the_thai_awaits_review() -> None:
+def test_committed_file_records_the_review_of_the_thai() -> None:
     header = TESTSET_FILE.read_text(encoding="utf-8").split("\ncases:")[0]
 
     # Unreviewed Thai stays a DRAFT until the user approves it as adviser review (NFR8).

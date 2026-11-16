@@ -64,4 +64,4 @@
 - [ ] 2026-11-15 [story-3-3-open-checklist](972-2026-11-15-20-21-09-story-3-3-open-checklist.md) — Run MT-16 (Open checklist button under answers) on a phone; part B with a real key or Ollama
 - [x] 2026-11-16 [story-4-1-show-english](970-2026-11-16-21-27-17-story-4-1-show-english.md) — Approve the Thai button text translate-button (แปลเป็นภาษาอังกฤษ (English)) (NFR8) (resolved 2026-11-16: approved by the user)
 - [ ] 2026-11-16 [story-4-1-show-english](970-2026-11-16-21-27-17-story-4-1-show-english.md) — Run MT-17 (Show English) in demo mode; part B with a real key and with Ollama (max tokens, kept URLs/amounts/[removed], Ollama timeout on a long answer)
-- [ ] 2026-11-16 [story-5-1-test-set](969-2026-11-16-21-52-36-story-5-1-test-set.md) — Approve the Thai of eval/testset.yaml (30 questions, 3 history exchanges) as adviser review (NFR8)
+- [x] 2026-11-16 [story-5-1-test-set](969-2026-11-16-21-52-36-story-5-1-test-set.md) — Approve the Thai of eval/testset.yaml (30 questions, 3 history exchanges) as adviser review (NFR8) (resolved 2026-11-16: approved by the user)

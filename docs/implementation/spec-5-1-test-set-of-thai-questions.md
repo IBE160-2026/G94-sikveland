@@ -78,6 +78,8 @@ context:
 - `TestCase` and `TestsetError` set `__test__ = False` so pytest does not try to collect them.
 - Extra checks beyond the matrix: Thai ID numbers have a wrong check digit, every number in an expected fact appears in a cited snapshot, no question equals one of the four example questions, history passes the filter unchanged.
 
+- The user approved the Thai of `eval/testset.yaml` (30 questions, 3 history exchanges) and the expected facts as adviser review on 2026-11-16 (NFR8).
+
 ## Spec Change Log
 
 ## Review Triage Log

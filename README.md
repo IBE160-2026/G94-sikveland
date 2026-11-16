@@ -227,7 +227,7 @@ Hvert spørsmål har disse feltene:
 | `history` | Bare for oppfølgingsspørsmål: 1–2 tidligere spørsmål og svar |
 | `personal_info` | Personopplysninger i spørsmålet (`thai_id`, `passport`, `phone`). Filteret fjerner ID- og passnummer, men beholder telefonnummer |
 
-`scripts/testset.py` leser fila og stopper med en feil som nevner spørsmålet hvis et felt mangler eller er ukjent, en kilde eller kategori ikke finnes, eller utfallet ikke passer til kategorien. `tests/test_testset.py` sjekker i tillegg at alt over er dekket, at filteret fjerner og beholder det det skal, og at hvert tall skrevet med sifre i de forventede faktaene står i en av kildene. De thai tekstene og faktaene er et UTKAST til brukeren har gjennomgått dem som rådgiver (NFR8).
+`scripts/testset.py` leser fila og stopper med en feil som nevner spørsmålet hvis et felt mangler eller er ukjent, en kilde eller kategori ikke finnes, eller utfallet ikke passer til kategorien. `tests/test_testset.py` sjekker i tillegg at alt over er dekket, at filteret fjerner og beholder det det skal, og at hvert tall skrevet med sifre i de forventede faktaene står i en av kildene. De thai tekstene og faktaene er godkjent av brukeren som rådgiver (NFR8).
 
 ## Mappestruktur
 
