@@ -69,3 +69,4 @@
 - [ ] 2026-11-16 [story-5-2-eval-script](968-2026-11-16-22-12-18-story-5-2-eval-script.md) — Run the evaluation with Claude (needs ANTHROPIC_API_KEY in .env, about 1 USD), score it and commit the report
 - [ ] 2026-11-16 [story-5-2-eval-script](968-2026-11-16-22-12-18-story-5-2-eval-script.md) — Ollama: out-of-source questions get cited general advice instead of the no-answer text (no-answer 1 of 4), and replies mention "the documents you gave me"; tune the Ollama answer/citing prompts
 - [ ] 2026-11-16 [story-5-2-eval-script](968-2026-11-16-22-12-18-story-5-2-eval-script.md) — Classifier (Ollama run): own chances plus a document question went to individual_assessment against the prompt rule
+- [ ] 2026-11-16 [story-4-3-readme](966-2026-11-16-22-42-42-story-4-3-readme.md) — Run MT-18: follow the README on a clean machine in demo mode and with your own key, and from a phone; fix any missing step (Story 4.3 AC 3)
