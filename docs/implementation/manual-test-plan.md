@@ -253,6 +253,17 @@ Mode: demo, 360 px and then 320 px. Part B: real key, then Ollama.
 
 Expected: (1) the button sits under the source links (and "Open checklist"), is disabled while the request runs, and is replaced by the English under the Thai answer; the Thai text, the source links and other buttons are unchanged; in demo mode the English is the stored demo English; (2) the stored English of the fixed reply ("Sorry, we cannot assess whether you will get the visa…" or the demo-only text), with no model call; (3) the English of the feedback question, with the Yes and No buttons still under it, after the English; (4) every saved reply has the button again; no English is shown until it is tapped (the English is never saved); (5) the fixed error text (ขออภัย เกิดข้อผิดพลาด…) under the reply and the button back; the second tap shows the English; (6) the new chat opens and nothing appears in it when the slow translation returns; (7) the English appears under every tourism item, stays after the tick, and the family list opens without English and with the button back; (8) focus is visible on the button, Enter shows the English, and focus moves to the English text; (9) one line with `"endpoint": "translate"` and `"model": "mock_llm"`, `cost_usd` 0, for the demo answer in step 1 and for any other text; no line for the fixed texts or the feedback question; no line holds any text; (10) the English keeps the amount, the URLs and `[removed]` in place of the passport number, and adds nothing of its own; the log has a `translate` line with `MODEL_SMALL` (Claude) or `OLLAMA_MODEL` (Ollama) and its tokens. At 320 px the button and the English wrap and nothing scrolls sideways; the button is at least 48 px high.
 
+### MT-18 The README on a clean machine (Story 4.3, NFR2)
+
+Mode: a computer that has never run the app (no clone, no `.venv`, no `.env`), with only Git and uv installed. Follow the [README](../../README.md#kom-i-gang) and nothing else; note every place you had to guess.
+
+1. Clone and install as in "Installer".
+2. Start demo mode in your shell as in "Kjør i demomodus", open the page and tap each of the four example questions; tap "Show English" under one answer.
+3. Stop the app. Start it with `--host 0.0.0.0` as in "Åpne siden fra en mobil på samme Wi-Fi" and open it from a phone on the same Wi-Fi.
+4. Stop the app, open a new terminal, copy `.env.example` to `.env`, set your own `ANTHROPIC_API_KEY`, start the app and ask one question of your own.
+5. Run `uv run pytest`.
+
+Expected: (1) `uv sync` finishes without errors; (2) the demo label is shown, each example gives a Thai answer with source links, and the English appears; (3) the page opens on the phone; (4) no demo label, a streamed Thai answer with sources, and one line in `data/requests.jsonl` with a `cost_usd`; (5) every test passes. Any missing or unclear step is fixed in the README.
 ## Results
 
 Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
@@ -276,3 +287,4 @@ Add one row per run. A failed check gets a line in `.logs/<user>/issues.md`.
 | | MT-15 | | | Not run | A one-off headless Edge run (demo mode, 320 px) of steps 1 to 11 (before steps 12 and 13 were added), with the browser closed and reopened for step 7 and a simulated failure for step 11, passed on 2026-11-15; not a manual-test result |
 | | MT-16 | | | Not run | Part B needs a real key or Ollama. A one-off headless Edge run in demo mode at 320 px passed 18 checks on 2026-11-15; not a manual-test result |
 | | MT-17 | | | Not run | Part B needs a real key, and Ollama |
+| | MT-18 | | | Not run | Needs a clean machine and a real key; a fresh clone in demo mode (steps 1–2 by request, not in a browser) worked on 2026-11-16, not a manual-test result |

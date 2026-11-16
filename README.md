@@ -10,9 +10,11 @@ Bakgrunnen er at én rådgiver i dag svarer på de samme spørsmålene fra mange
 
 - Wannapa Sikveland
 
-## Status (del 1, 2026-11-15)
+## Status (2026-11-16)
 
-Ferdig og testet:
+Alle stories i planen er laget. De har automatiske tester og venter på de manuelle testene i [testplanen](docs/implementation/manual-test-plan.md) (med ekte nøkkel og på mobil) før de regnes som helt ferdige.
+
+Laget og testet automatisk:
 
 - Chatside på thai, laget for mobil, med personvernmerknad og eksempelspørsmål man kan trykke på (Story 1.2)
 - Kunnskapsbase med 15 offisielle kilder lagret som Markdown (Story 1.3)
@@ -28,6 +30,10 @@ Ferdig og testet:
 - **Demomodus** som virker uten API-nøkkel (Story 4.2)
 - Knappen «Show English» under hvert ferdig svar og i sjekklisten, så sensor som ikke leser thai, kan følge med (Story 4.1)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
+- Denne README-en, slik at appen kan kjøres og følges uten hjelp fra gruppa (Story 4.3)
+- Testsett med 30 oppdiktede thai spørsmål og forventede svar, godkjent som rådgivergjennomgang (Story 5.1, se [Testsett](#testsett))
+- Evalueringsskript som kjører testsettet mot den ekte modellen og skriver en rapport rådgiveren vurderer (Story 5.2, se [Evaluering](#evaluering)); første kjøring med Ollama ligger i [`eval/reports/`](eval/reports/)
+- Statistikk over andelen samtaler der det første svaret er «Ja» (Story 5.3, se [Tilbakemelding på slutten av samtalen](#tilbakemelding-på-slutten-av-samtalen))
 
 Hele planen står i [epics.md](docs/planning/epics.md), og status per story står i [sprint-status.yaml](docs/implementation/sprint-status.yaml).
 
@@ -65,22 +71,45 @@ MOCK_LLM=true uv run uvicorn app.main:app
 
 Åpne <http://127.0.0.1:8000>. Siden viser merket «โหมดสาธิต» (demomodus). Trykk på et av de fire eksempelspørsmålene:
 
-| Eksempelspørsmål (thai) | På norsk |
-|---|---|
-| ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง | Hvilke dokumenter trenger jeg til turistvisum til Norge? |
-| ถ้าจะขอวีซ่าไปนอร์เวย์ ต้องเริ่มต้นอย่างไร | Hvordan begynner jeg å søke visum til Norge? |
-| ค่าธรรมเนียมวีซ่านอร์เวย์ราคาเท่าไร | Hva koster visum til Norge? |
-| การพิจารณาวีซ่าใช้เวลานานเท่าไร | Hvor lang er behandlingstiden? |
+| Eksempelspørsmål (thai) | In English | På norsk |
+|---|---|---|
+| ขอวีซ่าท่องเที่ยวนอร์เวย์ต้องใช้เอกสารอะไรบ้าง | What documents do I need for a Norway tourist visa? | Hvilke dokumenter trenger jeg til turistvisum til Norge? |
+| ถ้าจะขอวีซ่าไปนอร์เวย์ ต้องเริ่มต้นอย่างไร | How do I start applying for a Norway visa? | Hvordan begynner jeg å søke visum til Norge? |
+| ค่าธรรมเนียมวีซ่านอร์เวย์ราคาเท่าไร | How much is the Norway visa fee? | Hva koster visum til Norge? |
+| การพิจารณาวีซ่าใช้เวลานานเท่าไร | How long does the visa processing take? | Hvor lang er behandlingstiden? |
+
+Knappen «แปลเป็นภาษาอังกฤษ (English)» under hvert svar viser svaret på engelsk (se [Vis på engelsk](#vis-på-engelsk-show-english)).
 
 Hvert av dem gir et lagret thai svar med kildelenker. Andre spørsmål gir en fast tekst om at demoen bare svarer på eksempelspørsmålene. Svarene står i [`content/demo-answers.yaml`](content/demo-answers.yaml), med engelsk oversettelse.
 
-Vil du teste på en mobil på samme nettverk, start med `--host 0.0.0.0` og åpne `http://<maskinens-IP>:8000` på mobilen.
+### Åpne siden fra en mobil på samme Wi-Fi
+
+Appen er laget for mobil. For å prøve den på en telefon som er på samme Wi-Fi som maskinen:
+
+1. Start appen slik at den tar imot forespørsler fra andre maskiner. I demomodus, PowerShell (etter `$env:MOCK_LLM = "true"` som over):
+
+   ```powershell
+   uv run uvicorn app.main:app --host 0.0.0.0
+   ```
+
+   I demomodus, Bash:
+
+   ```sh
+   MOCK_LLM=true uv run uvicorn app.main:app --host 0.0.0.0
+   ```
+
+   Med `.env` (Claude eller Ollama, se under) er kommandoen den samme som den første, i begge skall.
+
+2. Finn maskinens IP-adresse på nettverket: i PowerShell `ipconfig` (linja «IPv4 Address» under Wi-Fi-kortet), på macOS `ipconfig getifaddr en0` (gir den ingenting, prøv `en1`), på Linux `hostname -I`. Velg adressen som begynner på `192.168.` eller `10.`, f.eks. `192.168.1.23`.
+3. Åpne `http://<IP-adressen>:8000` i nettleseren på mobilen, f.eks. `http://192.168.1.23:8000`.
+
+Spør Windows om Python får bruke nettverket, svar ja for private nettverk; macOS kan på samme måte spørre om innkommende tilkoblinger skal tillates. Laster ikke siden på mobilen, sjekk at begge er på samme Wi-Fi (ikke gjestenettet), at Wi-Fi-nettet er satt som privat nettverk i Windows, og at Python er tillatt i «Windows-sikkerhet → Brannmur og nettverksbeskyttelse → Tillat en app gjennom brannmuren» (Windows spør ikke på nytt hvis du har sagt nei før). Uten `--host 0.0.0.0` svarer appen bare på maskinen selv.
 
 ### Kjør med Claude (ekte svar)
 
-1. Kopier [`.env.example`](.env.example) til `.env`.
-2. Sett `ANTHROPIC_API_KEY` til nøkkelen din, og la `MOCK_LLM=false` stå.
-3. Start med `uv run uvicorn app.main:app`.
+1. Kopier [`.env.example`](.env.example) til `.env`: `Copy-Item .env.example .env` i PowerShell, `cp .env.example .env` i Bash. Har du satt `$env:MOCK_LLM` i samme PowerShell-vindu for demomodus, fjern den først med `Remove-Item Env:MOCK_LLM` (en miljøvariabel går foran `.env`).
+2. Åpne `.env`, sett `ANTHROPIC_API_KEY` til nøkkelen din, og la `MOCK_LLM=false` stå.
+3. Start med `uv run uvicorn app.main:app` og åpne <http://127.0.0.1:8000>. Merket «โหมดสาธิต» skal ikke vises.
 
 Uten nøkkel starter appen likevel, men hvert spørsmål gir en fast feiltekst. `.env` er git-ignorert og skal aldri committes.
 
@@ -114,7 +143,16 @@ Alle innstillinger står med forklaring i [`.env.example`](.env.example). Et fei
 | `ADVISER_CONTACT` | rådgiverens e-post | Vises når chatboten ikke kan hjelpe |
 | `REQUEST_LOG_PATH` | `data/requests.jsonl` | Forespørselsloggen (se under) |
 | `DATABASE_PATH` | `data/feedback.sqlite3` | SQLite-fila med tilbakemeldingene (se under); en relativ sti regnes fra prosjektmappa |
-| `PRICE_*` | Anthropics priser | USD per million tokens, brukt til kostnadsloggen |
+| `PRICE_ANSWER_INPUT` | `4.00` | USD per million vanlige input-tokens til svarmodellen (`MODEL_ANSWER`) |
+| `PRICE_ANSWER_OUTPUT` | `20.00` | USD per million output-tokens fra svarmodellen, tenking medregnet |
+| `PRICE_ANSWER_CACHE_READ` | `0.20` | USD per million tokens svarmodellen leser fra prompt-cachen (kunnskapsbasen etter første spørsmål) |
+| `PRICE_ANSWER_CACHE_WRITE` | `5.00` | USD per million tokens svarmodellen skriver til prompt-cachen (1,25 × input) |
+| `PRICE_SMALL_INPUT` | `0.10` | USD per million input-tokens til den lille modellen (`MODEL_SMALL`: sortering og oversettelse) |
+| `PRICE_SMALL_OUTPUT` | `0.50` | USD per million output-tokens fra den lille modellen |
+| `PRICE_SMALL_CACHE_READ` | `0.01` | USD per million cache-leste tokens for den lille modellen (brukes ikke i dag) |
+| `PRICE_SMALL_CACHE_WRITE` | `0.125` | USD per million cache-skrevne tokens for den lille modellen (brukes ikke i dag) |
+
+Prisene brukes bare til kostnadsloggen og evalueringsrapporten; de endrer ikke hva appen gjør. Sjekk dem mot Anthropics prisside hvis den endres.
 
 ## Tester
 
@@ -326,7 +364,7 @@ Appen skriver én JSON-linje per spørsmål og per oversettelse fra KI-en («Sho
 | `endpoint` | `chat` (et spørsmål, `POST /api/chat`) eller `translate` (en oversettelse, `POST /api/translate`) |
 | `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `translated` (oversatt av KI-en), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
 | `category` | Spørsmålskategori: `general`, `individual_assessment`, `out_of_scope` eller `reach_person`; `null` hvis forespørselen feilet før den ble kategorisert, og alltid `null` for `translate` |
-| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "2"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "2", "citing": "2"}`; for `translate` bare `{"translate": "1"}` |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "3"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "3", "citing": "2"}`; for `translate` bare `{"translate": "1"}` |
 | `model` | Modellen som svarte eller oversatte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama, `MODEL_SMALL` for `translate` med Claude) |
 | `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet eller oversettelseskallet (ut inkluderer tenking); `null` når modellen ikke ble kalt eller kallet feilet |
 | `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen i svarkallet (alltid 0 med Ollama, som ikke rapporterer det) |
@@ -335,6 +373,8 @@ Appen skriver én JSON-linje per spørsmål og per oversettelse fra KI-en («Sho
 | `unknown_source_ids` | Hvor mange kilde-id-er i svaret som ikke finnes i `sources.yaml` og derfor ble droppet (0 når alle var kjente); `null` hvis svaret stoppet før kildene kom, og alltid `null` for `translate` |
 
 Token-feltene er `null` når kallet ikke rapporterte forbruk (typisk ved feil), og `cost_usd` er `null` når ingen av kallene gjorde det.
+
+**Kostnad per spørsmål (anslag).** Med standardprisene og Claude koster det første spørsmålet etter en pause rundt 0,15–0,20 USD, fordi hele kunnskapsbasen skrives til cachen. Spørsmål innen fem minutter etter leser den fra cachen og koster rundt 0,05 USD hver. (Tokentallet «rundt 24 600» i Ollama-delen er Ollamas telling; Claude teller thai tekst annerledes, så tallene her er grove.) Et trykk på «Show English» under et modellsvar kommer i tillegg, men går til den lille modellen og koster lite. Faste svar («bare ambassaden avgjør», andre temaer, ønske om et menneske, tilbakemeldingsspørsmålet) koster bare sorteringskallet med den lille modellen, vanligvis godt under 0,01 USD. Dette er anslag ut fra prisene og tokenmengden, ikke målt. Det faktiske tallet står i `cost_usd` i loggen og i evalueringsrapporten etter en kjøring med Claude. Demomodus og Ollama koster ingenting.
 
 **Virker cachen?** Still to spørsmål innen fem minutter. Den første linja har `cache_write_tokens` > 0, den andre skal ha `cache_read_tokens` > 0 og lavere `cost_usd`. Dette gjelder Claude. Med Ollama er cache-feltene alltid 0, så cachen kan ikke sjekkes i loggen.
 
