@@ -212,7 +212,7 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 
 ### Testsett
 
-[`eval/testset.yaml`](eval/testset.yaml) er et fast sett med 30 oppdiktede thai spørsmål som måler svarkvaliteten (NFR4, SM-2). Evalueringsskriptet (Story 5.2, ikke laget ennå) kjører hvert spørsmål gjennom samme flyt som chatsiden og sammenligner med det som er forventet. Settet dekker søknadsstegene, sjekklisten, sponsorskjemaet, invitasjonsbrevet, bevis på forholdet og gebyret, spørsmål med skrivefeil og med thai og engelsk om hverandre, oppfølgingsspørsmål med en kort historikk, spørsmål om egne sjanser, spørsmål utenfor temaet, grensetilfeller for sorteringen (takk sammen med et spørsmål, egne sjanser sammen med et dokumentspørsmål, et oppfølgingsspørsmål som går over til studietillatelse), fire spørsmål kildene ikke svarer på, fire ulike måter å be om et menneske på, og spørsmål med personopplysninger (thai ID-nummer, passnummer og telefonnummer). Alle tall og personer er oppdiktet: ID-numrene har feil kontrollsiffer.
+[`eval/testset.yaml`](eval/testset.yaml) er et fast sett med 30 oppdiktede thai spørsmål som måler svarkvaliteten (NFR4, SM-2). Evalueringsskriptet kjører hvert spørsmål gjennom samme flyt som chatsiden og sammenligner med det som er forventet (se «Evaluering» under). Settet dekker søknadsstegene, sjekklisten, sponsorskjemaet, invitasjonsbrevet, bevis på forholdet og gebyret, spørsmål med skrivefeil og med thai og engelsk om hverandre, oppfølgingsspørsmål med en kort historikk, spørsmål om egne sjanser, spørsmål utenfor temaet, grensetilfeller for sorteringen (takk sammen med et spørsmål, egne sjanser sammen med et dokumentspørsmål, et oppfølgingsspørsmål som går over til studietillatelse), fire spørsmål kildene ikke svarer på, fire ulike måter å be om et menneske på, og spørsmål med personopplysninger (thai ID-nummer, passnummer og telefonnummer). Alle tall og personer er oppdiktet: ID-numrene har feil kontrollsiffer.
 
 Hvert spørsmål har disse feltene:
 
@@ -229,6 +229,54 @@ Hvert spørsmål har disse feltene:
 
 `scripts/testset.py` leser fila og stopper med en feil som nevner spørsmålet hvis et felt mangler eller er ukjent, en kilde eller kategori ikke finnes, eller utfallet ikke passer til kategorien. `tests/test_testset.py` sjekker i tillegg at alt over er dekket, at filteret fjerner og beholder det det skal, og at hvert tall skrevet med sifre i de forventede faktaene står i en av kildene. De thai tekstene og faktaene er godkjent av brukeren som rådgiver (NFR8).
 
+### Evaluering
+
+Evalueringen kjører hele testsettet mot de ekte modellene og skriver en rapport, slik at man ser om chatboten når kvalitetsmålene (NFR4, SM-2). Kjør den for hånd **etter hver endring i en prompt eller i kunnskapsbasen**, og behold rapportene. Den kjøres ikke i CI.
+
+```sh
+uv run python scripts/run_eval.py
+```
+
+- Skriptet bruker innstillingene i `.env` og bygger appen akkurat som serveren gjør. Hvert spørsmål går gjennom samme inngang som `POST /api/chat`: filteret, sorteringen og så et svar eller et fast svar. Spørsmålene kjøres ett og ett; feiler ett, står det som `error` i rapporten, og resten kjøres likevel.
+- Demomodus (`MOCK_LLM=true`) og Claude uten `ANTHROPIC_API_KEY` avvises med en melding og exit-kode 2, før noe kalles.
+- Feiler alle spørsmålene (for eksempel feil nøkkel, feil `LLM_PROVIDER`, eller Ollama som ikke kjører eller mangler modellen), skrives ingen rapport. Skriptet sier hva som er sannsynlige årsaker og avslutter med exit-kode 1. Ellers er exit-koden 0, også når noen sjekker feiler.
+- Med `LLM_PROVIDER=ollama` kjøres evalueringen mot den lokale modellen, uten nøkkel og uten kostnad. Rapporten oppgir da `OLLAMA_MODEL` som begge modellene og tar med versjonen av `answer-citing-markers.md` som `citing`.
+- **Kostnad:** med Claude koster én kjøring rundt 1 USD (anslag: 19 av de 30 spørsmålene går til svarmodellen, rundt 0,15–0,20 USD for det første og 0,05 USD for hvert av de neste; sorteringen koster nesten ingenting). Den faktiske kostnaden står øverst i rapporten. Med Ollama koster den ingenting.
+- Evalueringen skriver ikke til forespørselsloggen. Spørsmålene og svarene står bare i rapporten; i terminalen vises bare navnet på hvert spørsmål og utfallet.
+
+Rapporten havner i `eval/reports/<dato>-<promptversjoner>.md`, for eksempel `2026-11-16-answer-1-classifier-3.md` (med Ollama `...-citing-2.md`). En rapport skrives aldri over: kjøres evalueringen to ganger samme dag, får den neste `-2`, så `-3`. Øverst står dato, leverandør, modellene, promptversjonene, kunnskapsbasen (antall kilder og nyeste `retrieved`-dato), antall spørsmål, tokens og total kostnad. Så kommer totalene mot de fire målene, og deretter én del per spørsmål med det thai spørsmålet, den engelske oversettelsen, forventet og faktisk kategori og utfall, de automatiske sjekkene (bestått/feilet), kildene svaret viste til, selve svaret, de forventede faktaene og en tom linje `Adviser: ` til slutt.
+
+De automatiske sjekkene per spørsmål:
+
+| Sjekk | Bestått når |
+|---|---|
+| Kategori | Sorteringen valgte den forventede kategorien |
+| Utfall | Flyten endte i det forventede utfallet: `answered`, `no_answer` eller `fixed_reply` (`error` hvis spørsmålet feilet) |
+| Kilde | For `answered`: svaret viser til minst én av de forventede kildene. Ellers: svaret viser ikke til noen kilde |
+| Personopplysninger | Filteret fjernet noe hvis og bare hvis spørsmålet har et thai ID-nummer eller et passnummer |
+| Thai | Svaret inneholder thai skrift |
+
+Et spørsmål som feiler, feiler alle sjekkene. Målene og hvordan de telles:
+
+| Mål | Krav | Telles som riktig når |
+|---|---|---|
+| Generelle spørsmål riktig besvart med riktig kilde | minst 90 % | Kategori, utfall og kilde er bestått, **og** rådgiveren har skrevet `yes` |
+| Spørsmål om egne sjanser får «ambassaden avgjør» | 100 % | Kategori, utfall og kilde er bestått |
+| Spørsmål kildene ikke svarer på får «vi har ikke svar» | 100 % | Kategori, utfall og kilde er bestått |
+| Ønske om et menneske får rådgiverens kontakt | 100 % | Kategori, utfall og kilde er bestått |
+
+Før rådgiveren har vurdert svarene, står målet for generelle spørsmål som «awaiting adviser», med hvor mange som består de automatiske sjekkene.
+
+**Rådgiverens vurdering.** Rådgiveren leser svaret og de forventede faktaene for hvert spørsmål og skriver `yes` (svaret har faktaene og riktig kilde, og ingenting oppdiktet) eller `no` etter `Adviser:`, for eksempel `Adviser: yes`. Bare det første ordet teller (store eller små bokstaver), så en kommentar kan stå etter, for eksempel `Adviser: no – mangler gebyret`. En tom linje betyr «ikke vurdert ennå». Deretter regnes totalene ut på nytt:
+
+```sh
+uv run python scripts/run_eval.py --score eval/reports/2026-11-16-answer-1-classifier-3.md
+```
+
+`--score` kaller ingen modell og trenger ingen innstillinger. Den skriver bare om totalblokken (mellom `<!-- totals:start -->` og `<!-- totals:end -->`) i samme fil og lar resten stå, og den lister spørsmålene som fortsatt er tomme. Den kan kjøres så ofte man vil, også før alle linjene er fylt ut. En linje som ikke begynner med `yes` eller `no`, regnes som tom og listes.
+
+**Svarene varierer mellom kjøringer.** Modellene har ingen innstilling for å gi nøyaktig samme svar hver gang, så to kjøringer med samme prompt kan gi litt ulike svar og resultater. Hver rapport vurderes derfor for seg, og rådgiverens vurderinger gjelder bare svarene i den rapporten.
+
 ## Mappestruktur
 
 | Mappe | Innhold |
@@ -237,10 +285,10 @@ Hvert spørsmål har disse feltene:
 | `content/` | Faste tekster på thai og engelsk, dokumentsjekklistene og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
 | `prompts/` | Systemprompten for svar, prompten som sorterer spørsmålene, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
-| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen, og `testset.py`, som leser og sjekker testsettet |
+| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen, `testset.py`, som leser og sjekker testsettet, og `run_eval.py`, som kjører evalueringen og regner ut totalene (se «Evaluering») |
 | `tests/` | Pytest-tester og en falsk KI-klient (`tests/fakes/`) |
 | `data/` | Lokale kjøredata (forespørselslogg og tilbakemeldinger i `feedback.sqlite3`); git-ignorert |
-| `eval/` | Testsettet `testset.yaml`: oppdiktede thai spørsmål med forventet kategori, fakta og kilder (se «Testsett») |
+| `eval/` | Testsettet `testset.yaml`: oppdiktede thai spørsmål med forventet kategori, fakta og kilder (se «Testsett»), og evalueringsrapportene i `reports/`, som committes (se «Evaluering») |
 | `docs/planning/` | Product brief, PRD, arkitektur, epics, sensorveiledning |
 | `docs/implementation/` | Spesifikasjon per story, sprintstatus, utsatt arbeid |
 | `.logs/` | Sesjonslogger fra hver arbeidsøkt med KI, og lista over åpne punkter |
