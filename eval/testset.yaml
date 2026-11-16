@@ -1,0 +1,375 @@
+# Evaluation test set: made-up Thai questions with the expected handling (Story 5.1, NFR4, SM-2).
+# Read through `scripts/testset.py` (`load_testset`); `scripts/run_eval.py` (Story 5.2) runs every
+# case through the same pipeline as the chat page. `tests/test_testset.py` checks the rules below.
+#
+# DRAFT: the Thai questions, the Thai history turns and the expected facts are awaiting the
+# user's review as adviser (NFR8). Until then this file is not approved; after approval, any change
+# to a Thai text or an expected fact makes it a DRAFT again until it is reviewed.
+#
+# Everything here is made up: no real enquiry and no real person. Thai ID numbers have a wrong
+# check digit, passport numbers look like `AA1234567`, phone numbers like `081-234-5678`.
+#
+# Each case under `cases:` has:
+#   id        lowercase kebab-case, unique
+#   question  the question as an applicant would type it: Thai, may mix in English, may have typos
+#   en        an English gloss of the question, for readers who do not read Thai
+#   category  the category the classifier should choose: general, individual_assessment,
+#             out_of_scope, reach_person or done
+#   outcome   what the pipeline should end in, as in the request log: `answered` (an answer with
+#             sources), `no_answer` (the fixed "no answer" text: in scope, but no source answers it)
+#             or `fixed_reply` (the fixed text for the category). `general` expects `answered` or
+#             `no_answer`; every other category expects `fixed_reply`.
+#   facts     for `answered` only: the key facts a correct answer contains, in English. Each one is
+#             stated in at least one of the case's sources. Empty for the other outcomes.
+#   sources   for `answered` only: ids from knowledge-base/sources.yaml whose snapshot states the
+#             facts; an answer citing any of them cites a correct source. Empty otherwise.
+#   tags      what the case covers, e.g. steps, checklist, fee, typo, mixed-language, follow-up
+#   history   optional, exactly for cases tagged `follow-up`: 1-2 earlier exchanges
+#             ({question, answer}, Thai) sent with the question
+#   personal_info  optional: the kinds of personal information in the question (`thai_id`,
+#             `passport`, `phone`). The filter removes Thai ID and passport numbers and keeps phone
+#             numbers (user decision 2026-11-13), so a phone-only case expects nothing removed.
+#
+# Expected facts leave out points the adviser has not settled (e.g. how old the photo may be).
+
+cases:
+  # --- general, answered ------------------------------------------------------------------------
+
+  - id: application-steps
+    question: อยากไปเยี่ยมเพื่อนที่นอร์เวย์ ต้องทำอะไรบ้างตั้งแต่ต้นจนได้วีซ่าคะ
+    en: I want to visit a friend in Norway. What do I have to do, from the start until I get the visa?
+    category: general
+    outcome: answered
+    facts:
+      - Register the application online on the UDI website and pay the application fee online
+      - Print the Schengen.pdf application form received by email; the applicant signs it
+      - Book an appointment at VFS Global and hand in the application and the documents there in person
+    sources: [udi-how-to-apply-visitor-visa, embassy-visa-faq, embassy-online-registration]
+    tags: [steps]
+
+  - id: basic-documents-checklist
+    question: เอกสารพื้นฐานที่ทุกคนต้องเตรียมตามเช็คลิสต์ของสถานทูตมีอะไรบ้างคะ
+    en: Which basic documents does everyone have to prepare according to the embassy's checklist?
+    category: general
+    outcome: answered
+    facts:
+      - A passport valid for at least three months after the trip, with at least two blank pages
+      - A signed printout of the application form from the UDI application portal
+      - Travel medical insurance for the whole trip and the whole Schengen area, covering at least EUR 30,000
+    sources: [embassy-visitor-visa-checklist, embassy-hand-in-documents]
+    tags: [checklist]
+
+  - id: sponsor-how-to-fill-in
+    question: แฟนที่อยู่นอร์เวย์จะออกค่าใช้จ่ายให้ เขาต้องกรอกแบบฟอร์มสปอนเซอร์ยังไงคะ
+    en: My partner in Norway will pay for the trip. How does he fill in the sponsorship form?
+    category: general
+    outcome: answered
+    facts:
+      - The sponsor fills in an electronic sponsorship form; a paper form is the alternative
+      - The sponsor sends the four-word sponsor code to the applicant, who gives it in the visa application
+      - The sponsor must live in Norway, have a Norwegian national identity number and be at least 18
+    sources: [udi-sponsor-for-visitors]
+    tags: [sponsorship-form]
+
+  - id: sponsorship-form-validity
+    question: sponsorship form ที่ sponsor กรอกให้แล้ว ใช้ได้กี่ครั้ง แล้วมีอายุกี่เดือนคะ
+    en: The sponsorship form my sponsor filled in - how many times can it be used, and for how many months is it valid?
+    category: general
+    outcome: answered
+    facts:
+      - A sponsorship form is valid for one entry (one trip) into the Schengen area
+      - A sponsorship form is valid for 6 months after it was filled in and signed
+    sources: [udi-sponsor-for-visitors, udi-sponsorship-form]
+    tags: [sponsorship-form, mixed-language]
+
+  - id: invitation-letter-content
+    question: เพื่อนคนนอร์เวย์จะเขียนจดหมายเชิญให้ ในจดหมายต้องมีข้อมูลอะไรบ้างคะ
+    en: My Norwegian friend will write an invitation letter for me. What information must the letter contain?
+    category: general
+    outcome: answered
+    facts:
+      - Why the applicant is invited
+      - The proposed dates of the visit
+      - Information about the person who invites, such as their work and home
+      - The relationship between the applicant and the person who invites
+    sources: [udi-invitation-for-visitor-visa]
+    tags: [invitation-letter]
+
+  - id: relationship-proof-unmarried-partner
+    question: ไปเยี่ยมแฟนหนุ่มที่นอร์เวย์ แต่ยังไม่ได้แต่งงานกัน ต้องใช้อะไรพิสูจน์ว่าเป็นแฟนกันจริงคะ
+    en: I am visiting my boyfriend in Norway, but we are not married. What do I use to prove that we really are a couple?
+    category: general
+    outcome: answered
+    facts:
+      - A copy of the bio data page of the sponsor's passport and the sponsor's travel history
+      - Proof of correspondence between the applicant and the boyfriend
+    sources: [embassy-visitor-visa-checklist]
+    tags: [relationship-proof]
+
+  - id: fee-adult-and-child
+    question: ฉันกับลูกสาวอายุ 8 ขวบจะยื่นวีซ่าไปนอร์เวย์ด้วยกัน ต้องจ่ายค่าวีซ่าคนละกี่ยูโรคะ
+    en: My 8-year-old daughter and I will apply for Norway visas together. How many euros is the visa fee for each of us?
+    category: general
+    outcome: answered
+    facts:
+      - The visa fee is EUR 90 for an adult
+      - The visa fee is EUR 45 for a child aged 6 to under 12
+    sources: [udi-fees, embassy-online-registration]
+    tags: [fee]
+
+  - id: fee-where-to-pay-typo
+    # Typos: ทีไหน (ที่ไหน), มัย (ไหม).
+    question: ค่าธรรมเนียมวีซ่าจ่ายทีไหนคะ แล้วต้องจ่ายค่าบริการที่ VFS เพิ่มอีกมัย
+    en: Where do I pay the visa fee? And do I also have to pay a service fee at VFS?
+    category: general
+    outcome: answered
+    facts:
+      - The visa fee is paid online when the application is registered in the application portal
+      - VFS Global charges its own service fee, paid directly to VFS when the application is handed in
+    sources: [embassy-online-registration, udi-fees]
+    tags: [fee, typo]
+
+  - id: processing-time-typo
+    # Typos: ยืน (ยื่น), ค่ะ (คะ).
+    question: ยืนวีซ่าแล้วต้องรอผลกี่วันค่ะ
+    en: After I hand in the visa application, how many days do I have to wait for the result?
+    category: general
+    outcome: answered
+    facts:
+      - The processing time is normally up to 15 calendar days
+      - It can take up to 45 days when the application is sent to UDI or needs further examination
+    sources: [embassy-processing-time, udi-waiting-time-visitor-visa, embassy-visa-faq]
+    tags: [processing-time, typo]
+
+  - id: when-to-apply-mixed-language
+    question: ควร apply visa ล่วงหน้ากี่ week ก่อน travel คะ แล้ว apply เร็วสุดได้กี่เดือน
+    en: How many weeks before travelling should I apply for the visa, and how many months before at the earliest?
+    category: general
+    outcome: answered
+    facts:
+      - Applying at least 4 weeks before departure is recommended
+      - The application can be handed in no earlier than 6 months before the trip
+    sources: [embassy-processing-time, embassy-visa-faq, udi-visit-family-how-to-apply]
+    tags: [when-to-apply, mixed-language]
+
+  - id: follow-up-young-child-fee
+    history:
+      - question: ขั้นตอนยื่นวีซ่าเยี่ยมครอบครัวที่นอร์เวย์มีอะไรบ้างคะ
+        answer: >-
+          มีสองส่วนค่ะ ส่วนแรก ลงทะเบียนคำร้องออนไลน์ที่เว็บไซต์ของ UDI และชำระค่าธรรมเนียม
+          ส่วนที่สอง นัดหมายและไปยื่นคำร้องพร้อมเอกสารด้วยตนเองที่ศูนย์ VFS Global
+    question: แล้วลูกชายอายุ 4 ขวบต้องจ่ายค่าธรรมเนียมด้วยไหมคะ
+    en: And does my 4-year-old son also have to pay the fee?
+    category: general
+    outcome: answered
+    facts:
+      - Children under six years do not pay a visa fee
+    sources: [udi-fees, embassy-online-registration]
+    tags: [follow-up, fee]
+
+  - id: thai-id-hand-in-in-person
+    question: เลขบัตรประชาชนของฉันคือ 1234567890123 ค่ะ ต้องไปยื่นเอกสารที่ VFS ด้วยตัวเองไหม ให้น้องสาวไปแทนได้หรือเปล่า
+    en: (Gives a Thai ID number.) Do I have to hand in the documents at VFS in person, or can my younger sister go instead?
+    category: general
+    outcome: answered
+    facts:
+      - In most cases the applicant must hand in the application in person at VFS
+      - A representative with a signed power of attorney may hand it in only if the applicant applied for a Schengen visa within the last five years (59 months) and the biometric data is still valid
+    sources: [embassy-visa-faq]
+    tags: [in-person]
+    personal_info: [thai_id]
+
+  - id: passport-validity
+    question: พาสปอร์ตเลข AA1234567 จะหมดอายุอีก 2 เดือน ต้องทำเล่มใหม่ก่อนยื่นวีซ่าไหมคะ
+    en: (Gives a passport number.) My passport expires in 2 months. Do I need a new one before I apply for the visa?
+    category: general
+    outcome: answered
+    facts:
+      - The passport must be valid for at least three months after the planned departure from the Schengen area
+      - The passport must have at least two blank pages
+    sources: [embassy-visitor-visa-checklist, embassy-hand-in-documents, eu-applying-for-schengen-visa]
+    tags: [passport]
+    personal_info: [passport]
+
+  # Boundary rules of the classifier prompt: a thank-you that also asks something, and own chances
+  # asked together with a general question, are both `general`.
+
+  - id: thanks-and-insurance-question
+    question: ได้ค่ะ ขอบใจมาก อีกเรื่องนะคะ ประกันการเดินทางต้องมีวงเงินคุ้มครองขั้นต่ำเท่าไร
+    en: All right, many thanks. One more thing - what is the minimum cover the travel insurance must have?
+    category: general
+    outcome: answered
+    facts:
+      - The travel medical insurance must cover at least EUR 30,000
+      - It must be valid in all Schengen countries for the whole stay
+    sources: [embassy-necessary-documents, embassy-hand-in-documents, embassy-visitor-visa-checklist]
+    tags: [thanks-and-question, insurance]
+
+  - id: own-chances-and-employment-proof
+    question: เพิ่งเปลี่ยนงานมาได้สองเดือน สถานทูตจะอนุมัติให้ฉันหรือเปล่า และต้องใช้หลักฐานการทำงานแบบไหนคะ
+    en: I changed jobs only two months ago. Will the embassy approve me, and what kind of proof of employment do I need?
+    category: general
+    outcome: answered
+    facts:
+      - An employed applicant hands in a company registration and a statement of employment
+      - The statement of employment shows the vacation days granted, the position and the monthly salary
+    sources: [embassy-visitor-visa-checklist]
+    tags: [own-chances-and-question, checklist]
+
+  # --- general, no answer: in scope, but no snapshot answers it -----------------------------------
+
+  - id: no-answer-document-translation
+    question: สูติบัตรกับทะเบียนบ้านเป็นภาษาไทย ต้องแปลเป็นภาษาอังกฤษก่อนยื่นไหมคะ
+    en: My birth certificate and house registration are in Thai. Do they have to be translated into English before I hand them in?
+    category: general
+    outcome: no_answer
+    facts: []
+    sources: []
+    tags: [no-answer]
+
+  - id: no-answer-pregnancy
+    question: ตอนนี้ตั้งท้องได้หกเดือน ยังยื่นขอวีซ่าท่องเที่ยวนอร์เวย์ได้ไหม มีเงื่อนไขพิเศษสำหรับคนท้องหรือเปล่าคะ
+    en: I am six months pregnant. Can I still apply for a Norway tourist visa, and are there special conditions for pregnant women?
+    category: general
+    outcome: no_answer
+    facts: []
+    sources: []
+    tags: [no-answer]
+
+  - id: no-answer-vaccination-certificate
+    question: ต้องมีใบรับรองการฉีดวัคซีนไปยื่นพร้อมเอกสารวีซ่าด้วยไหมคะ
+    en: Do I need to hand in a vaccination certificate with my visa documents?
+    category: general
+    outcome: no_answer
+    facts: []
+    sources: []
+    tags: [no-answer]
+
+  - id: no-answer-interpreter-at-vfs
+    question: ฉันพูดภาษาอังกฤษไม่ได้ พาล่ามไปด้วยตอนยื่นเอกสารที่ VFS ได้ไหมคะ
+    en: I can't speak English. Can I bring an interpreter when I hand in my documents at VFS?
+    category: general
+    outcome: no_answer
+    facts: []
+    sources: []
+    tags: [no-answer]
+
+  # --- individual assessment: only the embassy decides ---------------------------------------------
+
+  - id: own-chances-salary
+    question: ฉันทำงานร้านนวด เงินเดือนหนึ่งหมื่นห้าพันบาท ยื่นไปแล้วจะโดนปฏิเสธไหมคะ
+    en: I work at a massage shop and earn fifteen thousand baht a month. Will my application be refused?
+    category: individual_assessment
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [own-chances]
+
+  - id: own-chances-earlier-overstay
+    question: เมื่อห้าปีก่อนเคยอยู่เกินวีซ่าที่ญี่ปุ่น เลขบัตรประชาชน 3-1012-34567-89-5 ช่วยดูหน่อยว่าสถานทูตนอร์เวย์จะให้วีซ่าฉันไหม
+    en: Five years ago I overstayed a visa in Japan. (Gives a Thai ID number.) Please check whether the Norwegian embassy will give me a visa.
+    category: individual_assessment
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [own-chances]
+    personal_info: [thai_id]
+
+  - id: follow-up-own-chances
+    history:
+      - question: ไปเยี่ยมพี่สาวที่นอร์เวย์ต้องใช้เอกสารอะไรบ้างคะ
+        answer: >-
+          นอกจากเอกสารทั่วไปตามเช็คลิสต์ของสถานทูต เช่น หนังสือเดินทางและประกันการเดินทาง
+          ต้องมีหลักฐานความสัมพันธ์ เช่น สูติบัตรหรือทะเบียนบ้าน
+          และถ้าพี่สาวออกค่าใช้จ่ายให้ ต้องมีแบบฟอร์มสปอนเซอร์ด้วยค่ะ
+    question: ถ้าเตรียมครบตามนี้ทุกอย่าง รับรองว่าได้วีซ่าแน่ใช่ไหมคะ
+    en: If I prepare everything on this list, is it guaranteed that I get the visa?
+    category: individual_assessment
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [follow-up, own-chances]
+
+  # --- out of scope ----------------------------------------------------------------------------
+
+  - id: out-of-scope-berry-picking-sweden
+    question: อยากไปทำงานเก็บเบอร์รี่ที่สวีเดน ต้องขอวีซ่าประเภทไหนคะ
+    en: I want to go to Sweden to work picking berries. Which type of visa do I need?
+    category: out_of_scope
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [other-country, work]
+
+  - id: out-of-scope-move-to-husband
+    question: แต่งงานกับสามีชาวนอร์เวย์แล้ว อยากย้ายไปอยู่กับเขาถาวร ต้องขอใบอนุญาตอะไรคะ
+    en: I am married to a Norwegian man and want to move to live with him permanently. Which permit do I need?
+    category: out_of_scope
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [family-immigration]
+
+  - id: follow-up-study-permit
+    history:
+      - question: ไปเที่ยวนอร์เวย์สองอาทิตย์ ต้องเตรียมหลักฐานอะไรไปยื่นบ้างคะ
+        answer: >-
+          นอกจากหนังสือเดินทางและประกันการเดินทาง ต้องมีหลักฐานที่พักตลอดการเดินทาง
+          ตั๋วเครื่องบินไปกลับ และรายการเดินบัญชีธนาคารย้อนหลังสามเดือนค่ะ
+    question: ถ้าจะไปเรียนปริญญาโทที่ออสโลสองปี ต้องยื่นขออนุญาตแบบไหนคะ
+    en: If I go to Oslo for a two-year master's degree, which kind of permit do I apply for?
+    category: out_of_scope
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [follow-up, study]
+
+  # --- reach a person: different wordings ------------------------------------------------------
+
+  - id: reach-person-call-back
+    question: รบกวนให้เจ้าหน้าที่โทรกลับที่เบอร์ 081-234-5678 หน่อยค่ะ อยากปรึกษาเรื่องวีซ่า
+    en: (Gives a phone number.) Could a staff member please call me back? I would like advice about the visa.
+    category: reach_person
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [ask-person]
+    personal_info: [phone]
+
+  - id: reach-person-not-a-bot
+    question: เบื่อแชทกับบอทแล้วค่ะ มีพนักงานตัวจริงให้ปรึกษาไหม
+    en: I am tired of chatting with a bot. Is there a real staff member I can consult?
+    category: reach_person
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [ask-person]
+
+  - id: reach-person-whole-process
+    question: อ่านแล้วงงไปหมด อยากได้คนมาจัดการเอกสารและนัด VFS แทนฉันทุกขั้นตอนค่ะ
+    en: Reading this confuses me completely. I want someone to handle the documents and the VFS appointment for me, every step of the way.
+    category: reach_person
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [whole-process]
+
+  - id: reach-person-adviser-email-mixed-language
+    question: ขอ email ของ adviser ตัวจริงหน่อยค่ะ จะส่งคำถามไปถามเอง
+    en: Please give me the email address of a real adviser; I will send my questions myself.
+    category: reach_person
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [ask-person, mixed-language]
+
+  # --- done: closes the conversation -----------------------------------------------------------
+
+  - id: done-thanks
+    question: ชัดเจนมากเลยค่ะ ขอบคุณที่ช่วยนะคะ 😊
+    en: That is very clear, thank you for helping!
+    category: done
+    outcome: fixed_reply
+    facts: []
+    sources: []
+    tags: [done]

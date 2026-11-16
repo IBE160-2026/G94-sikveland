@@ -210,6 +210,25 @@ uv run python scripts/ingest.py
 
 Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har endret seg. Endringene gjennomgås (med rådgiveren) før de committes.
 
+### Testsett
+
+[`eval/testset.yaml`](eval/testset.yaml) er et fast sett med 30 oppdiktede thai spørsmål som måler svarkvaliteten (NFR4, SM-2). Evalueringsskriptet (Story 5.2, ikke laget ennå) kjører hvert spørsmål gjennom samme flyt som chatsiden og sammenligner med det som er forventet. Settet dekker søknadsstegene, sjekklisten, sponsorskjemaet, invitasjonsbrevet, bevis på forholdet og gebyret, spørsmål med skrivefeil og med thai og engelsk om hverandre, oppfølgingsspørsmål med en kort historikk, spørsmål om egne sjanser, spørsmål utenfor temaet, grensetilfeller for sorteringen (takk sammen med et spørsmål, egne sjanser sammen med et dokumentspørsmål, et oppfølgingsspørsmål som går over til studietillatelse), fire spørsmål kildene ikke svarer på, fire ulike måter å be om et menneske på, og spørsmål med personopplysninger (thai ID-nummer, passnummer og telefonnummer). Alle tall og personer er oppdiktet: ID-numrene har feil kontrollsiffer.
+
+Hvert spørsmål har disse feltene:
+
+| Felt | Innhold |
+|---|---|
+| `id` | Fast navn i kebab-case |
+| `question`, `en` | Spørsmålet slik en søker skriver det, og en engelsk oversettelse |
+| `category` | Kategorien sorteringen skal velge (`general`, `individual_assessment`, `out_of_scope`, `reach_person`, `done`) |
+| `outcome` | Hva flyten skal ende i, som i forespørselsloggen: `answered` (svar med kilder), `no_answer` («vi har ikke svar») eller `fixed_reply` (fast tekst for kategorien) |
+| `facts`, `sources` | Bare for `answered`: faktaene et riktig svar inneholder (på engelsk), og kildene i `sources.yaml` som sier dem |
+| `tags` | Hva spørsmålet dekker, f.eks. `fee`, `typo`, `follow-up` |
+| `history` | Bare for oppfølgingsspørsmål: 1–2 tidligere spørsmål og svar |
+| `personal_info` | Personopplysninger i spørsmålet (`thai_id`, `passport`, `phone`). Filteret fjerner ID- og passnummer, men beholder telefonnummer |
+
+`scripts/testset.py` leser fila og stopper med en feil som nevner spørsmålet hvis et felt mangler eller er ukjent, en kilde eller kategori ikke finnes, eller utfallet ikke passer til kategorien. `tests/test_testset.py` sjekker i tillegg at alt over er dekket, at filteret fjerner og beholder det det skal, og at hvert tall skrevet med sifre i de forventede faktaene står i en av kildene. De thai tekstene og faktaene er et UTKAST til brukeren har gjennomgått dem som rådgiver (NFR8).
+
 ## Mappestruktur
 
 | Mappe | Innhold |
@@ -218,10 +237,10 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 | `content/` | Faste tekster på thai og engelsk, dokumentsjekklistene og demosvarene. Alle thai tekster godkjennes av rådgiveren (NFR8) |
 | `knowledge-base/` | De offisielle kildene som Markdown, og kildelista `sources.yaml` |
 | `prompts/` | Systemprompten for svar, prompten som sorterer spørsmålene, og tillegget om kildemerker og thai skrift som bare brukes med Ollama |
-| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen |
+| `scripts/` | `ingest.py`, som oppdaterer kunnskapsbasen, og `testset.py`, som leser og sjekker testsettet |
 | `tests/` | Pytest-tester og en falsk KI-klient (`tests/fakes/`) |
 | `data/` | Lokale kjøredata (forespørselslogg og tilbakemeldinger i `feedback.sqlite3`); git-ignorert |
-| `eval/` | Plass til evalueringssettet (ikke laget ennå) |
+| `eval/` | Testsettet `testset.yaml`: oppdiktede thai spørsmål med forventet kategori, fakta og kilder (se «Testsett») |
 | `docs/planning/` | Product brief, PRD, arkitektur, epics, sensorveiledning |
 | `docs/implementation/` | Spesifikasjon per story, sprintstatus, utsatt arbeid |
 | `.logs/` | Sesjonslogger fra hver arbeidsøkt med KI, og lista over åpne punkter |
