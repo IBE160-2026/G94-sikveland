@@ -11,7 +11,7 @@ Make the evaluation report say why a case got the fixed no-answer text (no sourc
 ### Resultat
 - Commit `0452452` (Norwegian message): `Sources.no_answer_reason` in `app/pipeline/answer.py` (`no_citation`, `unknown_ids_only`, `not_available_opening`; with no known citation one of the first two); `scripts/run_eval.py` prints "- No-answer reason: …" for every `no_answer` case; README sentence; tests. Request log, stream and `--score` totals unchanged.
 - Review: 3 small patches (label-completeness test, precedence test, docstrings), 5 findings rejected with evidence (triage log in the spec).
-- `uv run pytest`: 1513 passed, exit code 0; ruff clean. Not pushed.
+- `uv run pytest`: 1513 passed, exit code 0; ruff clean. Pushed to `origin/main` at the user's request (`c6c2ceb..bc9d485`).
 - Closed in issues.md: the decision about the no-answer reason.
 
 ### Åpne punkter
