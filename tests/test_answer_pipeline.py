@@ -1,9 +1,12 @@
 """The answer pipeline: filter, classify and route, grounding, error handling (AD-1, AD-4, AD-5, AD-7)."""
 
+import re
 from collections.abc import Sequence
 from datetime import date
+from pathlib import Path
 
 import pytest
+import yaml
 
 from app.pipeline.answer import (
     UNKNOWN_CATEGORY_REASON,
@@ -16,12 +19,14 @@ from app.pipeline.answer import (
     Spent,
     TextDelta,
     answer_question,
+    opens_with_not_available,
 )
 from app.pipeline.filter import REMOVED_MARKER
 from app.ports.knowledge_base import Source
 from app.ports.llm import AnswerChunk, Exchange, LLMError, LLMRefusalError, Usage
 from tests.fakes.fake_llm import CLASSIFY_USAGE, DEFAULT_USAGE, ClassifyCall, ScriptedLLM
 
+ROOT = Path(__file__).resolve().parent.parent
 NO_ANSWER = "no answer, contact the adviser"
 EMBASSY_DECIDES = "only the embassy decides"
 FIXED_REPLIES = {"individual_assessment": EMBASSY_DECIDES}
@@ -427,3 +432,274 @@ def test_category_outside_the_set_fails_after_its_usage_and_answers_nothing() ->
     assert events == [CLASSIFIED, Failed(reason=UNKNOWN_CATEGORY_REASON)]
     assert "weather" not in repr(events)
     assert llm.calls == []
+
+
+# --- not-available sentence guard (spec-no-answer-sentence-guard, AD-7) -----------------
+
+DECLINED = [
+    CLASSIFIED,
+    META,
+    TextDelta(NO_ANSWER),
+    Spent(DEFAULT_USAGE, call="answer"),
+    Sources(()),
+    Done(),
+]
+
+
+def _shown(*texts: str) -> list[AnswerEvent]:
+    """The events of an answer shown as `texts`, citing `s1` only."""
+    return [
+        CLASSIFIED,
+        META,
+        *(TextDelta(text) for text in texts),
+        Spent(DEFAULT_USAGE, call="answer"),
+        Sources((_ref("s1"),)),
+        Done(),
+    ]
+
+
+def test_not_available_sentence_then_cited_advice_is_declined() -> None:
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ\n\n"),
+            AnswerChunk("แนะนำให้ติดต่อ VFS ", ("s1",)),
+            AnswerChunk("ที่กรุงเทพฯ", ("s2",)),
+        ]
+    )
+
+    assert _run(llm) == DECLINED
+
+
+def test_the_no_answer_text_is_sent_at_once_and_the_stream_is_read_to_the_end() -> None:
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ\n\nแนะนำให้ติดต่อ VFS ", ("s1",)),
+            AnswerChunk("more advice", ("s2",)),
+        ]
+    )
+    events = _answer(llm, "How much is the fee?")
+
+    assert [next(events), next(events), next(events)] == [CLASSIFIED, META, TextDelta(NO_ANSWER)]
+    # The rest of the reply is read only for its usage: no text and no sources.
+    assert list(events) == [Spent(DEFAULT_USAGE, call="answer"), Sources(()), Done()]
+
+
+def test_the_not_available_sentence_itself_cited_is_declined() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+@pytest.mark.parametrize(
+    "opening",
+    [
+        "ขออภัยค่ะ ไม่มีข้อมูลเรื่องนี้",
+        "ขออภัยครับ ไม่มีข้อมูลเรื่องนี้",
+        "ขออภัยนะคะ ไม่มีข้อมูลเรื่องนี้",
+        "ขออภัย นะครับ ไม่มีข้อมูลเรื่องนี้",
+        "ไม่พบข้อมูลเรื่องนี้ในเอกสาร",
+        "ขออภัย ไม่พบคำตอบสำหรับคำถามนี้",
+        "ไม่มีข้อมูลเรื่องนี้ค่ะ",
+    ],
+)
+def test_not_available_variants_are_declined(opening: str) -> None:
+    llm = ScriptedLLM([AnswerChunk(opening + "\nคำแนะนำ ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+def test_opening_split_over_uncited_chunks_is_declined() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย "), AnswerChunk("ไม่มีข้อ"), AnswerChunk("มูลค่ะ\nX ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+def test_partial_answer_with_the_sentence_later_is_shown() -> None:
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ต้องใช้หนังสือรับรอง ", ("s1",)),
+            AnswerChunk("\n\nขออภัย ไม่มีข้อมูลเรื่องค่าธรรมเนียมค่ะ"),
+        ]
+    )
+
+    assert _run(llm) == _shown("ต้องใช้หนังสือรับรอง ", "\n\nขออภัย ไม่มีข้อมูลเรื่องค่าธรรมเนียมค่ะ")
+
+
+def test_not_available_that_turns_to_an_answer_on_the_first_line_is_shown() -> None:
+    first = "ขออภัย ไม่มีข้อมูลเรื่อง X แต่สามารถบอกขั้นตอนได้ดังนี้:"
+    llm = ScriptedLLM([AnswerChunk(first), AnswerChunk("\n1. ยื่นคำร้อง ", ("s1",))])
+
+    assert _run(llm) == _shown(first + "\n1. ยื่นคำร้อง ")
+
+
+def test_however_on_the_first_line_is_a_turn() -> None:
+    text = "ขออภัย ไม่มีข้อมูลเรื่อง X อย่างไรก็ตาม ควรเตรียม\nเอกสาร "
+    llm = ScriptedLLM([AnswerChunk(text, ("s1",))])
+
+    assert _run(llm) == _shown(text)
+
+
+def test_turn_word_after_a_mid_line_citation_is_seen() -> None:
+    # Ollama releases a chunk at each marker, so the first citation can come mid-line.
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่อง X ", ("s1",)),
+            AnswerChunk(" แต่สามารถบอกได้ดังนี้\n1. "),
+            AnswerChunk("ยื่นคำร้อง"),
+        ]
+    )
+
+    assert _run(llm) == _shown("ขออภัย ไม่มีข้อมูลเรื่อง X  แต่สามารถบอกได้ดังนี้\n1. ", "ยื่นคำร้อง")
+
+
+def test_citation_chunk_before_its_text_is_declined() -> None:
+    # Claude sends a citation as an empty-text chunk, which may come before the text it cites.
+    llm = ScriptedLLM(
+        [AnswerChunk("", ("s1",)), AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ"), AnswerChunk("\nคำแนะนำ")]
+    )
+
+    assert _run(llm) == DECLINED
+
+
+def test_citation_chunk_after_its_text_is_declined() -> None:
+    llm = ScriptedLLM(
+        [AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ"), AnswerChunk("", ("s1",)), AnswerChunk("\nคำแนะนำ")]
+    )
+
+    assert _run(llm) == DECLINED
+
+
+@pytest.mark.parametrize("word", ["วีซ่าแต่งงาน", "เอกสารแต่ละชนิด", "ตั้งแต่ปีนี้"])
+def test_tae_inside_another_word_is_not_a_turn(word: str) -> None:
+    llm = ScriptedLLM([AnswerChunk(f"ขออภัย ไม่มีข้อมูลเรื่อง{word}ค่ะ\nคำแนะนำ ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+@pytest.mark.parametrize(
+    "opening",
+    [
+        "**ขออภัย** ไม่มีข้อมูลเรื่องนี้ค่ะ",
+        "\u200bขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ",
+        "> ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ",
+        "# ไม่พบข้อมูล",
+        "- _ขออภัย_ ไม่พบคำตอบ",
+        "\n\nขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ",
+    ],
+)
+def test_leading_markdown_or_zero_width_space_is_ignored(opening: str) -> None:
+    llm = ScriptedLLM([AnswerChunk(opening + "\nคำแนะนำ ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+def test_ordinary_answer_is_shown_at_the_first_citation_not_at_the_line_end() -> None:
+    llm = ScriptedLLM([AnswerChunk("ค่าธรรมเนียม 90 ยูโร ", ("s1",)), AnswerChunk(" ต่อคน")])
+    events = _answer(llm, "How much is the fee?")
+
+    assert [next(events), next(events)] == [CLASSIFIED, META]
+    # Shown before the model has sent the rest of the line.
+    assert next(events) == TextDelta("ค่าธรรมเนียม 90 ยูโร ")
+    assert list(events) == _shown(" ต่อคน")[2:]
+
+
+def test_possible_opening_without_a_line_break_is_decided_at_the_end() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูล ", ("s1",))])
+
+    assert _run(llm) == DECLINED
+
+
+def test_apology_that_can_no_longer_be_not_available_streams_at_the_first_citation() -> None:
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ขออภัย เราไม่สามารถทราบผลอนุมัติล่วงหน้าได้ ", ("s1",)),
+            AnswerChunk(" สถานทูตเป็นผู้ตัดสิน"),
+        ]
+    )
+    events = _answer(llm, "How much is the fee?")
+
+    assert [next(events), next(events)] == [CLASSIFIED, META]
+    # Not held to the line end: shown before the model has sent the rest of the line.
+    assert next(events) == TextDelta("ขออภัย เราไม่สามารถทราบผลอนุมัติล่วงหน้าได้ ")
+    assert list(events) == _shown(" สถานทูตเป็นผู้ตัดสิน")[2:]
+
+
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        ["ขออภัย ", "ไม่มีข้อ", "มูลค่ะ\nX"],
+        ["ขออภ", "ัยค่ะ ", "ไม่พบคำตอบ\nX"],
+        ["ขออภัยนะ", "คะ ไม่พ", "บข้อมูล\nX"],
+        ["ไม่", "มีข้อมูลค่ะ", "\nX"],
+    ],
+)
+def test_cited_beginning_of_an_opening_is_held_and_declined(chunks: list[str]) -> None:
+    # The citation comes with the first chunk, while the opening is still incomplete.
+    llm = ScriptedLLM([AnswerChunk(chunks[0], ("s1",)), *(AnswerChunk(text) for text in chunks[1:])])
+
+    assert _run(llm) == DECLINED
+
+
+def test_example_sentence_of_the_citing_prompt_is_not_available() -> None:
+    prompt = (ROOT / "prompts" / "answer-citing-markers.md").read_text(encoding="utf-8")
+    examples = re.findall(r'"(ขออภัย[^"]*)"', prompt)
+
+    assert examples, "no Thai example sentence found in the citing prompt"
+    assert all(opens_with_not_available(example) for example in examples)
+
+
+def test_thai_no_answer_text_is_not_available() -> None:
+    texts = yaml.safe_load((ROOT / "content" / "texts.yaml").read_text(encoding="utf-8"))
+
+    assert opens_with_not_available(texts["texts"]["reply-no-answer"]["th"])
+
+
+def test_unknown_ids_in_a_declined_answer_are_counted() -> None:
+    llm = ScriptedLLM(
+        [
+            AnswerChunk("ขออภัย ไม่มีข้อมูลค่ะ\n"),
+            AnswerChunk("X ", ("s1", "nope")),
+            AnswerChunk("Y ", ("nope2",)),
+        ]
+    )
+
+    assert _run(llm) == [
+        CLASSIFIED,
+        META,
+        TextDelta(NO_ANSWER),
+        Spent(DEFAULT_USAGE, call="answer"),
+        Sources((), unknown_source_ids=2),
+        Done(),
+    ]
+
+
+def test_apology_that_is_not_not_available_is_answered() -> None:
+    text = "ขออภัย เราไม่สามารถทราบผลอนุมัติล่วงหน้าได้\nสถานทูตเป็นผู้ตัดสิน "
+    llm = ScriptedLLM([AnswerChunk(text, ("s1",))])
+
+    assert _run(llm) == _shown(text)
+
+
+def test_not_available_sentence_with_only_unknown_ids_is_handled_as_before() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ", ("nope",))])
+
+    assert _run(llm) == [
+        CLASSIFIED,
+        META,
+        TextDelta(NO_ANSWER),
+        Spent(DEFAULT_USAGE, call="answer"),
+        Sources((), unknown_source_ids=1),
+        Done(),
+    ]
+
+
+def test_error_after_the_guard_fired_fails() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ\nคำแนะนำ ", ("s1",))], error=LLMError("cut"))
+
+    assert _run(llm) == [CLASSIFIED, META, TextDelta(NO_ANSWER), Failed(reason="LLMError")]
+
+
+def test_error_while_the_first_line_is_held_shows_nothing() -> None:
+    llm = ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูล ", ("s1",))], error=LLMError("cut"))
+
+    assert _run(llm) == [CLASSIFIED, META, Failed(reason="LLMError")]
