@@ -35,3 +35,18 @@ Run the Ollama evaluation on the updated test set; then, after the result, the u
 
 ### Åpne punkter
 - `passport-validity` came back as a no-answer once although direct calls cite correctly; watch it in the next runs.
+
+## 2026-11-18 kl. 23:32 — WannapaS
+
+### Oppgave
+Run the Ollama evaluation again on the 29-case test set; commit the report and push.
+
+### Plan
+- Ollama run; direct model calls on the failing cases (three each) to see the raw replies.
+
+### Resultat
+- Report `eval/reports/2026-11-18-answer-1-classifier-4-citing-3-4.md`, committed 7ce3ea3 and pushed: no-answer 4 of 4, individual assessment 3 of 3, reach person 4 of 4, general 12 of 14 automatic.
+- `sponsorship-form-validity` got the no-answer text with one dropped unknown id; a direct call showed the model misspelling an id (`udi-sponsor-for-visators`), so most likely only unknown ids were cited (the existing rule). `application-steps` got the no-answer text with no dropped id; three direct calls were cited step lists and the guard did not fire, so the cause in the run (zero citations or the guard) cannot be told from the report.
+
+### Åpne punkter
+- Offered, not decided: let the evaluation report say why a reply became the no-answer text (no citation, only unknown ids, or the guard), so misses like `application-steps` can be explained.
