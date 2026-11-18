@@ -31,7 +31,7 @@ Laget og testet automatisk:
 - Knappen «Show English» under hvert ferdig svar og i sjekklisten, så sensor som ikke leser thai, kan følge med (Story 4.1)
 - Valgfritt: svar fra en lokal modell via [Ollama](https://ollama.com) i stedet for Claude, så appen ikke er avhengig av én bestemt KI-tjeneste ([spesifikasjon](docs/implementation/spec-ollama-provider.md))
 - Denne README-en, slik at appen kan kjøres og følges uten hjelp fra gruppa (Story 4.3)
-- Testsett med 30 oppdiktede thai spørsmål og forventede svar, godkjent som rådgivergjennomgang (Story 5.1, se [Testsett](#testsett))
+- Testsett med 29 oppdiktede thai spørsmål og forventede svar, godkjent som rådgivergjennomgang (Story 5.1, se [Testsett](#testsett))
 - Evalueringsskript som kjører testsettet mot den ekte modellen og skriver en rapport rådgiveren vurderer (Story 5.2, se [Evaluering](#evaluering)); første kjøring med Ollama ligger i [`eval/reports/`](eval/reports/)
 - Statistikk over andelen samtaler der det første svaret er «Ja» (Story 5.3, se [Tilbakemelding på slutten av samtalen](#tilbakemelding-på-slutten-av-samtalen))
 
@@ -254,7 +254,7 @@ Skriptet henter hver kilde i `sources.yaml` på nytt og skriver om de som har en
 
 ### Testsett
 
-[`eval/testset.yaml`](eval/testset.yaml) er et fast sett med 30 oppdiktede thai spørsmål som måler svarkvaliteten (NFR4, SM-2). Evalueringsskriptet kjører hvert spørsmål gjennom samme flyt som chatsiden og sammenligner med det som er forventet (se «Evaluering» under). Settet dekker søknadsstegene, sjekklisten, sponsorskjemaet, invitasjonsbrevet, bevis på forholdet og gebyret, spørsmål med skrivefeil og med thai og engelsk om hverandre, oppfølgingsspørsmål med en kort historikk, spørsmål om egne sjanser, spørsmål utenfor temaet, grensetilfeller for sorteringen (takk sammen med et spørsmål, egne sjanser sammen med et dokumentspørsmål, et oppfølgingsspørsmål som går over til studietillatelse), fire spørsmål kildene ikke svarer på, fire ulike måter å be om et menneske på, og spørsmål med personopplysninger (thai ID-nummer, passnummer og telefonnummer). Alle tall og personer er oppdiktet: ID-numrene har feil kontrollsiffer.
+[`eval/testset.yaml`](eval/testset.yaml) er et fast sett med 29 oppdiktede thai spørsmål som måler svarkvaliteten (NFR4, SM-2). Evalueringsskriptet kjører hvert spørsmål gjennom samme flyt som chatsiden og sammenligner med det som er forventet (se «Evaluering» under). Settet dekker søknadsstegene, sjekklisten, sponsorskjemaet, invitasjonsbrevet, bevis på forholdet og gebyret, spørsmål med skrivefeil og med thai og engelsk om hverandre, oppfølgingsspørsmål med en kort historikk, spørsmål om egne sjanser, spørsmål utenfor temaet, grensetilfeller for sorteringen (takk sammen med et spørsmål, egne sjanser sammen med et dokumentspørsmål, et oppfølgingsspørsmål som går over til studietillatelse), fire spørsmål kildene ikke svarer på, fire ulike måter å be om et menneske på, og spørsmål med personopplysninger (thai ID-nummer, passnummer og telefonnummer). Alle tall og personer er oppdiktet: ID-numrene har feil kontrollsiffer.
 
 Hvert spørsmål har disse feltene:
 
@@ -283,7 +283,7 @@ uv run python scripts/run_eval.py
 - Demomodus (`MOCK_LLM=true`) og Claude uten `ANTHROPIC_API_KEY` avvises med en melding og exit-kode 2, før noe kalles.
 - Feiler alle spørsmålene (for eksempel feil nøkkel, feil `LLM_PROVIDER`, eller Ollama som ikke kjører eller mangler modellen), skrives ingen rapport. Skriptet sier hva som er sannsynlige årsaker og avslutter med exit-kode 1. Ellers er exit-koden 0, også når noen sjekker feiler.
 - Med `LLM_PROVIDER=ollama` kjøres evalueringen mot den lokale modellen, uten nøkkel og uten kostnad. Rapporten oppgir da `OLLAMA_MODEL` som begge modellene og tar med versjonen av `answer-citing-markers.md` som `citing`.
-- **Kostnad:** med Claude koster én kjøring rundt 1 USD (anslag: 19 av de 30 spørsmålene går til svarmodellen, rundt 0,15–0,20 USD for det første og 0,05 USD for hvert av de neste; sorteringen koster nesten ingenting). Den faktiske kostnaden står øverst i rapporten. Med Ollama koster den ingenting.
+- **Kostnad:** med Claude koster én kjøring rundt 1 USD (anslag: 18 av de 29 spørsmålene går til svarmodellen, rundt 0,15–0,20 USD for det første og 0,05 USD for hvert av de neste; sorteringen koster nesten ingenting). Den faktiske kostnaden står øverst i rapporten. Med Ollama koster den ingenting.
 - Evalueringen skriver ikke til forespørselsloggen. Spørsmålene og svarene står bare i rapporten; i terminalen vises bare navnet på hvert spørsmål og utfallet.
 
 Rapporten havner i `eval/reports/<dato>-<promptversjoner>.md`, for eksempel `2026-11-16-answer-1-classifier-4.md` (med Ollama `...-citing-3.md`). En rapport skrives aldri over: kjøres evalueringen to ganger samme dag, får den neste `-2`, så `-3`. Øverst står dato, leverandør, modellene, promptversjonene, kunnskapsbasen (antall kilder og nyeste `retrieved`-dato), antall spørsmål, tokens og total kostnad. Så kommer totalene mot de fire målene, og deretter én del per spørsmål med det thai spørsmålet, den engelske oversettelsen, forventet og faktisk kategori og utfall, de automatiske sjekkene (bestått/feilet), kildene svaret viste til, selve svaret, de forventede faktaene og en tom linje `Adviser: ` til slutt.
