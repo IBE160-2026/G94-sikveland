@@ -3,8 +3,10 @@
 # case through the same pipeline as the chat page. `tests/test_testset.py` checks the rules below.
 #
 # The Thai questions, the Thai history turns and the expected facts were approved by the user as
-# adviser review on 2026-11-16 (NFR8). Any later change to a Thai text or an expected fact makes it a
-# DRAFT again until it is reviewed.
+# adviser review on 2026-11-16 (NFR8). The 2026-11-18 changes (the pregnancy case accepted as a
+# partial answer, the new no-answer-colour-copies, fee-adult-and-child removed) were approved on
+# 2026-11-18. Any later change to a Thai text or an expected fact makes it a DRAFT again until it
+# is reviewed.
 #
 # Everything here is made up: no real enquiry and no real person. Thai ID numbers have a wrong
 # check digit, passport numbers look like `AA1234567`, phone numbers like `081-234-5678`.
@@ -106,17 +108,6 @@ cases:
     sources: [embassy-visitor-visa-checklist]
     tags: [relationship-proof]
 
-  - id: fee-adult-and-child
-    question: ฉันกับลูกสาวอายุ 8 ขวบจะยื่นวีซ่าไปนอร์เวย์ด้วยกัน ต้องจ่ายค่าวีซ่าคนละกี่ยูโรคะ
-    en: My 8-year-old daughter and I will apply for Norway visas together. How many euros is the visa fee for each of us?
-    category: general
-    outcome: answered
-    facts:
-      - The visa fee is EUR 90 for an adult
-      - The visa fee is EUR 45 for a child aged 6 to under 12
-    sources: [udi-fees, embassy-online-registration]
-    tags: [fee]
-
   - id: fee-where-to-pay-typo
     # Typos: ทีไหน (ที่ไหน), มัย (ไหม).
     question: ค่าธรรมเนียมวีซ่าจ่ายทีไหนคะ แล้วต้องจ่ายค่าบริการที่ VFS เพิ่มอีกมัย
@@ -216,6 +207,19 @@ cases:
     sources: [embassy-visitor-visa-checklist]
     tags: [own-chances-and-question, checklist]
 
+  # Was `no-answer-pregnancy` until 2026-11-18. The user accepted a partial answer: the usual
+  # steps apply (cited), and the sources say nothing about special conditions for pregnant women
+  # (said without a source). The adviser checks that no special condition is made up.
+  - id: pregnancy-apply-as-usual
+    question: ตอนนี้ตั้งท้องได้หกเดือน ยังยื่นขอวีซ่าท่องเที่ยวนอร์เวย์ได้ไหม มีเงื่อนไขพิเศษสำหรับคนท้องหรือเปล่าคะ
+    en: I am six months pregnant. Can I still apply for a Norway tourist visa, and are there special conditions for pregnant women?
+    category: general
+    outcome: answered
+    facts:
+      - The usual steps apply - register the application and pay the fee online at UDI, then hand in the application in person at VFS Global
+    sources: [udi-how-to-apply-visitor-visa, embassy-online-registration, embassy-hand-in-documents]
+    tags: [partial-answer, steps]
+
   # --- general, no answer: in scope, but no snapshot answers it -----------------------------------
 
   - id: no-answer-document-translation
@@ -227,9 +231,9 @@ cases:
     sources: []
     tags: [no-answer]
 
-  - id: no-answer-pregnancy
-    question: ตอนนี้ตั้งท้องได้หกเดือน ยังยื่นขอวีซ่าท่องเที่ยวนอร์เวย์ได้ไหม มีเงื่อนไขพิเศษสำหรับคนท้องหรือเปล่าคะ
-    en: I am six months pregnant. Can I still apply for a Norway tourist visa, and are there special conditions for pregnant women?
+  - id: no-answer-colour-copies
+    question: สำเนาเอกสารที่ต้องยื่น ถ่ายเอกสารขาวดำได้ไหม หรือต้องเป็นสำเนาสีคะ
+    en: Can the copies of the documents I hand in be black and white, or must they be colour copies?
     category: general
     outcome: no_answer
     facts: []
