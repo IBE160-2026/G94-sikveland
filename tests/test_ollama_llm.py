@@ -1,13 +1,16 @@
 """The Ollama adapter, with a stand-in transport (`httpx.MockTransport`). Never touches the network."""
 
+import difflib
 import json
 import logging
 from collections.abc import Callable, Iterator, Sequence
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+import yaml
 
 from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message
 from app.adapters.file_prompts import Prompt
@@ -20,11 +23,13 @@ from app.adapters.ollama_llm import (
     build_classify_request,
     build_system_prompt,
     build_translate_request,
+    resolve_source_id,
 )
 from app.config import Settings
 from app.ports.knowledge_base import Source
 from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusalError, Usage
 
+ROOT = Path(__file__).resolve().parents[1]
 PROMPT = Prompt(version="a-1", text="Answer in Thai from the documents.")
 CITING = Prompt(version="c-1", text="Cite as [[id]].")
 CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
@@ -337,6 +342,77 @@ def test_id_is_stripped() -> None:
 
 def test_no_empty_chunks() -> None:
     assert _parse("", "  ", "[[a]]", "") == [AnswerChunk("", ("a",))]
+
+
+# --- misspelled marker ids ----------------------------------------------------------
+
+# The real knowledge-base ids, so the cases below meet their real neighbours.
+KNOWN_IDS = tuple(
+    source["id"]
+    for source in yaml.safe_load((ROOT / "knowledge-base" / "sources.yaml").read_text(encoding="utf-8"))
+)
+
+
+@pytest.mark.parametrize(
+    ("written", "resolved"),
+    [
+        ("udi-fees", "udi-fees"),  # exact
+        ("udi-sponsor-for-visators", "udi-sponsor-for-visitors"),  # seen in an evaluation run
+        ("embassy-visitor-visa-check-list", "embassy-visitor-visa-checklist"),
+        ("UDI_Sponsorship Form", "udi-sponsorship-form"),  # case, underscore and space
+        (" udi-fees ", "udi-fees"),
+        ("udi-invitation-for-visitors-visa", "udi-invitation-for-visitor-visa"),
+        ("udi-feez", "udi-fees"),
+    ],
+)
+def test_a_near_miss_id_is_mapped_to_the_known_id(written: str, resolved: str) -> None:
+    assert resolve_source_id(written, KNOWN_IDS) == resolved
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "udi-invitation-letter",  # a different name, not a misspelling
+        "embassy-faq",
+        "https://www.udi.no/",
+        "no-such-source",
+        "udi",
+    ],
+)
+def test_an_id_that_is_not_a_near_miss_is_passed_on_unchanged(written: str) -> None:
+    assert resolve_source_id(written, KNOWN_IDS) == written
+
+
+def test_a_tie_between_two_known_ids_maps_nothing() -> None:
+    # Both ratios are 0.9, above the cutoff, so only the tie rule stops the mapping.
+    assert resolve_source_id("abcdefgh-z", ("abcdefgh-x", "abcdefgh-y")) == "abcdefgh-z"
+
+
+def test_no_two_known_ids_are_near_misses_of_each_other() -> None:
+    # The matching relies on this: a new source this close to an existing one would
+    # let a misspelling land on the wrong one, so adding it must be a decision.
+    pairs = [(a, b) for a in KNOWN_IDS for b in KNOWN_IDS if a < b]
+    close = [(a, b) for a, b in pairs if difflib.SequenceMatcher(None, a, b).ratio() >= 0.8]
+    assert close == []
+
+
+def test_a_mapping_logs_only_the_known_id(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="app.adapters.ollama_llm"):
+        assert resolve_source_id("udi-sponsor-for-visators", KNOWN_IDS) == "udi-sponsor-for-visitors"
+    assert caplog.messages == ["Mapped a misspelled source id to udi-sponsor-for-visitors"]
+
+
+def test_no_known_ids_passes_the_id_on() -> None:
+    assert resolve_source_id("udi-fees", ()) == "udi-fees"
+
+
+def test_answer_maps_a_misspelled_marker_and_passes_an_unknown_one_on(ollama_settings: Settings) -> None:
+    server = Server(_stream("Fee [[B_Fees]].", " Steps [[nothing-like-it]].", " Sponsor [[c-spnsor]]"))
+
+    text, ids, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "Fee. Steps. Sponsor"
+    assert ids == ["b-fees", "nothing-like-it", "c-sponsor"]
 
 
 # --- stream -------------------------------------------------------------------------

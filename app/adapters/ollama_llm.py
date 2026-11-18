@@ -4,6 +4,9 @@ Ollama has no Citations, so the model marks its sources in the text as `[[source
 (`prompts/answer-citing-markers.md`). The marker parser here turns markers into
 `AnswerChunk.source_ids` and strips them, and the spaces and tabs before them, from
 the text (line breaks stay, so list items never merge); a split marker is never shown.
+A marker id that is not a known document id is mapped to the closest known id when it
+is a near-miss spelling of one (`resolve_source_id`); any other id is passed on, and
+the pipeline drops it (AD-7).
 Thinking is on, but its text is never passed on. Classifying is a short
 non-streaming call with thinking off and the reply held to the category schema
 (`format`). Translating is a non-streaming call with thinking off, too.
@@ -13,6 +16,7 @@ status or an `error` line is logged as a warning (status or a fixed reason, neve
 response text), so "model not pulled" can be told from "Ollama down".
 """
 
+import difflib
 import json
 import logging
 import re
@@ -32,6 +36,9 @@ from app.ports.llm import AnswerChunk, Category, Exchange, LLMError, Usage
 # knowledge base to be read, which on a laptop can take minutes.
 TIMEOUT = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=5.0)
 MAX_MARKER_BODY = 80
+# How similar (difflib ratio) a misspelled marker id must be to a known document id to
+# be mapped to it. No two known ids are more than 0.8 similar to each other today.
+CLOSEST_ID_CUTOFF = 0.85
 OLLAMA_ERROR_REASON = "Ollama reported an error"
 
 logger = logging.getLogger(__name__)
@@ -161,8 +168,40 @@ class MarkerParser:
         return _chunk(rest, [])
 
 
+def resolve_source_id(source_id: str, known_ids: Sequence[str]) -> str:
+    """The known document id a marker id means, or the marker id unchanged.
+
+    An exact id is kept. Otherwise the id is normalised (trimmed, lower case, spaces
+    and underscores to hyphens) and, if still unknown, mapped to the most similar
+    known id when the similarity is at least `CLOSEST_ID_CUTOFF`; a tie maps nothing.
+    """
+    if source_id in known_ids:
+        return source_id
+    normalised = re.sub(r"[\s_]+", "-", source_id.strip().lower())
+    if normalised in known_ids:
+        return normalised
+    scored = sorted(
+        ((difflib.SequenceMatcher(None, normalised, known).ratio(), known) for known in known_ids),
+        reverse=True,
+    )
+    if not scored or scored[0][0] < CLOSEST_ID_CUTOFF:
+        return source_id
+    if len(scored) > 1 and scored[1][0] == scored[0][0]:
+        return source_id
+    # Only the known id is logged, never the model's text: mapped ids no longer count
+    # as unknown in the request log, so this line shows how often the matching fires.
+    logger.info("Mapped a misspelled source id to %s", scored[0][1])
+    return scored[0][1]
+
+
 def _chunk(text: str, ids: list[str]) -> AnswerChunk | None:
     return AnswerChunk(text, tuple(ids)) if text or ids else None
+
+
+def _resolved(chunk: AnswerChunk, known_ids: Sequence[str]) -> AnswerChunk:
+    if not chunk.source_ids:
+        return chunk
+    return AnswerChunk(chunk.text, tuple(resolve_source_id(sid, known_ids) for sid in chunk.source_ids))
 
 
 class OllamaLLM:
@@ -200,6 +239,7 @@ class OllamaLLM:
             history=history,
         )
         parser = MarkerParser()
+        known_ids = tuple(source.id for source in documents)
         final: dict[str, Any] | None = None
         try:
             with self._client.stream("POST", self._url, json=request) as response:
@@ -217,7 +257,7 @@ class OllamaLLM:
                     if isinstance(content, str) and content:
                         chunk = parser.feed(content)
                         if chunk is not None:
-                            yield chunk
+                            yield _resolved(chunk, known_ids)
                     if data.get("done") is True:
                         final = data
                         break
@@ -234,7 +274,7 @@ class OllamaLLM:
             raise LLMError(f"the answer is incomplete (done_reason: {done_reason})")
         chunk = parser.finish()
         if chunk is not None:
-            yield chunk
+            yield _resolved(chunk, known_ids)
         yield Usage(
             input_tokens=_count(final.get("prompt_eval_count")),
             output_tokens=_count(final.get("eval_count")),
