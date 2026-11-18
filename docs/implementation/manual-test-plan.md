@@ -170,7 +170,7 @@ Mode: real key, then Ollama. Run every step in both modes.
 9. Ask `จะไปฝรั่งเศสกับนอร์เวย์ ต้องยื่นวีซ่าที่สถานทูตไหน` (I am going to France and Norway, which embassy do I apply to?).
 10. Open `data/requests.jsonl` and read the last lines.
 
-Expected: (1, 2) the fixed text saying the chatbot only covers short-stay tourist and visitor visas to Norway, with the adviser contact and no source links; (3, 4) the fixed text with the adviser contact, no source links; (5) a cited answer (a short visit to a partner is in scope); (6) the fixed adviser-contact text (a request for a person wins); (7) a cited answer, not the out-of-scope text; (8) a cited answer, then the out-of-scope text for the follow-up; (9) a cited answer (a trip to Norway and other Schengen countries is in scope); (10) lines for (1, 2) have `category: "out_of_scope"`, lines for (3, 4) `category: "reach_person"`, all four with `outcome: "fixed_reply"` and null answer tokens; `prompt_versions.classifier` is `"3"` (it was `"2"` before Story 2.3).
+Expected: (1, 2) the fixed text saying the chatbot only covers short-stay tourist and visitor visas to Norway, with the adviser contact and no source links; (3, 4) the fixed text with the adviser contact, no source links; (5) a cited answer (a short visit to a partner is in scope); (6) the fixed adviser-contact text (a request for a person wins); (7) a cited answer, not the out-of-scope text; (8) a cited answer, then the out-of-scope text for the follow-up; (9) a cited answer (a trip to Norway and other Schengen countries is in scope); (10) lines for (1, 2) have `category: "out_of_scope"`, lines for (3, 4) `category: "reach_person"`, all four with `outcome: "fixed_reply"` and null answer tokens; `prompt_versions.classifier` is `"4"` (it was `"3"` before the prompt fixes from the first evaluation).
 
 ### MT-14 Feedback question at the end (Story 2.3)
 
@@ -196,7 +196,7 @@ Part B, how the real classifier sorts done signals (the riskiest change: classif
 5. Send `สวัสดีค่ะ` (hello).
 6. Open `data/requests.jsonl` and read the last lines.
 
-Expected: (1, 2, 3) the feedback question with Yes and No buttons, no source links; (4) a cited answer about the fee, not the feedback question; (5) not the feedback question (a greeting is `general`); (6) lines for (1, 2, 3) have `category: "done"` and `outcome: "fixed_reply"`, and `prompt_versions.classifier` is `"3"`.
+Expected: (1, 2, 3) the feedback question with Yes and No buttons, no source links; (4) a cited answer about the fee, not the feedback question; (5) not the feedback question (a greeting is `general`); (6) lines for (1, 2, 3) have `category: "done"` and `outcome: "fixed_reply"`, and `prompt_versions.classifier` is `"4"`.
 
 ### MT-15 Document checklist with kept ticks (Story 3.2)
 

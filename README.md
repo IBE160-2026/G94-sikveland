@@ -286,7 +286,7 @@ uv run python scripts/run_eval.py
 - **Kostnad:** med Claude koster én kjøring rundt 1 USD (anslag: 19 av de 30 spørsmålene går til svarmodellen, rundt 0,15–0,20 USD for det første og 0,05 USD for hvert av de neste; sorteringen koster nesten ingenting). Den faktiske kostnaden står øverst i rapporten. Med Ollama koster den ingenting.
 - Evalueringen skriver ikke til forespørselsloggen. Spørsmålene og svarene står bare i rapporten; i terminalen vises bare navnet på hvert spørsmål og utfallet.
 
-Rapporten havner i `eval/reports/<dato>-<promptversjoner>.md`, for eksempel `2026-11-16-answer-1-classifier-3.md` (med Ollama `...-citing-2.md`). En rapport skrives aldri over: kjøres evalueringen to ganger samme dag, får den neste `-2`, så `-3`. Øverst står dato, leverandør, modellene, promptversjonene, kunnskapsbasen (antall kilder og nyeste `retrieved`-dato), antall spørsmål, tokens og total kostnad. Så kommer totalene mot de fire målene, og deretter én del per spørsmål med det thai spørsmålet, den engelske oversettelsen, forventet og faktisk kategori og utfall, de automatiske sjekkene (bestått/feilet), kildene svaret viste til, selve svaret, de forventede faktaene og en tom linje `Adviser: ` til slutt.
+Rapporten havner i `eval/reports/<dato>-<promptversjoner>.md`, for eksempel `2026-11-16-answer-1-classifier-4.md` (med Ollama `...-citing-3.md`). En rapport skrives aldri over: kjøres evalueringen to ganger samme dag, får den neste `-2`, så `-3`. Øverst står dato, leverandør, modellene, promptversjonene, kunnskapsbasen (antall kilder og nyeste `retrieved`-dato), antall spørsmål, tokens og total kostnad. Så kommer totalene mot de fire målene, og deretter én del per spørsmål med det thai spørsmålet, den engelske oversettelsen, forventet og faktisk kategori og utfall, de automatiske sjekkene (bestått/feilet), kildene svaret viste til, selve svaret, de forventede faktaene og en tom linje `Adviser: ` til slutt.
 
 De automatiske sjekkene per spørsmål:
 
@@ -312,7 +312,7 @@ Før rådgiveren har vurdert svarene, står målet for generelle spørsmål som 
 **Rådgiverens vurdering.** Rådgiveren leser svaret og de forventede faktaene for hvert spørsmål og skriver `yes` (svaret har faktaene og riktig kilde, og ingenting oppdiktet) eller `no` etter `Adviser:`, for eksempel `Adviser: yes`. Bare det første ordet teller (store eller små bokstaver), så en kommentar kan stå etter, for eksempel `Adviser: no – mangler gebyret`. En tom linje betyr «ikke vurdert ennå». Deretter regnes totalene ut på nytt:
 
 ```sh
-uv run python scripts/run_eval.py --score eval/reports/2026-11-16-answer-1-classifier-3.md
+uv run python scripts/run_eval.py --score eval/reports/2026-11-16-answer-1-classifier-4.md
 ```
 
 `--score` kaller ingen modell og trenger ingen innstillinger. Den skriver bare om totalblokken (mellom `<!-- totals:start -->` og `<!-- totals:end -->`) i samme fil og lar resten stå, og den lister spørsmålene som fortsatt er tomme. Den kan kjøres så ofte man vil, også før alle linjene er fylt ut. En linje som ikke begynner med `yes` eller `no`, regnes som tom og listes.
@@ -364,7 +364,7 @@ Appen skriver én JSON-linje per spørsmål og per oversettelse fra KI-en («Sho
 | `endpoint` | `chat` (et spørsmål, `POST /api/chat`) eller `translate` (en oversettelse, `POST /api/translate`) |
 | `outcome` | `answered` (svar med kilder), `no_answer` (fast «vi har ikke svar»-tekst), `fixed_reply` (fast tekst for kategorien, f.eks. «bare ambassaden avgjør», uten svarkall), `translated` (oversatt av KI-en), `error` (feil) eller `incomplete` (brukeren gikk før svaret var ferdig) |
 | `category` | Spørsmålskategori: `general`, `individual_assessment`, `out_of_scope` eller `reach_person`; `null` hvis forespørselen feilet før den ble kategorisert, og alltid `null` for `translate` |
-| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "3"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "3", "citing": "2"}`; for `translate` bare `{"translate": "1"}` |
+| `prompt_versions` | Versjonen av promptene som ble brukt, f.eks. `{"answer": "1", "classifier": "4"}`; med Ollama også tillegget, f.eks. `{"answer": "1", "classifier": "4", "citing": "3"}`; for `translate` bare `{"translate": "1"}` |
 | `model` | Modellen som svarte eller oversatte (`mock_llm` i demomodus, `OLLAMA_MODEL` med Ollama, `MODEL_SMALL` for `translate` med Claude) |
 | `input_tokens`, `output_tokens` | Tokens inn og ut i svarkallet eller oversettelseskallet (ut inkluderer tenking); `null` når modellen ikke ble kalt eller kallet feilet |
 | `cache_read_tokens`, `cache_write_tokens` | Tokens lest fra og skrevet til prompt-cachen i svarkallet (alltid 0 med Ollama, som ikke rapporterer det) |

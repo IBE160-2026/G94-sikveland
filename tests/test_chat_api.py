@@ -1149,8 +1149,8 @@ def test_missing_classifier_prompt_stops_startup_in_every_mode(
 def test_classifier_prompt_is_loaded_and_versioned(settings: Settings) -> None:
     created = create_app(settings, llm=ScriptedLLM())
 
-    assert created.state.classifier_prompt.version == "3"
-    assert created.state.prompt_versions["classifier"] == "3"
+    assert created.state.classifier_prompt.version == "4"
+    assert created.state.prompt_versions["classifier"] == "4"
 
 
 def test_classify_is_priced_with_the_small_prices_only_with_claude(settings: Settings) -> None:

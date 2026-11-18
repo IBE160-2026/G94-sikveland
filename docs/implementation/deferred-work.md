@@ -105,3 +105,6 @@
 - source_spec: `docs/implementation/spec-4-1-show-the-english-translation.md`
   summary: Check whether a non-streamed Ollama translation of a long answer can pass the 300 s read timeout on a slow machine; if so, stream the translate reply or give it a longer timeout.
   evidence: Review of Story 4.1 (edge case #5), unverified (would be medium): `_post` uses the shared 300 s timeout with `stream: false`, so nothing arrives until the whole English is written. Settle with MT-17 part B on the user's 16 GB GPU and a long answer.
+- source_spec: `docs/implementation/spec-eval-prompt-fixes.md`
+  summary: Run the evaluation with Claude after classifier prompt version 4, and check that the own-chances cases (`own-chances-salary`, `own-chances-earlier-overstay`, `follow-up-own-chances`) still get `individual_assessment` and `own-chances-and-employment-proof` gets `general`.
+  evidence: Review of the eval prompt fixes (blind): the classifier prompt is shared with Claude, but only an Ollama run could be made (no Claude key on this machine).
