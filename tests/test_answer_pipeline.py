@@ -137,7 +137,7 @@ def test_zero_citations_sends_only_the_no_answer_text() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources(()),
+        Sources((), no_answer_reason="no_citation"),
         Done(),
     ]
 
@@ -148,7 +148,7 @@ def test_empty_answer_gets_the_no_answer_text() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources(()),
+        Sources((), no_answer_reason="no_citation"),
         Done(),
     ]
 
@@ -251,7 +251,7 @@ def test_only_unknown_ids_give_the_no_answer_text() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=2),
+        Sources((), unknown_source_ids=2, no_answer_reason="unknown_ids_only"),
         Done(),
     ]
 
@@ -441,7 +441,7 @@ DECLINED = [
     META,
     TextDelta(NO_ANSWER),
     Spent(DEFAULT_USAGE, call="answer"),
-    Sources(()),
+    Sources((), no_answer_reason="not_available_opening"),
     Done(),
 ]
 
@@ -481,7 +481,11 @@ def test_the_no_answer_text_is_sent_at_once_and_the_stream_is_read_to_the_end() 
 
     assert [next(events), next(events), next(events)] == [CLASSIFIED, META, TextDelta(NO_ANSWER)]
     # The rest of the reply is read only for its usage: no text and no sources.
-    assert list(events) == [Spent(DEFAULT_USAGE, call="answer"), Sources(()), Done()]
+    assert list(events) == [
+        Spent(DEFAULT_USAGE, call="answer"),
+        Sources((), no_answer_reason="not_available_opening"),
+        Done(),
+    ]
 
 
 def test_the_not_available_sentence_itself_cited_is_declined() -> None:
@@ -668,7 +672,7 @@ def test_unknown_ids_in_a_declined_answer_are_counted() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=2),
+        Sources((), unknown_source_ids=2, no_answer_reason="not_available_opening"),
         Done(),
     ]
 
@@ -688,7 +692,19 @@ def test_not_available_sentence_with_only_unknown_ids_is_handled_as_before() -> 
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=1),
+        Sources((), unknown_source_ids=1, no_answer_reason="unknown_ids_only"),
+        Done(),
+    ]
+
+
+def test_not_available_sentence_with_no_citation_is_the_no_citation_reason() -> None:
+    # With no known source cited, the zero-citation rule decides, not the guard.
+    assert _run(ScriptedLLM([AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ\nคำแนะนำ")])) == [
+        CLASSIFIED,
+        META,
+        TextDelta(NO_ANSWER),
+        Spent(DEFAULT_USAGE, call="answer"),
+        Sources((), no_answer_reason="no_citation"),
         Done(),
     ]
 

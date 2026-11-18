@@ -10,6 +10,7 @@ import re
 from collections.abc import Callable, Iterator, Sequence
 from datetime import date
 from pathlib import Path
+from typing import get_args
 
 import pytest
 import yaml
@@ -454,6 +455,39 @@ def test_dropped_unknown_source_ids_are_shown_and_counted(tmp_path: Path, claude
     # `--score` keeps the count.
     assert _score(path)[0] == 0
     assert "- Cases that dropped unknown source ids: 1 of 2" in path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("chunks", "reason"),
+    [
+        ([AnswerChunk("ข้อความที่ไม่มีแหล่งที่มา")], "no source cited"),
+        ([AnswerChunk("ข้อความ", ("no-such-source",))], "only unknown source ids cited"),
+        (
+            [AnswerChunk("ขออภัย ไม่มีข้อมูลเรื่องนี้ค่ะ\nคำแนะนำ", ("udi-fees",))],
+            "opened with the not-available sentence",
+        ),
+    ],
+)
+def test_a_no_answer_case_shows_why_it_got_the_no_answer_text(
+    tmp_path: Path, claude: Settings, chunks: list[AnswerChunk], reason: str
+) -> None:
+    llm = ScriptedLLM(chunks=chunks, category="general")
+    code, *_, reports = _run(
+        claude,
+        tmp_path,
+        [NO_ANSWER_CASE, FEE_CASE, CHANCES_CASE],
+        CaseByCaseLLM([llm, _answered("udi-fees"), _fixed("individual_assessment")]),
+    )
+    assert code == 0
+    report = _report(reports)
+    assert f"- No-answer reason: {reason}" in _section(report, "not-covered")
+    assert "No-answer reason" not in _section(report, "visa-fee")  # answered
+    assert "No-answer reason" not in _section(report, "my-chances")  # fixed reply
+
+
+def test_every_no_answer_reason_has_a_label() -> None:
+    # A reason without a label would stop the report from being written after a paid run.
+    assert set(run_eval.NO_ANSWER_REASON_LABELS) == set(get_args(run_eval.NoAnswerReason))
 
 
 def test_every_case_failing_writes_no_report_and_exits_1(tmp_path: Path, claude: Settings) -> None:

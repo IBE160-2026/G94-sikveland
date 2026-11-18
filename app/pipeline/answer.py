@@ -9,8 +9,8 @@ use, one `Sources`, then `Done`. A fixed reply has no answer call: `Spent`
 (classify), `Meta`, one `TextDelta`, an empty `Sources`, `Done`. A declined
 answer (zero known citations, or a held reply that opens with a not-available
 sentence) has one `TextDelta` with the no-answer text, then `Spent` (answer)
-when the model reported its token use, as for any answer, an empty `Sources`,
-`Done`. `Failed` can come instead of any of these events,
+when the model reported its token use, as for any answer, an empty `Sources`
+with its `no_answer_reason`, `Done`. `Failed` can come instead of any of these events,
 also the first ones when the classify call fails, and is always the last one.
 """
 
@@ -29,6 +29,10 @@ UNKNOWN_CATEGORY_REASON = "UnknownCategory"
 _CATEGORIES: frozenset[str] = frozenset(get_args(Category))
 
 ModelCall = Literal["classify", "answer"]
+# Why an answer got the no-answer text: it cited no source, it cited only ids that are
+# not in the knowledge base, or its first line was a not-available sentence (the guard).
+# With no known source cited, the reason is one of the first two.
+NoAnswerReason = Literal["no_citation", "unknown_ids_only", "not_available_opening"]
 
 # Not-available openings (AD-7, amended 2026-11-18). A held reply whose first line
 # matches is declined: the applicant gets the no-answer text, as for zero citations.
@@ -87,10 +91,14 @@ class Sources:
 
     `unknown_source_ids` counts the distinct cited ids that are not in the knowledge
     base: they were dropped. For the request log only, never shown to the applicant.
+    `no_answer_reason` says why the no-answer text was sent instead of the answer,
+    and is `None` when it was not (also for a fixed reply). For the evaluation report
+    only: neither the request log nor the stream carries it.
     """
 
     items: tuple[SourceRef, ...]
     unknown_source_ids: int = 0
+    no_answer_reason: NoAnswerReason | None = None
 
 
 @dataclass(frozen=True)
@@ -187,7 +195,10 @@ def answer_question(
     complete (a line break or the end of the answer); if that line is such a
     sentence without a turn word (`TURN_WORD`), the reply is declined:
     `no_answer_text` is sent at once, the rest of the stream is read only for its
-    `Usage` and unknown ids, and `Sources` is empty. The check runs on each chunk
+    `Usage` and unknown ids, and `Sources` is empty. Whenever the no-answer text
+    is sent, `Sources.no_answer_reason` says why: `no_citation` or
+    `unknown_ids_only` when no known source was cited (also when the text opened
+    with a not-available sentence), else `not_available_opening`. The check runs on each chunk
     until it decides; it decides once, before anything is shown, and text already
     sent is never taken back. A cited id that is not
     in the knowledge base is dropped (it does not count as a citation) and counted
@@ -277,5 +288,15 @@ def answer_question(
     # Before `Sources`: a client that leaves at that event still gets its cost logged.
     if usage is not None:
         yield Spent(usage, call="answer")
-    yield Sources(() if declined else tuple(cited.values()), unknown_source_ids=len(unknown))
+    reason: NoAnswerReason | None = None
+    if declined:
+        if cited:
+            reason = "not_available_opening"
+        else:
+            reason = "unknown_ids_only" if unknown else "no_citation"
+    yield Sources(
+        () if declined else tuple(cited.values()),
+        unknown_source_ids=len(unknown),
+        no_answer_reason=reason,
+    )
     yield Done()

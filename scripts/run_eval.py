@@ -34,7 +34,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.config import Settings, get_settings  # noqa: E402
-from app.pipeline.answer import Done, Failed, Meta, Sources, Spent, TextDelta, answer_question  # noqa: E402
+from app.pipeline.answer import (  # noqa: E402
+    Done,
+    Failed,
+    Meta,
+    NoAnswerReason,
+    Sources,
+    Spent,
+    TextDelta,
+    answer_question,
+)
 from app.pipeline.cost import COST_DECIMALS, Prices, cost_usd  # noqa: E402
 from app.ports.knowledge_base import KnowledgeBase  # noqa: E402
 from app.ports.llm import Category, LLMClient, Usage  # noqa: E402
@@ -71,6 +80,12 @@ PERSONAL_INFO_REMOVED_KINDS = frozenset({"thai_id", "passport"})
 TOTALS_START = "<!-- totals:start -->"
 TOTALS_END = "<!-- totals:end -->"
 CASE_MARKER = "<!-- eval-case "
+# How the case section names why the pipeline sent the no-answer text.
+NO_ANSWER_REASON_LABELS: dict[NoAnswerReason, str] = {
+    "no_citation": "no source cited",
+    "unknown_ids_only": "only unknown source ids cited",
+    "not_available_opening": "opened with the not-available sentence",
+}
 ADVISER_PREFIX = "Adviser:"
 _CASE_LINE = re.compile(r"^<!-- eval-case (\{.*\}) -->$")
 _ADVISER_LINE = re.compile(r"^Adviser:(.*)$")
@@ -110,6 +125,8 @@ class CaseResult:
     source_ids: tuple[str, ...] = ()
     # Cited ids that are not in the knowledge base, dropped by the pipeline (no check fails on it).
     dropped_source_ids: int = 0
+    # Why the pipeline sent the no-answer text, when it did (shown for `no_answer` cases).
+    no_answer_reason: NoAnswerReason | None = None
     reply: str = ""
     error: str | None = None
     usages: list[tuple[str, Usage]] = field(default_factory=list)
@@ -201,6 +218,7 @@ def run_case(
                         reached = "answered" if event.items else "no_answer"
                     result.source_ids = tuple(ref.id for ref in event.items)
                     result.dropped_source_ids = event.unknown_source_ids
+                    result.no_answer_reason = event.no_answer_reason
                 case Done():
                     outcome = reached
         else:
@@ -446,6 +464,8 @@ def _case_section(number: int, result: CaseResult) -> str:
     ]
     if result.dropped_source_ids:
         lines.append(f"- Dropped unknown source ids: {result.dropped_source_ids}")
+    if result.outcome == "no_answer" and result.no_answer_reason is not None:
+        lines.append(f"- No-answer reason: {NO_ANSWER_REASON_LABELS[result.no_answer_reason]}")
     if result.error is not None:
         lines.append(f"- Error: `{result.error}`")
     lines += ["", "**Reply:**", ""]
