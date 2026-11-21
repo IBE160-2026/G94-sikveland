@@ -118,7 +118,7 @@ Uten nøkkel starter appen likevel, men hvert spørsmål gir en fast feiltekst. 
 Svarene kan også komme fra en modell som kjører på din egen maskin. Det koster ingenting og trenger ingen nøkkel, men krever et grafikkort med nok minne (testet med `qwen3.5:9b` på et kort med 16 GB) og gir svakere svar enn Claude.
 
 1. Installer [Ollama](https://ollama.com) og hent modellen: `ollama pull qwen3.5:9b`. Modellen må støtte tenking (thinking), for appen slår den alltid på.
-2. Sett `LLM_PROVIDER=ollama` i `.env` (og la `MOCK_LLM=false` stå). `OLLAMA_BASE_URL`, `OLLAMA_MODEL` og `OLLAMA_NUM_CTX` har standardverdier som passer for en vanlig Ollama-installasjon.
+2. Kopier [`.env.example`](.env.example) til `.env` hvis du ikke har gjort det (se over), og sett `LLM_PROVIDER=ollama` i `.env` (og la `MOCK_LLM=false` stå). `OLLAMA_BASE_URL`, `OLLAMA_MODEL` og `OLLAMA_NUM_CTX` har standardverdier som passer for en vanlig Ollama-installasjon.
 3. Start Ollama, og så appen med `uv run uvicorn app.main:app`.
 
 Appen sender med `num_ctx` (standard 32768 tokens) i hver forespørsel. Kunnskapsbasen er rundt 24 600 tokens, og Ollamas egen standard på 4096 ville kuttet den uten å si fra. Det første svaret etter at Ollama har startet tar ekstra tid, fordi modellen må lese hele kunnskapsbasen (rundt 7 sekunder på et grafikkort med 16 GB, mye lenger uten grafikkort); deretter gjenbruker Ollama den. Fordi modellen tenker før den svarer, tok et svar i testene fra 6 sekunder til over ett minutt.
@@ -126,6 +126,10 @@ Appen sender med `num_ctx` (standard 32768 tokens) i hver forespørsel. Kunnskap
 Uten Claudes innebygde kildehenvisninger skriver modellen kildene som `[[kilde-id]]` i teksten. Appen gjør dem om til kildelenker og fjerner dem fra teksten, så søkeren ser det samme som med Claude. Staver modellen en kilde-ID nesten riktig (f.eks. `udi-sponsor-for-visators`), brukes den kjente kilden som ligner mest, når likheten (`difflib`-forholdet) er minst 0,85 etter at mellomrom i endene er fjernet og store bokstaver, mellomrom og understrek er rettet; ligner to kilder like mye, får ingen av dem lenken. En slik ID telles ikke lenger som ukjent i forespørselsloggen, men står som en linje i applikasjonsloggen. Andre ukjente ID-er får ingen lenke. Reglene for dette, og en regel om å bare skrive thai skrift, står i [`prompts/answer-citing-markers.md`](prompts/answer-citing-markers.md), som bare brukes med Ollama. En liten modell blander av og til inn ord eller tegn fra andre skriftsystemer, mest kinesisk. I en test med 36 svar før og 36 svar etter regelen gjaldt det 5 og 2 svar: færre, men ikke null, og for få svar til å bevise at regelen virker. Ollama-svar bør derfor leses av en som kan thai før de brukes overfor søkere.
 
 Kjører ikke Ollama, eller er modellen ikke hentet, starter appen likevel, men hvert spørsmål gir den faste feilteksten. Demomodus (`MOCK_LLM=true`) går foran `LLM_PROVIDER`.
+
+### Hvert spørsmål gir feilteksten
+
+Svarer appen «ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งภายหลัง …» (Sorry, something went wrong) på alt, også «hello», får den ikke kontakt med noen modell. Det vanligste er at `.env` mangler: da bruker appen Claude (`LLM_PROVIDER=anthropic` er standard) uten nøkkel. Se på siste linje i forespørselsloggen (`data/requests.jsonl`): `"outcome": "error"` med `"model": "claude-…"` betyr Claude uten nøkkel, med `"model": "qwen3.5:9b"` at Ollama ikke svarer. Lag `.env` som beskrevet over (nøkkel for Claude, eller `LLM_PROVIDER=ollama`), eller bruk demomodus. Appen leser `.env` bare når den starter, så stopp den (Ctrl+C) og start den igjen etter hver endring.
 
 ### Innstillinger
 
