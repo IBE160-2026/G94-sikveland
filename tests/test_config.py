@@ -21,6 +21,7 @@ def test_defaults_without_env_file(settings: Settings) -> None:
     assert settings.ollama_base_url == "http://localhost:11434"
     assert settings.ollama_model == "qwen3.5:9b"
     assert settings.ollama_num_ctx == 32768
+    assert settings.ollama_think is True
 
 
 def test_ollama_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,6 +29,7 @@ def test_ollama_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://gpu-box:11434")
     monkeypatch.setenv("OLLAMA_MODEL", "qwen3.5:27b")
     monkeypatch.setenv("OLLAMA_NUM_CTX", "65536")
+    monkeypatch.setenv("OLLAMA_THINK", "false")
 
     settings = Settings(_env_file=None)
 
@@ -35,6 +37,7 @@ def test_ollama_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.ollama_base_url == "http://gpu-box:11434"
     assert settings.ollama_model == "qwen3.5:27b"
     assert settings.ollama_num_ctx == 65536
+    assert settings.ollama_think is False
 
 
 def test_smallest_num_ctx_is_32768(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,6 +50,13 @@ def test_unknown_provider_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
 
     with pytest.raises(ValidationError, match="llm_provider"):
+        Settings(_env_file=None)
+
+
+def test_invalid_think_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OLLAMA_THINK", "sometimes")
+
+    with pytest.raises(ValidationError, match="ollama_think"):
         Settings(_env_file=None)
 
 

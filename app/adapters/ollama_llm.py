@@ -7,7 +7,7 @@ the text (line breaks stay, so list items never merge); a split marker is never 
 A marker id that is not a known document id is mapped to the closest known id when it
 is a near-miss spelling of one (`resolve_source_id`); any other id is passed on, and
 the pipeline drops it (AD-7).
-Thinking is on, but its text is never passed on. Classifying is a short
+Thinking follows `OLLAMA_THINK` (on by default), and its text is never passed on. Classifying is a short
 non-streaming call with thinking off and the reply held to the category schema
 (`format`). Translating is a non-streaming call with thinking off, too.
 
@@ -68,11 +68,15 @@ def build_chat_request(
     *,
     model: str,
     num_ctx: int,
+    think: bool,
     system: str,
     question: str,
     history: Sequence[Exchange],
 ) -> dict[str, Any]:
-    """The JSON body for `POST /api/chat`: system, the history as plain turns, the question."""
+    """The JSON body for `POST /api/chat`: system, the history as plain turns, the question.
+
+    `think` is `OLLAMA_THINK`: off for a model without Ollama's thinking capability.
+    """
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     for exchange in history:
         messages.append({"role": "user", "content": exchange.question})
@@ -82,7 +86,7 @@ def build_chat_request(
         "model": model,
         "messages": messages,
         "stream": True,
-        "think": True,
+        "think": think,
         "options": {"num_ctx": num_ctx},
     }
 
@@ -245,6 +249,7 @@ class OllamaLLM:
         request = build_chat_request(
             model=self._settings.ollama_model,
             num_ctx=self._settings.ollama_num_ctx,
+            think=self._settings.ollama_think,
             system=build_system_prompt(self._prompt, self._citing_prompt, documents),
             question=question,
             history=history,

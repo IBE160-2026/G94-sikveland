@@ -326,7 +326,9 @@ def run(
         print(
             f"Every case failed (first error: {results[0].error}); no report was written. "
             "Check that ANTHROPIC_API_KEY is valid, that LLM_PROVIDER is the provider you meant, "
-            "and, with Ollama, that Ollama is running and OLLAMA_MODEL has been pulled.",
+            "and, with Ollama, that Ollama is running and OLLAMA_MODEL has been pulled. "
+            "Ollama's HTTP 400 means a model without thinking (set OLLAMA_THINK=false) "
+            "or without structured (JSON) output, which the classifier needs.",
             file=err,
         )
         return EXIT_ALL_FAILED
@@ -345,6 +347,7 @@ def run(
         provider,
         state.answer_model,
         classify_model,
+        settings.ollama_think if provider == "ollama" else None,
         prompt_versions,
         state.knowledge_base,
         len(results),
@@ -383,11 +386,16 @@ def write_report(reports_dir: Path, run_date: date, prompt_versions: Mapping[str
         return path
 
 
+def _on_off(value: bool) -> str:
+    return "on" if value else "off"
+
+
 def _header(
     run_date: date,
     provider: str,
     answer_model: str,
     classify_model: str,
+    answer_thinking: bool | None,
     prompt_versions: Mapping[str, str],
     knowledge_base: KnowledgeBase,
     case_count: int,
@@ -406,6 +414,7 @@ def _header(
             f"- Provider: {provider}",
             f"- Answer model: `{answer_model}`",
             f"- Classify model: `{classify_model}`",
+            *([] if answer_thinking is None else [f"- Answer thinking: {_on_off(answer_thinking)}"]),
             f"- Prompt versions: {versions}",
             f"- Knowledge base: {len(sources)} sources, newest retrieved {newest_text}",
             f"- Cases: {case_count}",

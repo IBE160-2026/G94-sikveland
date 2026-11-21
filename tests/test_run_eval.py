@@ -609,6 +609,19 @@ def test_a_failing_individual_assessment_misses_its_target(tmp_path: Path, claud
     assert "| 0 of 1 (0%) | no |" in _report(reports)
 
 
+def test_report_says_when_ollama_answers_without_thinking(tmp_path: Path, settings: Settings) -> None:
+    ollama = settings.model_copy(update={"llm_provider": "ollama", "ollama_think": False})
+    code, _, err, reports = _run(ollama, tmp_path, [FEE_CASE], CaseByCaseLLM([_answered("udi-fees")]))
+    assert code == 0, err
+    assert "- Answer thinking: off" in _report(reports)
+
+
+def test_claude_report_has_no_thinking_line(tmp_path: Path, claude: Settings) -> None:
+    code, *_, reports = _run(claude, tmp_path, [FEE_CASE], CaseByCaseLLM([_answered("udi-fees")]))
+    assert code == 0
+    assert "Answer thinking" not in _report(reports)
+
+
 def test_ollama_runs_without_a_key_at_no_cost(tmp_path: Path, settings: Settings) -> None:
     ollama = settings.model_copy(update={"llm_provider": "ollama", "ollama_model": "qwen-test:1b"})
     code, _, err, reports = _run(ollama, tmp_path, ALL_CASES, CaseByCaseLLM(_all_match()))
@@ -619,6 +632,7 @@ def test_ollama_runs_without_a_key_at_no_cost(tmp_path: Path, settings: Settings
     assert "- Provider: ollama" in report
     assert "- Answer model: `qwen-test:1b`" in report
     assert "- Classify model: `qwen-test:1b`" in report
+    assert "- Answer thinking: on" in report
     assert f"citing {CITING_VERSION}" in report
     assert "- Total cost: 0.000000 USD" in report
 

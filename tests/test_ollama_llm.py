@@ -183,6 +183,17 @@ def test_request_goes_to_api_chat_with_think_num_ctx_and_stream(ollama_settings:
     assert body["messages"][-1] == {"role": "user", "content": "How much?"}
 
 
+def test_think_setting_off_sends_think_false_on_the_answer(ollama_settings: Settings) -> None:
+    server = Server(_stream("x"))
+    settings = ollama_settings.model_copy(update={"ollama_think": False})
+
+    _answer(_llm(settings, server), "How much?")
+
+    body = server.json()
+    assert body["think"] is False
+    assert body["stream"] is True
+
+
 def test_num_ctx_is_sent_by_default(ollama_settings: Settings) -> None:
     server = Server(_stream("x"))
 
@@ -223,6 +234,7 @@ def test_history_is_alternating_plain_messages() -> None:
     request = build_chat_request(
         model="m",
         num_ctx=4096,
+        think=True,
         system="S",
         question="q3",
         history=(Exchange("q1", "a1"), Exchange("q2", "a2")),

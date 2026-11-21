@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Context window sent with every Ollama request, at least 32768: the knowledge
     # base alone is about 24,600 tokens, and Ollama's own default (4096) silently cuts it.
     ollama_num_ctx: Annotated[int, Field(ge=32768)] = 32768
+    # Thinking for the Ollama answer call (classify and translate never think). Ollama
+    # answers HTTP 400 to `think: true` for a model without the thinking capability.
+    ollama_think: bool = True
     adviser_contact: Contact = "ngan.visaa@gmail.com"
     # The feedback answers (SQLite); a relative path is resolved against the project root.
     database_path: str = "data/feedback.sqlite3"
