@@ -15,6 +15,7 @@ Show the dropped unknown source ids in the evaluation report, so a near-miss bel
 - Review: 5 patches, 1 deferred (mapped ids are still not visible in the report; deferred-work.md), the rest rejected with evidence (triage log in the spec).
 - `uv run pytest`: 1540 passed, exit code 0; ruff clean.
 - Closed in issues.md: the decision to show the dropped ids.
+- Pushed at the user's request (`origin/main` = `3a4973e`). A new Ollama run wrote `eval/reports/2026-11-21-answer-1-classifier-4-citing-3-2.md` (not committed yet). Results: general 12 of 14 automatic, no-answer 4 of 4, 1 of 29 cases dropped ids. `relationship-proof-unmarried-partner` passed this time. The one dropped id was a near-miss: `embassy-visa-checklist` (closest `embassy-visitor-visa-checklist`, 0.846; runner-up `embassy-visa-faq`, 0.68) in `thanks-and-insurance-question`, which still passed. General misses: `processing-time-typo` (the model opened with the not-available sentence) and `when-to-apply-mixed-language` (no source cited); both passed in the earlier runs.
 
 ### Åpne punkter
-- The next Ollama evaluation run shows which ids `relationship-proof-unmarried-partner` drops; then decide between lowering the cutoff and changing the citing prompt.
+- Decide whether to lower the closest-id cutoff from 0.85 to 0.80: the one near-miss seen scored 0.846, and no two real ids are more than 0.73 similar.
