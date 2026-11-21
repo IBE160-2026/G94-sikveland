@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 import scripts.run_eval as run_eval
 from app.adapters.file_knowledge_base import load_knowledge_base
 from app.adapters.file_prompts import load_prompt
+from app.adapters.ollama_llm import CLOSEST_ID_CUTOFF, resolve_source_id
 from app.config import Settings
 from app.main import (
     ANSWER_PROMPT_FILE,
@@ -440,6 +441,55 @@ def test_cache_tokens_are_summed_and_priced(tmp_path: Path, claude: Settings) ->
     assert f"- Total cost: {cost:.6f} USD" in report
 
 
+def test_dropped_id_names_the_closest_known_id_as_the_ollama_adapter_scores_it() -> None:
+    known = [source.id for source in KB.documents()]
+
+    # Below the cutoff after normalising, so the adapter drops it: the case this line is for.
+    dropped = run_eval._dropped_id("UDI_Waiting Time", known)
+
+    assert dropped.similarity < CLOSEST_ID_CUTOFF
+    assert resolve_source_id("UDI_Waiting Time", known) == "UDI_Waiting Time"
+    expected = "`UDI_Waiting Time` (closest `udi-waiting-time-visitor-visa`, 0.71)"
+    assert run_eval._dropped_text(dropped) == expected
+
+
+def test_dropped_id_with_a_tie_names_every_closest_id() -> None:
+    # A tie above the cutoff is the one way an Ollama id that close is still dropped.
+    known = ["visa-fees-a", "visa-fees-b", "other"]
+    dropped = run_eval._dropped_id("visa-fees-c", ["visa-fees-b", "other", "visa-fees-a"])
+
+    assert resolve_source_id("visa-fees-c", known) == "visa-fees-c"
+    assert dropped.closest == ("visa-fees-a", "visa-fees-b")
+    assert run_eval._dropped_text(dropped) == "`visa-fees-c` (closest `visa-fees-a` or `visa-fees-b`, 0.90)"
+
+
+def test_dropped_id_without_known_ids_is_shown_alone() -> None:
+    dropped = run_eval._dropped_id("nope", [])
+
+    assert run_eval._dropped_text(dropped) == "`nope`"
+
+
+@pytest.mark.parametrize(
+    ("similarity", "shown"),
+    [(0.8499, "0.84"), (0.85, "0.85"), (0.29, "0.29"), (1.0, "1.00"), (0.0, "0.00")],
+)
+def test_dropped_id_similarity_is_rounded_down(similarity: float, shown: str) -> None:
+    dropped = run_eval.DroppedId("x", ("y",), similarity)
+
+    assert run_eval._dropped_text(dropped) == f"`x` (closest `y`, {shown})"
+
+
+def test_dropped_id_text_cannot_break_the_report_line() -> None:
+    model_text = "a`b\nc" + "z" * 100
+    dropped = run_eval.DroppedId(model_text, (), 0.0)
+
+    text = run_eval._dropped_text(dropped)
+
+    assert "\n" not in text
+    assert text.count("`") == 2
+    assert text == "`a'b c" + "z" * 75 + "…`"
+
+
 def test_dropped_unknown_source_ids_are_shown_and_counted(tmp_path: Path, claude: Settings) -> None:
     llm = _answered("udi-fees", "no-such-source", "also-unknown")
     code, *_, reports = _run(
@@ -448,7 +498,10 @@ def test_dropped_unknown_source_ids_are_shown_and_counted(tmp_path: Path, claude
     assert code == 0
     (path,) = reports.glob("*.md")
     report = path.read_text(encoding="utf-8")
-    assert "- Dropped unknown source ids: 2" in _section(report, "visa-fee")
+    assert (
+        "- Dropped unknown source ids: 2 — `no-such-source` (closest `eu-applying-for-schengen-visa`, 0.37), "
+        "`also-unknown` (closest `embassy-hand-in-documents`, 0.27)"
+    ) in _section(report, "visa-fee")
     assert "Dropped unknown source ids" not in _section(report, "my-chances")
     assert all(_case_data(report)["visa-fee"]["checks"].values())  # no check fails on it
     assert "- Cases that dropped unknown source ids: 1 of 2" in report

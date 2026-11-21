@@ -89,16 +89,22 @@ class SourceRef:
 class Sources:
     """Exactly the cited sources, in order of first citation, each once.
 
-    `unknown_source_ids` counts the distinct cited ids that are not in the knowledge
-    base: they were dropped. For the request log only, never shown to the applicant.
+    `unknown_ids` are the distinct cited ids that are not in the knowledge base, in
+    order of first citation: they were dropped. Their count (`unknown_source_ids`)
+    goes to the request log; the ids themselves only to the evaluation report, since
+    they are the model's text. Neither is ever shown to the applicant.
     `no_answer_reason` says why the no-answer text was sent instead of the answer,
     and is `None` when it was not (also for a fixed reply). For the evaluation report
     only: neither the request log nor the stream carries it.
     """
 
     items: tuple[SourceRef, ...]
-    unknown_source_ids: int = 0
+    unknown_ids: tuple[str, ...] = ()
     no_answer_reason: NoAnswerReason | None = None
+
+    @property
+    def unknown_source_ids(self) -> int:
+        return len(self.unknown_ids)
 
 
 @dataclass(frozen=True)
@@ -202,7 +208,7 @@ def answer_question(
     until it decides; it decides once, before anything is shown, and text already
     sent is never taken back. A cited id that is not
     in the knowledge base is dropped (it does not count as a citation) and counted
-    in `Sources.unknown_source_ids`; the answer goes on.
+    in `Sources.unknown_ids`; the answer goes on.
     """
     clean = remove_personal_info(question)
     clean_history = tuple(
@@ -238,7 +244,7 @@ def answer_question(
     declined = False  # the no-answer text was sent instead of the reply
     usage: Usage | None = None
     cited: dict[str, SourceRef] = {}  # insertion order = order of first citation
-    unknown: set[str] = set()
+    unknown: dict[str, None] = {}  # insertion order = order of first citation
     try:
         for item in llm.answer(clean.text, clean_history):
             if isinstance(item, Usage):
@@ -250,7 +256,7 @@ def answer_question(
                 try:
                     source = knowledge_base.source(source_id)
                 except KeyError:
-                    unknown.add(source_id)  # no link for it; the rest of the answer is shown
+                    unknown[source_id] = None  # no link for it; the rest of the answer is shown
                     continue
                 cited[source_id] = SourceRef(source.id, source.title, source.url)
             if declined:
@@ -296,7 +302,7 @@ def answer_question(
             reason = "unknown_ids_only" if unknown else "no_citation"
     yield Sources(
         () if declined else tuple(cited.values()),
-        unknown_source_ids=len(unknown),
+        unknown_ids=tuple(unknown),
         no_answer_reason=reason,
     )
     yield Done()

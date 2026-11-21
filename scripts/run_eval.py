@@ -21,6 +21,7 @@ mode, Claude without `ANTHROPIC_API_KEY`, a broken test set, a missing or unread
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
@@ -33,6 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.adapters.ollama_llm import MAX_MARKER_BODY, closest_known_ids  # noqa: E402
 from app.config import Settings, get_settings  # noqa: E402
 from app.pipeline.answer import (  # noqa: E402
     Done,
@@ -114,6 +116,19 @@ class Tokens:
         self.cache_write += usage.cache_write_tokens
 
 
+@dataclass(frozen=True)
+class DroppedId:
+    """A cited id that is not in the knowledge base, with the known ids most similar to it.
+
+    `closest` holds every known id sharing the best similarity (more than one is a tie,
+    which the Ollama adapter does not map); it is empty when the knowledge base is.
+    """
+
+    id: str
+    closest: tuple[str, ...]
+    similarity: float
+
+
 @dataclass
 class CaseResult:
     """What the pipeline did with one case, and the automatic checks."""
@@ -125,6 +140,8 @@ class CaseResult:
     source_ids: tuple[str, ...] = ()
     # Cited ids that are not in the knowledge base, dropped by the pipeline (no check fails on it).
     dropped_source_ids: int = 0
+    # The dropped ids themselves, in order of first citation, for the case section only.
+    dropped_ids: tuple[DroppedId, ...] = ()
     # Why the pipeline sent the no-answer text, when it did (shown for `no_answer` cases).
     no_answer_reason: NoAnswerReason | None = None
     reply: str = ""
@@ -218,6 +235,8 @@ def run_case(
                         reached = "answered" if event.items else "no_answer"
                     result.source_ids = tuple(ref.id for ref in event.items)
                     result.dropped_source_ids = event.unknown_source_ids
+                    known_ids = [source.id for source in knowledge_base.documents()]
+                    result.dropped_ids = tuple(_dropped_id(sid, known_ids) for sid in event.unknown_ids)
                     result.no_answer_reason = event.no_answer_reason
                 case Done():
                     outcome = reached
@@ -428,6 +447,31 @@ def _judged(result: CaseResult) -> Judged:
     )
 
 
+def _dropped_id(source_id: str, known_ids: Sequence[str]) -> DroppedId:
+    """`source_id` with the known ids it is closest to, scored as the Ollama adapter scores them."""
+    scored = closest_known_ids(source_id, known_ids)
+    if not scored:
+        return DroppedId(source_id, (), 0.0)
+    best = scored[0][0]
+    return DroppedId(source_id, tuple(sorted(known for ratio, known in scored if ratio == best)), best)
+
+
+def _dropped_text(dropped: DroppedId) -> str:
+    """One dropped id for the case section: the model's text, then the closest known id(s).
+
+    The similarity is rounded down to two decimals, so a score just below the closest-id
+    cutoff never shows as the cutoff itself.
+    """
+    text = _one_line(dropped.id).replace("`", "'")
+    if len(text) > MAX_MARKER_BODY:  # only an id from another source than an Ollama marker can be longer
+        text = text[:MAX_MARKER_BODY] + "…"
+    if not dropped.closest:
+        return f"`{text}`"
+    closest = " or ".join(f"`{known}`" for known in dropped.closest)
+    similarity = math.floor(dropped.similarity * 100 + 1e-9) / 100
+    return f"`{text}` (closest {closest}, {similarity:.2f})"
+
+
 def _one_line(text: str) -> str:
     """Text for a single report line: no line break can start a line of its own."""
     return " ".join(text.split())
@@ -463,7 +507,10 @@ def _case_section(number: int, result: CaseResult) -> str:
         f"- Cited sources: {cited} (expected: {expected_sources})",
     ]
     if result.dropped_source_ids:
-        lines.append(f"- Dropped unknown source ids: {result.dropped_source_ids}")
+        line = f"- Dropped unknown source ids: {result.dropped_source_ids}"
+        if result.dropped_ids:
+            line += " — " + ", ".join(_dropped_text(dropped) for dropped in result.dropped_ids)
+        lines.append(line)
     if result.outcome == "no_answer" and result.no_answer_reason is not None:
         lines.append(f"- No-answer reason: {NO_ANSWER_REASON_LABELS[result.no_answer_reason]}")
     if result.error is not None:

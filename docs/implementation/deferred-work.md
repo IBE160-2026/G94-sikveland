@@ -108,3 +108,7 @@
 - source_spec: `docs/implementation/spec-eval-prompt-fixes.md`
   summary: Run the evaluation with Claude after classifier prompt version 4, and check that the own-chances cases (`own-chances-salary`, `own-chances-earlier-overstay`, `follow-up-own-chances`) still get `individual_assessment` and `own-chances-and-employment-proof` gets `general`.
   evidence: Review of the eval prompt fixes (blind): the classifier prompt is shared with Claude, but only an Ollama run could be made (no Claude key on this machine).
+
+- source_spec: `docs/implementation/spec-eval-dropped-source-ids.md`
+  summary: Show in the evaluation report which marker ids the Ollama adapter mapped to a known id, and at what similarity, so both sides of the 0.85 cutoff are visible.
+  evidence: The report now lists dropped ids (below the cutoff or tied) but mapped ids only reach an INFO log line with the known id; the pipeline never sees the model's original text, so this needs the adapter to pass mapping details through the port.

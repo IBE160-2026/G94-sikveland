@@ -168,22 +168,33 @@ class MarkerParser:
         return _chunk(rest, [])
 
 
-def resolve_source_id(source_id: str, known_ids: Sequence[str]) -> str:
-    """The known document id a marker id means, or the marker id unchanged.
+def normalise_source_id(source_id: str) -> str:
+    """A marker id trimmed, in lower case, with spaces and underscores turned into hyphens."""
+    return re.sub(r"[\s_]+", "-", source_id.strip().lower())
 
-    An exact id is kept. Otherwise the id is normalised (trimmed, lower case, spaces
-    and underscores to hyphens) and, if still unknown, mapped to the most similar
-    known id when the similarity is at least `CLOSEST_ID_CUTOFF`; a tie maps nothing.
-    """
-    if source_id in known_ids:
-        return source_id
-    normalised = re.sub(r"[\s_]+", "-", source_id.strip().lower())
-    if normalised in known_ids:
-        return normalised
-    scored = sorted(
+
+def closest_known_ids(source_id: str, known_ids: Sequence[str]) -> list[tuple[float, str]]:
+    """Every known id with its difflib ratio to the normalised `source_id`, most similar first."""
+    normalised = normalise_source_id(source_id)
+    return sorted(
         ((difflib.SequenceMatcher(None, normalised, known).ratio(), known) for known in known_ids),
         reverse=True,
     )
+
+
+def resolve_source_id(source_id: str, known_ids: Sequence[str]) -> str:
+    """The known document id a marker id means, or the marker id unchanged.
+
+    An exact id is kept. Otherwise the id is normalised (`normalise_source_id`) and,
+    if still unknown, mapped to the most similar known id when the similarity is at
+    least `CLOSEST_ID_CUTOFF`; a tie maps nothing.
+    """
+    if source_id in known_ids:
+        return source_id
+    normalised = normalise_source_id(source_id)
+    if normalised in known_ids:
+        return normalised
+    scored = closest_known_ids(source_id, known_ids)
     if not scored or scored[0][0] < CLOSEST_ID_CUTOFF:
         return source_id
     if len(scored) > 1 and scored[1][0] == scored[0][0]:

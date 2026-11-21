@@ -220,7 +220,7 @@ def test_unknown_cited_id_is_dropped_and_counted() -> None:
         TextDelta("B"),
         TextDelta("C"),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((_ref("s1"),), unknown_source_ids=1),
+        Sources((_ref("s1"),), unknown_ids=("not-in-kb",)),
         Done(),
     ]
 
@@ -236,7 +236,7 @@ def test_unknown_id_before_a_known_one_is_dropped_and_text_is_held_until_the_kno
         TextDelta("A"),
         TextDelta("B"),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((_ref("s2"), _ref("s1")), unknown_source_ids=2),
+        Sources((_ref("s2"), _ref("s1")), unknown_ids=("nope", "other")),
         Done(),
     ]
 
@@ -251,7 +251,7 @@ def test_only_unknown_ids_give_the_no_answer_text() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=2, no_answer_reason="unknown_ids_only"),
+        Sources((), unknown_ids=("nope", "other"), no_answer_reason="unknown_ids_only"),
         Done(),
     ]
 
@@ -259,7 +259,17 @@ def test_only_unknown_ids_give_the_no_answer_text() -> None:
 def test_no_unknown_ids_counts_zero() -> None:
     events = _run(ScriptedLLM([AnswerChunk("A", ("s1",))]))
 
-    assert events[-2] == Sources((_ref("s1"),), unknown_source_ids=0)
+    assert events[-2] == Sources((_ref("s1"),), unknown_ids=())
+    assert events[-2].unknown_source_ids == 0
+
+
+def test_unknown_ids_keep_the_order_of_first_citation_and_are_counted() -> None:
+    llm = ScriptedLLM([AnswerChunk("A", ("zz", "s1", "aa")), AnswerChunk("B", ("zz", "mm"))])
+
+    sources = _run(llm)[-2]
+
+    assert sources.unknown_ids == ("zz", "aa", "mm")
+    assert sources.unknown_source_ids == 3
 
 
 def test_usage_ends_the_answer() -> None:
@@ -672,7 +682,7 @@ def test_unknown_ids_in_a_declined_answer_are_counted() -> None:
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=2, no_answer_reason="not_available_opening"),
+        Sources((), unknown_ids=("nope", "nope2"), no_answer_reason="not_available_opening"),
         Done(),
     ]
 
@@ -692,7 +702,7 @@ def test_not_available_sentence_with_only_unknown_ids_is_handled_as_before() -> 
         META,
         TextDelta(NO_ANSWER),
         Spent(DEFAULT_USAGE, call="answer"),
-        Sources((), unknown_source_ids=1, no_answer_reason="unknown_ids_only"),
+        Sources((), unknown_ids=("nope",), no_answer_reason="unknown_ids_only"),
         Done(),
     ]
 
