@@ -706,6 +706,7 @@ def _ollama_llm(
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
         load_prompt(app.main.TRANSLATE_PROMPT_FILE),
+        load_prompt(app.main.REPAIR_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(_ollama_handler(body, requests, category))),
     )
 
@@ -749,6 +750,7 @@ def test_ollama_provider_wires_the_ollama_adapter(settings: Settings) -> None:
         "answer": created.state.answer_prompt.version,
         "classifier": created.state.classifier_prompt.version,
         "citing": load_prompt(app.main.CITING_PROMPT_FILE).version,
+        "repair": load_prompt(app.main.REPAIR_PROMPT_FILE).version,
     }
 
 
@@ -860,6 +862,7 @@ def test_ollama_down_shows_the_error_text(settings: Settings) -> None:
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
         load_prompt(app.main.TRANSLATE_PROMPT_FILE),
+        load_prompt(app.main.REPAIR_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(refused)),
     )
 
@@ -876,10 +879,11 @@ def test_ollama_down_shows_the_error_text(settings: Settings) -> None:
     )
 
 
+@pytest.mark.parametrize("prompt_file", ["CITING_PROMPT_FILE", "REPAIR_PROMPT_FILE"])
 def test_broken_citing_prompt_stops_startup_only_with_ollama(
-    settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prompt_file: str
 ) -> None:
-    monkeypatch.setattr(app.main, "CITING_PROMPT_FILE", tmp_path / "missing.md")
+    monkeypatch.setattr(app.main, prompt_file, tmp_path / "missing.md")
 
     create_app(settings, llm=ScriptedLLM())  # Claude never reads it
     with pytest.raises(PromptError):
@@ -957,6 +961,7 @@ def test_ollama_classify_failure_is_an_error_event(settings: Settings, reply: ht
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
         load_prompt(app.main.TRANSLATE_PROMPT_FILE),
+        load_prompt(app.main.REPAIR_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 

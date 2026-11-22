@@ -430,6 +430,7 @@ def _ollama(settings: Settings, handler: Any) -> OllamaLLM:
         load_prompt(app.main.CITING_PROMPT_FILE),
         load_prompt(app.main.CLASSIFIER_PROMPT_FILE),
         load_prompt(app.main.TRANSLATE_PROMPT_FILE),
+        load_prompt(app.main.REPAIR_PROMPT_FILE),
         client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 

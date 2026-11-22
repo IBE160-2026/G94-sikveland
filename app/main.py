@@ -32,6 +32,8 @@ CLASSIFIER_PROMPT_FILE = ROOT / "prompts" / "classifier-system.md"
 TRANSLATE_PROMPT_FILE = ROOT / "prompts" / "translate-system.md"
 # Read only with `LLM_PROVIDER=ollama`: how the model marks its sources as `[[id]]`.
 CITING_PROMPT_FILE = ROOT / "prompts" / "answer-citing-markers.md"
+# Read only with `LLM_PROVIDER=ollama`: the call that puts Thai words in place of CJK words.
+REPAIR_PROMPT_FILE = ROOT / "prompts" / "ollama-script-repair.md"
 STATIC_DIR = ROOT / "app" / "static"
 # Wait between the chunks of a demo answer, so the page shows it arriving bit by bit.
 DEMO_CHUNK_PAUSE_SECONDS = 0.05
@@ -53,8 +55,9 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     Without `llm`, answers go to the Anthropic API. Building that adapter needs no
     key: without `ANTHROPIC_API_KEY` every answer fails and the page shows the
     fixed error text. With `LLM_PROVIDER=ollama` they go to a local Ollama server
-    instead (`OLLAMA_MODEL`, also for classifying, no cost); `prompts/answer-citing-markers.md` is then
-    read too (`PromptError` stops startup) and logged as prompt version `citing`.
+    instead (`OLLAMA_MODEL`, also for classifying, no cost); `prompts/answer-citing-markers.md` and
+    `prompts/ollama-script-repair.md` are then read too (`PromptError` stops startup) and
+    logged as prompt versions `citing` and `repair`.
     If Ollama is not running, every answer fails with the fixed error text.
 
     In demo mode (`MOCK_LLM=true`) `content/demo-answers.yaml` is read and checked
@@ -108,6 +111,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     elif settings.llm_provider == "ollama":
         # Loaded even with a given `llm`, like the answer prompt, and logged with it.
         citing_prompt = load_prompt(CITING_PROMPT_FILE)
+        repair_prompt = load_prompt(REPAIR_PROMPT_FILE)
         if llm is None:
             llm = OllamaLLM(
                 settings,
@@ -116,6 +120,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
                 citing_prompt,
                 app.state.classifier_prompt,
                 app.state.translate_prompt,
+                repair_prompt,
             )
         app.state.no_answer_key = "reply-no-answer"
         app.state.answer_model = settings.ollama_model
@@ -124,7 +129,11 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         app.state.translate_model = settings.ollama_model
         app.state.translate_prices = NO_PRICES
         app.state.fallback_usage = None
-        app.state.prompt_versions = {**prompt_versions, "citing": citing_prompt.version}
+        app.state.prompt_versions = {
+            **prompt_versions,
+            "citing": citing_prompt.version,
+            "repair": repair_prompt.version,
+        }
     else:
         if llm is None:
             llm = AnthropicLLM(

@@ -26,6 +26,7 @@ from app.main import (
     CITING_PROMPT_FILE,
     CLASSIFIER_PROMPT_FILE,
     KNOWLEDGE_BASE_DIR,
+    REPAIR_PROMPT_FILE,
     create_app,
 )
 from app.pipeline.cost import cost_usd
@@ -40,6 +41,7 @@ TODAY = date(2026, 11, 16)
 ANSWER_VERSION = load_prompt(ANSWER_PROMPT_FILE).version
 CLASSIFIER_VERSION = load_prompt(CLASSIFIER_PROMPT_FILE).version
 CITING_VERSION = load_prompt(CITING_PROMPT_FILE).version
+REPAIR_VERSION = load_prompt(REPAIR_PROMPT_FILE).version
 STEM = f"2026-11-16-answer-{ANSWER_VERSION}-classifier-{CLASSIFIER_VERSION}"
 THAI_ANSWER = "ค่าธรรมเนียมวีซ่าจ่ายออนไลน์"
 
@@ -626,14 +628,14 @@ def test_ollama_runs_without_a_key_at_no_cost(tmp_path: Path, settings: Settings
     ollama = settings.model_copy(update={"llm_provider": "ollama", "ollama_model": "qwen-test:1b"})
     code, _, err, reports = _run(ollama, tmp_path, ALL_CASES, CaseByCaseLLM(_all_match()))
     assert code == 0, err
-    name = f"{STEM}-citing-{CITING_VERSION}.md"
+    name = f"{STEM}-citing-{CITING_VERSION}-repair-{REPAIR_VERSION}.md"
     assert (reports / name).exists()
     report = _report(reports)
     assert "- Provider: ollama" in report
     assert "- Answer model: `qwen-test:1b`" in report
     assert "- Classify model: `qwen-test:1b`" in report
     assert "- Answer thinking: on" in report
-    assert f"citing {CITING_VERSION}" in report
+    assert f"citing {CITING_VERSION}, repair {REPAIR_VERSION}" in report
     assert "- Total cost: 0.000000 USD" in report
 
 

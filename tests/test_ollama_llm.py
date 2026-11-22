@@ -15,17 +15,32 @@ import yaml
 from app.adapters.classifier_request import CATEGORY_SCHEMA, classifier_user_message
 from app.adapters.file_prompts import Prompt
 from app.adapters.ollama_llm import (
+    CJK,
     MAX_MARKER_BODY,
+    MAX_REPLACEMENT_CHARS,
+    REPAIR_CALL_FAILED,
+    REPAIR_CONTEXT_CHARS,
+    REPAIR_INCOMPLETE,
+    REPAIR_NOT_JSON,
+    REPAIR_SCHEMA,
+    REPAIR_WRONG_SHAPE,
     TIMEOUT,
     MarkerParser,
     OllamaLLM,
+    apply_replacements,
     build_chat_request,
     build_classify_request,
+    build_repair_request,
     build_system_prompt,
     build_translate_request,
+    find_cjk_runs,
+    parse_repair_reply,
+    repair_user_message,
     resolve_source_id,
+    usable_replacement,
 )
 from app.config import Settings
+from app.pipeline.answer import Sources, TextDelta, answer_question
 from app.ports.knowledge_base import Source
 from app.ports.llm import AnswerChunk, Exchange, LLMClient, LLMError, LLMRefusalError, Usage
 
@@ -34,6 +49,7 @@ PROMPT = Prompt(version="a-1", text="Answer in Thai from the documents.")
 CITING = Prompt(version="c-1", text="Cite as [[id]].")
 CLASSIFIER = Prompt(version="k-1", text="Sort the question.")
 TRANSLATOR = Prompt(version="t-1", text="Translate to English.")
+REPAIRER = Prompt(version="r-1", text="Give Thai words.")
 BASE_URL = "http://ollama.test:11434"
 
 
@@ -124,7 +140,7 @@ def ollama_settings(settings: Settings) -> Settings:
 def _llm(settings: Settings, server: Callable[[httpx.Request], httpx.Response], **kb: Any) -> OllamaLLM:
     client = httpx.Client(transport=httpx.MockTransport(server))
     return OllamaLLM(
-        settings, StandInKnowledgeBase(**kb), PROMPT, CITING, CLASSIFIER, TRANSLATOR, client=client
+        settings, StandInKnowledgeBase(**kb), PROMPT, CITING, CLASSIFIER, TRANSLATOR, REPAIRER, client=client
     )
 
 
@@ -158,7 +174,7 @@ def test_satisfies_the_port(ollama_settings: Settings) -> None:
 
 
 def test_building_needs_no_network(ollama_settings: Settings) -> None:
-    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING, CLASSIFIER, TRANSLATOR)
+    llm = OllamaLLM(ollama_settings, StandInKnowledgeBase(), PROMPT, CITING, CLASSIFIER, TRANSLATOR, REPAIRER)
 
     timeout = llm._client.timeout
     assert timeout.connect is not None and timeout.connect <= 10
@@ -884,3 +900,496 @@ def test_translate_transport_errors_become_llm_errors(ollama_settings: Settings,
 
     assert type(raised.value) is LLMError
     assert raised.value.__cause__ is error
+
+
+# --- CJK words replaced with Thai (spec-ollama-chinese-word-repair) ----------------------
+
+ANSWER_USAGE = Usage(input_tokens=1200, output_tokens=300, cache_read_tokens=0, cache_write_tokens=0)
+REPAIR_USAGE = Usage(input_tokens=90, output_tokens=20, cache_read_tokens=0, cache_write_tokens=0)
+SUMMED_USAGE = Usage(input_tokens=1290, output_tokens=320, cache_read_tokens=0, cache_write_tokens=0)
+
+
+def _repaired(*pairs: tuple[str, str], done_reason: str | None = "stop", content: str | None = None) -> bytes:
+    """A repair reply: `{"replacements": [...]}` from `pairs`, or the raw `content`."""
+    if content is None:
+        content = json.dumps(
+            {"replacements": [{"cjk": cjk, "thai": thai} for cjk, thai in pairs]}, ensure_ascii=False
+        )
+    reply: dict[str, Any] = {
+        "model": "m",
+        "message": {"role": "assistant", "content": content},
+        "done": True,
+        "done_reason": done_reason,
+        "prompt_eval_count": REPAIR_USAGE.input_tokens,
+        "eval_count": REPAIR_USAGE.output_tokens,
+    }
+    return json.dumps(reply, ensure_ascii=False).encode()
+
+
+class RepairServer:
+    """Streams `answer` for the answer call; answers the repair (and classify) call itself."""
+
+    def __init__(
+        self,
+        answer: bytes,
+        repair: bytes = b"",
+        status: int = 200,
+        error: Exception | None = None,
+    ) -> None:
+        self.answer = answer
+        self.repair = repair
+        self.status = status
+        self.error = error
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        body = json.loads(request.content)
+        if body["stream"] is True:
+            return httpx.Response(200, content=self.answer)
+        if body.get("format") == CATEGORY_SCHEMA:
+            return httpx.Response(200, content=_classified())
+        if self.error is not None:
+            raise self.error
+        return httpx.Response(self.status, content=self.repair)
+
+    def bodies(self) -> list[dict[str, Any]]:
+        return [json.loads(r.content) for r in self.requests]
+
+    def repair_bodies(self) -> list[dict[str, Any]]:
+        return [b for b in self.bodies() if b["stream"] is False and b.get("format") == REPAIR_SCHEMA]
+
+
+def test_no_cjk_streams_as_today_without_a_repair_call(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("90 ยูโร [[b-fees]].", " ต่อ"))
+
+    items = _answer(_llm(ollama_settings, server))
+
+    assert items == [AnswerChunk("90 ยูโร.", ("b-fees",)), AnswerChunk(" ต่อ"), ANSWER_USAGE]
+    assert len(server.requests) == 1
+
+
+def test_one_cjk_word_is_replaced_and_released_at_the_end(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ส่งโค้ดนี้ให้申请人 ใช้", "เวลา [[a-steps]]"), _repaired(("申请人", "ผู้สมัคร")))
+
+    items = _answer(_llm(ollama_settings, server))
+
+    assert items == [
+        AnswerChunk("ส่งโค้ดนี้ให้"),
+        AnswerChunk("ผู้สมัคร ใช้เวลา", ("a-steps",)),
+        SUMMED_USAGE,
+    ]
+    assert len(server.repair_bodies()) == 1
+
+
+def test_text_before_the_first_cjk_character_streams_and_nothing_after_it(ollama_settings: Settings) -> None:
+    answer = _body(
+        _content("ก่อน [[a-steps]]"), _content(" ข้อ申请表 ต่อ"), _content(" หลัง [[b-fees]]"), _final()
+    )
+    server = RepairServer(answer, _repaired(("申请表", "แบบฟอร์ม")))
+    stream = _llm(ollama_settings, server).answer("q", ())
+
+    first = next(stream)
+    second = next(stream)
+
+    assert first == AnswerChunk("ก่อน", ("a-steps",))
+    assert second == AnswerChunk(" ข้อ")
+    assert server.repair_bodies() == []  # the repair waits for the end of the answer
+    assert list(stream) == [AnswerChunk("แบบฟอร์ม ต่อ หลัง", ("b-fees",)), SUMMED_USAGE]
+
+
+def test_markers_before_the_first_cjk_character_in_the_same_piece_are_not_held(
+    ollama_settings: Settings,
+) -> None:
+    server = RepairServer(
+        _stream("ค่า 90 ยูโร [[b-fees]] ส่ง申请表 [[a-steps]]"), _repaired(("申请表", "แบบฟอร์ม"))
+    )
+
+    items = _answer(_llm(ollama_settings, server))
+
+    # `b-fees` is cited before the CJK word, so it streams now; only `a-steps` is held.
+    assert items == [
+        AnswerChunk("ค่า 90 ยูโร ส่ง", ("b-fees",)),
+        AnswerChunk("แบบฟอร์ม", ("a-steps",)),
+        SUMMED_USAGE,
+    ]
+
+
+def test_the_same_word_twice_is_asked_for_once_and_replaced_twice(ollama_settings: Settings) -> None:
+    server = RepairServer(
+        _stream("กรอก申请表 [[a-steps]] แล้วส่ง申请表 [[b-fees]]"), _repaired(("申请表", "แบบฟอร์ม"))
+    )
+
+    text, ids, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "กรอกแบบฟอร์ม แล้วส่งแบบฟอร์ม"
+    assert ids == ["a-steps", "b-fees"]
+    [repair] = server.repair_bodies()
+    user = repair["messages"][1]["content"]
+    assert user.startswith("1. 申请表\n")
+    assert "\n2. " not in user
+
+
+def test_held_source_ids_are_released_once_in_order_of_first_citation_and_resolved(
+    ollama_settings: Settings,
+) -> None:
+    server = RepairServer(
+        _stream("ไป递交 [[c-sponsor]] ที่ VFS [[B_Fees]] และ [[c-sponsor]][[a-steps]]"),
+        _repaired(("递交", "ยื่น")),
+    )
+
+    items = _answer(_llm(ollama_settings, server))
+
+    assert items == [
+        AnswerChunk("ไป"),
+        AnswerChunk("ยื่น ที่ VFS และ", ("c-sponsor", "b-fees", "a-steps")),
+        SUMMED_USAGE,
+    ]
+
+
+def test_repair_request_shape(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ว่า你们是แฟนกันจริง ๆ [[a-steps]]"), _repaired(("你们是", "คุณทั้งสองเป็น")))
+    settings = ollama_settings.model_copy(update={"ollama_model": "qwen-test", "ollama_num_ctx": 40000})
+
+    _answer(_llm(settings, server))
+
+    answer, repair = server.bodies()
+    assert answer["stream"] is True
+    assert repair == {
+        "model": "qwen-test",
+        "messages": [
+            {"role": "system", "content": REPAIRER.text},
+            {"role": "user", "content": "1. 你们是\nว่า你们是แฟนกันจริง ๆ"},
+        ],
+        "stream": False,
+        "think": False,
+        "format": REPAIR_SCHEMA,
+        "options": {"num_ctx": 40000},
+    }
+    assert "<document" not in json.dumps(repair, ensure_ascii=False)
+    assert str(server.requests[1].url) == BASE_URL + "/api/chat"
+
+
+def test_build_repair_request_numbers_each_run_with_its_context() -> None:
+    request = build_repair_request(
+        model="m", num_ctx=4096, system="S", text="แบบฟอร์ม申请表\nออก并提交ไปด้วย", runs=["申请表", "并提交"]
+    )
+
+    assert request["format"] == REPAIR_SCHEMA
+    assert request["messages"][1]["content"] == (
+        "1. 申请表\nแบบฟอร์ม申请表 ออก并提交ไปด้วย\n\n2. 并提交\nแบบฟอร์ม申请表 ออก并提交ไปด้วย"
+    )
+
+
+def test_repair_context_is_cut_to_60_characters_on_each_side() -> None:
+    text = "ก" * 100 + "申请" + "ข" * 100
+
+    message = repair_user_message(text, ["申请"])
+
+    assert message == "1. 申请\n…" + "ก" * REPAIR_CONTEXT_CHARS + "申请" + "ข" * REPAIR_CONTEXT_CHARS + "…"
+
+
+def test_repair_context_is_taken_at_the_whole_run_not_inside_a_longer_one() -> None:
+    text = "ก" * 70 + "申请表" + "ข" * 70 + "申请" + "ค" * 70
+
+    message = repair_user_message(text, ["申请表", "申请"])
+
+    second = message.split("\n\n")[1]
+    assert second == "2. 申请\n…" + "ข" * REPAIR_CONTEXT_CHARS + "申请" + "ค" * REPAIR_CONTEXT_CHARS + "…"
+
+
+def test_repair_context_comes_from_the_shown_and_the_held_text(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ข้อความที่แสดงแล้ว [[a-steps]] แล้ว申请"), _repaired(("申请", "สมัคร")))
+
+    _answer(_llm(ollama_settings, server))
+
+    [repair] = server.repair_bodies()
+    assert repair["messages"][1]["content"] == "1. 申请\nข้อความที่แสดงแล้ว แล้ว申请"
+
+
+def test_cjk_in_the_first_line_reaches_the_no_answer_guard_repaired(ollama_settings: Settings) -> None:
+    # The CJK word is removed (empty Thai word); the guard then sees the not-available sentence.
+    server = RepairServer(
+        _stream("ขออภัย ไม่มีข้อมูล申请人ค่ะ\n", "แนะนำให้ติดต่อ VFS [[a-steps]]"), _repaired(("申请人", ""))
+    )
+    llm = _llm(ollama_settings, server)
+
+    events = list(answer_question("q", (), llm, StandInKnowledgeBase(), "NO ANSWER", fixed_replies={}))
+
+    texts = [e.text for e in events if isinstance(e, TextDelta)]
+    assert texts == ["NO ANSWER"]
+    assert [e.items for e in events if isinstance(e, Sources)] == [()]
+    assert len(server.repair_bodies()) == 1
+
+
+def test_cjk_in_the_first_line_of_an_answer_is_shown_repaired(ollama_settings: Settings) -> None:
+    server = RepairServer(
+        _stream("กรอก申请表 [[a-steps]]\n", "แล้วส่ง [[b-fees]]"), _repaired(("申请表", "แบบฟอร์ม"))
+    )
+    llm = _llm(ollama_settings, server)
+
+    events = list(answer_question("q", (), llm, StandInKnowledgeBase(), "NO ANSWER", fixed_replies={}))
+
+    text = "".join(e.text for e in events if isinstance(e, TextDelta))
+    assert text == "กรอกแบบฟอร์ม\nแล้วส่ง"
+    assert not CJK.search(text)
+
+
+@pytest.mark.parametrize(
+    "server_kwargs",
+    [
+        {"status": 500, "repair": b"{}"},
+        {"error": httpx.ReadTimeout("slow")},
+        {"error": httpx.ConnectError("refused")},
+        {"repair": b"<html>not json</html>"},
+        {"repair": _body({"error": "申请人 echoed"})},
+    ],
+    ids=["http-500", "timeout", "connect-error", "body-not-json", "error-field"],
+)
+def test_a_failed_repair_call_removes_the_cjk_words_and_counts_only_the_answer(
+    ollama_settings: Settings, server_kwargs: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    server = RepairServer(_stream("ให้申请人 ใช้เวลา [[a-steps]]"), **server_kwargs)
+
+    with caplog.at_level(logging.INFO, logger="app.adapters.ollama_llm"):
+        items = _answer(_llm(ollama_settings, server))
+
+    assert items == [AnswerChunk("ให้"), AnswerChunk(" ใช้เวลา", ("a-steps",)), ANSWER_USAGE]
+    messages = [r.getMessage() for r in caplog.records]
+    # The exception's class name, never its message.
+    assert (
+        f"Script repair gave no Thai words ({REPAIR_CALL_FAILED}: LLMError); the CJK words are removed"
+        in messages
+    )
+    assert "Script repair: 0 replaced, 1 removed" in messages
+    assert not CJK.search(caplog.text)
+
+
+def _incomplete_repair() -> bytes:
+    return _repaired(content="{}", done_reason="length")
+
+
+@pytest.mark.parametrize(
+    ("reply", "reason"),
+    [
+        (_repaired(content="not json at all"), REPAIR_NOT_JSON),
+        (_repaired(content='["申请人", "ผู้สมัคร"]'), REPAIR_WRONG_SHAPE),
+        (_repaired(content='{"replacements": "ผู้สมัคร"}'), REPAIR_WRONG_SHAPE),
+        (_repaired(content='{"replacements": [{"cjk": "申请人"}]}'), REPAIR_WRONG_SHAPE),
+        (_repaired(content='{"replacements": ["ผู้สมัคร"]}'), REPAIR_WRONG_SHAPE),
+        (_repaired(content='{"replacements": [{"cjk": "申请人", "thai": 5}]}'), REPAIR_WRONG_SHAPE),
+        (_incomplete_repair(), REPAIR_INCOMPLETE),
+    ],
+    ids=["content-not-json", "list", "not-a-list", "no-thai", "item-not-object", "thai-not-text", "length"],
+)
+def test_an_unusable_repair_reply_removes_the_cjk_words_and_counts_its_tokens(
+    ollama_settings: Settings, reply: bytes, reason: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    server = RepairServer(_stream("ให้申请人 ใช้เวลา [[a-steps]]"), reply)
+
+    with caplog.at_level(logging.WARNING, logger="app.adapters.ollama_llm"):
+        items = _answer(_llm(ollama_settings, server))
+
+    # A reply arrived, so its tokens were used and are counted.
+    assert items == [AnswerChunk("ให้"), AnswerChunk(" ใช้เวลา", ("a-steps",)), SUMMED_USAGE]
+    assert [r.getMessage() for r in caplog.records] == [
+        f"Script repair gave no Thai words ({reason}); the CJK words are removed"
+    ]
+    assert not CJK.search(caplog.text)
+
+
+def test_a_reply_without_text_is_the_wrong_shape(ollama_settings: Settings) -> None:
+    reply = json.dumps({"message": {"role": "assistant"}, "done": True, "done_reason": "stop"}).encode()
+    server = RepairServer(_stream("ให้申请人 ใช้เวลา [[a-steps]]"), reply)
+
+    text, _, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "ให้ ใช้เวลา"
+
+
+@pytest.mark.parametrize(
+    "thai",
+    ["", "   ", "申请", "ผู้" + "ก" * 39, "ผู้\nสมัคร", "[[a-steps]]", "ผู้]"],
+    ids=["empty", "blank", "cjk", "41-chars", "line-break", "marker", "bracket"],
+)
+def test_an_unusable_word_is_removed_and_the_others_replaced(
+    ollama_settings: Settings, thai: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    server = RepairServer(
+        _stream("ไป递交ที่ VFS [[a-steps]] ออก并提交ไปด้วย"), _repaired(("递交", thai), ("并提交", "แล้วส่ง"))
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.adapters.ollama_llm"):
+        text, ids, usage = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "ไปที่ VFS ออกแล้วส่งไปด้วย"
+    assert ids == ["a-steps"]
+    assert usage == [SUMMED_USAGE]
+    assert [r.getMessage() for r in caplog.records] == ["Script repair: 1 replaced, 1 removed"]
+
+
+def test_replacements_are_trimmed_and_40_characters_are_usable() -> None:
+    longest = "ผ" * MAX_REPLACEMENT_CHARS
+
+    assert MAX_REPLACEMENT_CHARS == 40
+    assert usable_replacement(f"  {longest} ") == longest
+    assert usable_replacement(longest + "ผ") is None
+    assert usable_replacement(" ผู้สมัคร\t") == "ผู้สมัคร"
+
+
+def test_reply_entries_for_words_not_asked_for_are_ignored_and_the_first_entry_wins() -> None:
+    content = json.dumps(
+        {
+            "replacements": [
+                {"cjk": " 申请人 ", "thai": "ผู้สมัคร"},
+                {"cjk": "申请人", "thai": "คนอื่น"},
+                {"cjk": "其他", "thai": "อื่น"},
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+    assert parse_repair_reply(content, ["申请人"]) == {"申请人": "ผู้สมัคร"}
+
+
+def test_a_word_the_reply_leaves_out_is_removed(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ไป递交ที่ VFS ออก并提交ไปด้วย [[a-steps]]"), _repaired(("并提交", "แล้วส่ง")))
+
+    text, _, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "ไปที่ VFS ออกแล้วส่งไปด้วย"
+
+
+def test_the_repair_never_changes_text_outside_the_cjk_runs() -> None:
+    text = "ค่า 90 ยูโร [ref] 申请表 (A) **申请** x"
+
+    assert apply_replacements(text, {"申请表": "แบบฟอร์ม", "申请": "สมัคร"}) == (
+        "ค่า 90 ยูโร [ref] แบบฟอร์ม (A) **สมัคร** x"
+    )
+    assert apply_replacements(text, {}) == "ค่า 90 ยูโร [ref]  (A) **** x"
+    # A replacement is put in as written, never read as a regex template.
+    assert apply_replacements("a申b", {"申": r"\1\g<0>"}) == r"a\1\g<0>b"
+
+
+@pytest.mark.parametrize(
+    ("text", "runs"),
+    [
+        ("ไทยล้วน ASCII 90 €", []),
+        ("ให้申请人 ใช้เวลา", ["申请人"]),
+        ("申请表 … 申请表 และ 递交", ["申请表", "递交"]),
+        ("ญี่ปุ่น ひらがな カタカナ ｶﾀｶﾅ", ["ひらがな", "カタカナ", "ｶﾀｶﾅ"]),
+        ("เกาหลี 한국어 ᄀ ㄱ", ["한국어", "ᄀ", "ㄱ"]),
+        ("จบ。 ，「」　ok", ["。", "，「」　"]),
+        ("ฟูลวิดท์ ＡＢＣ１２ และ 㐀 豈 𠀀 𪜀", ["ＡＢＣ１２", "㐀", "豈", "𠀀", "𪜀"]),
+        (
+            "ก ⺀ ข ⼀ ค ㄅ ง ㆐ จ ㇀ ฉ ㈠ ช ㎏ ซ ︐ ฌ ︰ ญ 𛀁",
+            ["⺀", "⼀", "ㄅ", "㆐", "㇀", "㈠", "㎏", "︐", "︰", "𛀁"],
+        ),
+    ],
+    ids=[
+        "none",
+        "han",
+        "distinct",
+        "kana",
+        "hangul",
+        "punctuation",
+        "fullwidth-ext-compat-supplementary",
+        "radicals-bopomofo-kanbun-strokes-enclosed-vertical-kana-supplement",
+    ],
+)
+def test_find_cjk_runs(text: str, runs: list[str]) -> None:
+    assert find_cjk_runs(text) == runs
+
+
+def test_answer_failure_after_a_cjk_run_makes_no_repair_call(ollama_settings: Settings) -> None:
+    server = RepairServer(_body(_content("ให้申请人 ใช้เวลา [[a-steps]]"), {"error": "boom"}), _repaired())
+    items: list[AnswerChunk | Usage] = []
+
+    with pytest.raises(LLMError):
+        for item in _llm(ollama_settings, server).answer("q", ()):
+            items.append(item)
+
+    assert items == [AnswerChunk("ให้")]
+    assert len(server.requests) == 1
+
+
+@pytest.mark.parametrize("reason", ["length", None])
+def test_an_incomplete_answer_after_a_cjk_run_makes_no_repair_call(
+    ollama_settings: Settings, reason: str | None
+) -> None:
+    final = _final()
+    final["done_reason"] = reason
+    server = RepairServer(_stream("ให้申请人 ใช้เวลา", final=final), _repaired())
+
+    with pytest.raises(LLMError, match="incomplete"):
+        _answer(_llm(ollama_settings, server))
+    assert len(server.requests) == 1
+
+
+def test_held_ids_are_released_when_every_held_word_is_removed(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ค่าธรรมเนียม 90 ยูโร申请 [[b-fees]]"), _repaired(("申请", "")))
+
+    items = _answer(_llm(ollama_settings, server))
+
+    # The held text is empty after the removal, but its source id still arrives.
+    assert items == [AnswerChunk("ค่าธรรมเนียม 90 ยูโร"), AnswerChunk("", ("b-fees",)), SUMMED_USAGE]
+
+
+def test_held_ids_of_a_removed_word_still_make_an_answer(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ค่าธรรมเนียม 90 ยูโร申请 [[b-fees]]"), _repaired(("申请", "")))
+    llm = _llm(ollama_settings, server)
+
+    events = list(answer_question("q", (), llm, StandInKnowledgeBase(), "NO ANSWER", fixed_replies={}))
+
+    text = "".join(e.text for e in events if isinstance(e, TextDelta))
+    assert text == "ค่าธรรมเนียม 90 ยูโร"
+    [sources] = [e for e in events if isinstance(e, Sources)]
+    assert [ref.id for ref in sources.items] == ["b-fees"]
+
+
+@pytest.mark.parametrize(
+    ("piece", "shown"),
+    [
+        ("ค่าธรรมเนียม ９０ ยูโร", "ค่าธรรมเนียม 90 ยูโร"),
+        ("ก，ข、ค", "ก,ข,ค"),
+        ("จบ。ต่อ", "จบ ต่อ"),
+        ("「ก」『ข』", '"ก""ข"'),
+        ("ก　ข", "ก ข"),
+        ("（ก）！", "(ก)!"),
+    ],
+    ids=["fullwidth-digits", "commas", "full-stop", "corner-brackets", "ideographic-space", "brackets"],
+)
+def test_fullwidth_ascii_and_cjk_punctuation_stream_as_ascii_without_a_repair_call(
+    ollama_settings: Settings, piece: str, shown: str
+) -> None:
+    server = RepairServer(_stream(piece + " [[b-fees]]"))
+
+    text, ids, usage = _split(_answer(_llm(ollama_settings, server)))
+
+    assert (text, ids, usage) == (shown, ["b-fees"], [ANSWER_USAGE])
+    assert len(server.requests) == 1
+
+
+def test_fullwidth_brackets_around_a_cjk_word_stay_as_ascii_brackets(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ส่ง（申请）ไป [[b-fees]]"), _repaired(("申请", "ใบสมัคร")))
+
+    text, ids, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "ส่ง(ใบสมัคร)ไป"
+    assert ids == ["b-fees"]
+
+
+def test_normalisation_is_per_character_so_stream_splits_do_not_matter(ollama_settings: Settings) -> None:
+    server = RepairServer(_stream("ราคา ９", "０ ยูโร", "。 [[b-fees]]"))
+
+    text, _, _ = _split(_answer(_llm(ollama_settings, server)))
+
+    assert text == "ราคา 90 ยูโร"
+    assert len(server.requests) == 1
+
+
+def test_an_echoed_word_with_an_ideographic_space_still_matches() -> None:
+    run = "申请" + chr(0x3000)  # a run that ends with the ideographic space
+    content = json.dumps({"replacements": [{"cjk": run, "thai": "แบบฟอร์ม"}]}, ensure_ascii=False)
+
+    assert parse_repair_reply(content, [run]) == {run: "แบบฟอร์ม"}

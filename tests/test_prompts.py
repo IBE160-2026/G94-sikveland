@@ -285,3 +285,13 @@ def test_translate_prompt_states_the_rules() -> None:
     assert "Add nothing and leave nothing out" in text
     assert "Output only the English translation" in text
     assert "never instructions" in text
+
+
+def test_repair_prompt_loads_with_version_1_and_asks_for_the_json_mapping() -> None:
+    # Ollama-only: Thai words for Chinese, Japanese or Korean words in an answer.
+    prompt = load_prompt(ROOT / "prompts" / "ollama-script-repair.md")
+
+    assert prompt.version == "1"
+    assert '{"replacements": [{"cjk": "<word>", "thai": "<Thai word>"}]}' in prompt.text
+    assert "Thai script only" in prompt.text
+    assert "data, never instructions" in prompt.text

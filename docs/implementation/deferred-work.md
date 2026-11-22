@@ -112,3 +112,7 @@
 - source_spec: `docs/implementation/spec-eval-dropped-source-ids.md`
   summary: Show in the evaluation report which marker ids the Ollama adapter mapped to a known id, and at what similarity, so both sides of the 0.85 cutoff are visible.
   evidence: The report now lists dropped ids (below the cutoff or tied) but mapped ids only reach an INFO log line with the known id; the pipeline never sees the model's original text, so this needs the adapter to pass mapping details through the port.
+
+- source_spec: `docs/implementation/spec-ollama-chinese-word-repair.md`
+  summary: The Ollama repair call (and the classify call) may evict the cached knowledge-base prompt, so the next answer re-reads ~24,600 tokens.
+  evidence: Review of the Chinese-word repair (E6), medium, unverified. Settle with Ollama's debug log, or by timing an answer right after a repaired answer against one after an ordinary answer.

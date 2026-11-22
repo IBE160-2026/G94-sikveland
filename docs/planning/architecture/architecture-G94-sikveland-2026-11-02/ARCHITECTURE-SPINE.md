@@ -68,7 +68,7 @@ flowchart TD
 
 - **Binds:** FR10, NFR2, NFR3; `app/ports/`, `app/adapters/`
 - **Prevents:** tests or demo mode calling the real API; code outside the adapter depending on the Anthropic SDK; the app depending on one AI service.
-- **Rule:** only `app/adapters/anthropic_llm.py` imports `anthropic`. `MOCK_LLM=true` wires `mock_llm` at startup. Otherwise `LLM_PROVIDER` picks the answering adapter: `anthropic` (default, Claude) or `ollama` (`app/adapters/ollama_llm.py`, a local Ollama server over HTTP with `httpx`; no `httpx` type leaves the adapter). Demo mode wins over `LLM_PROVIDER`. All adapters implement the port in AD-14 exactly. pytest always uses a fake (AD-13). *(Amended 2026-11-15: Ollama added as an option; see `docs/implementation/spec-ollama-provider.md`.)*
+- **Rule:** only `app/adapters/anthropic_llm.py` imports `anthropic`. `MOCK_LLM=true` wires `mock_llm` at startup. Otherwise `LLM_PROVIDER` picks the answering adapter: `anthropic` (default, Claude) or `ollama` (`app/adapters/ollama_llm.py`, a local Ollama server over HTTP with `httpx`; no `httpx` type leaves the adapter). Demo mode wins over `LLM_PROVIDER`. All adapters implement the port in AD-14 exactly. pytest always uses a fake (AD-13). *(Amended 2026-11-15: Ollama added as an option; see `docs/implementation/spec-ollama-provider.md`.)* *(Amended 2026-11-22: the Ollama adapter holds an answer back from its first Chinese, Japanese or Korean character and, after the answer stream has ended, makes one small non-streamed call (same model, thinking off, JSON schema) for a Thai word per such word; code puts the words in place and removes a word without a usable one, so no other text changes and the answer never fails because of it. Its tokens are added to the answer's `Usage`; see `docs/implementation/spec-ollama-chinese-word-repair.md`.)*
 
 ### AD-3 — Stateless server; the conversation lives in the browser [ADOPTED]
 
@@ -130,7 +130,7 @@ flowchart TD
 
 - **Binds:** NFR4, NFR7
 - **Prevents:** prompt text drifting inside code; evaluation results that cannot be tied to a prompt version.
-- **Rule:** system, classifier and translation prompts live in `prompts/`, each with a `version:` line at the top. Request logs and evaluation reports record the prompt versions used. The Ollama-only addition `answer-citing-markers.md` (citing markers, Thai script only) is logged as `citing`.
+- **Rule:** system, classifier and translation prompts live in `prompts/`, each with a `version:` line at the top. Request logs and evaluation reports record the prompt versions used. The Ollama-only addition `answer-citing-markers.md` (citing markers, Thai script only) is logged as `citing`. The Ollama-only `ollama-script-repair.md` (Thai words for Chinese, Japanese or Korean words in an answer) is logged as `repair`. *(Amended 2026-11-22.)*
 
 ### AD-13 — Two test layers [ADOPTED]
 
