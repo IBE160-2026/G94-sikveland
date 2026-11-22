@@ -252,7 +252,7 @@ The app can run in demo mode without an API key.
 - Knowledge base of 10–20 official sources, updated by script (FR11).
 - Demo mode without an API key (FR10).
 
-**Deadline and team:** part 1 of the IBE160 portfolio is due 2026-11-15; the deadline for the finished app is not yet known. The group is one person.
+**Deadline and team:** part 1 of the IBE160 portfolio is due 2026-11-23 at 23:59; the deadline for the finished app is not yet known. The group is one person.
 
 **Priority order** (when time runs short, cut from the bottom of this list first):
 1. **Core:** FR1, FR2, FR3, FR4, FR9, FR10, FR12 — Thai answers with sources, the steps in order, "the embassy decides", no-answer, the privacy filter, and demo mode so the examiner can run the app.
